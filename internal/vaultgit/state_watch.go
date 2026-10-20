@@ -49,15 +49,23 @@ func (s *safetyState) publishWatchState(state WatchState, policy config.Autosave
 // because a history full of explicit `bn` commits would otherwise be read as
 // external autosaves and would hold the very first external snapshot back behind
 // a floor nothing ever anchored.
-func (s *safetyState) RefreshWatchState(policy config.AutosavePolicy) (WatchState, error) {
-	return s.publishWatchState(s.LoadWatchState(), policy, false)
+//
+// It is also where an anchor left in the future by a wall clock that stepped
+// backwards is pulled back to now, and that correction is written rather than
+// only read: a clamp applied afresh on every read would slide the due time
+// forward with the clock and never let it arrive.
+func (s *safetyState) RefreshWatchState(policy config.AutosavePolicy, now time.Time) (WatchState, error) {
+	state := s.LoadWatchState()
+	clamped := state.clampedTo(now.UTC())
+	return s.publishWatchState(clamped, policy, !clamped.anchorsEqual(state))
 }
 
 // NoteChange records that the working tree changed at now, starting a burst if
-// one is not already open.
+// one is not already open. Anchors later than now are pulled back to it first,
+// for the reason RefreshWatchState gives.
 func (s *safetyState) NoteChange(policy config.AutosavePolicy, now time.Time) (WatchState, error) {
 	now = now.UTC()
-	state := s.LoadWatchState()
+	state := s.LoadWatchState().clampedTo(now)
 	if state.FirstChangeAt.IsZero() {
 		state.FirstChangeAt = now
 	}
@@ -257,12 +265,53 @@ func (w WatchState) externalAnchor() time.Time {
 // elapsed *and* the configured floor since the last external autosave has too. A
 // state with no open burst, and every state under a disabled policy, is never
 // due.
+//
+// It reads the anchors as stored. Anchors a backwards clock step left in the
+// future are corrected where they are persisted — RefreshWatchState and
+// NoteChange — because a clamp applied here, on a copy, would move with every
+// read and the due time it produced would never arrive.
 func (w WatchState) DueAt(policy config.AutosavePolicy, now time.Time) bool {
 	due, scheduled := w.DueTime(policy)
 	if !scheduled {
 		return false
 	}
 	return !now.UTC().Before(due)
+}
+
+// clampedTo returns a copy of w whose anchors are no later than now.
+//
+// Clamping the in-flight marker can stop AbandonExternalCommit from matching
+// the instant its attempt wrote, which only happens when the clock stepped back
+// during that attempt. That fails closed: the marker then holds one interval
+// from now and expires, exactly as a marker left by a crash does.
+func (w WatchState) clampedTo(now time.Time) WatchState {
+	clamp := func(t time.Time) time.Time {
+		if t.After(now) {
+			return now
+		}
+		return t
+	}
+	w.FirstChangeAt = clamp(w.FirstChangeAt)
+	w.LastChangeAt = clamp(w.LastChangeAt)
+	w.LastCommitAt = clamp(w.LastCommitAt)
+	if w.ExternalCommitStartedAt != nil {
+		started := clamp(w.ExternalCommitStartedAt.UTC())
+		w.ExternalCommitStartedAt = &started
+	}
+	return w
+}
+
+// anchorsEqual reports whether w and other carry the same burst and floor
+// anchors, which is what tells RefreshWatchState that a clamp moved something.
+func (w WatchState) anchorsEqual(other WatchState) bool {
+	sameStart := (w.ExternalCommitStartedAt == nil) == (other.ExternalCommitStartedAt == nil)
+	if sameStart && w.ExternalCommitStartedAt != nil {
+		sameStart = w.ExternalCommitStartedAt.Equal(*other.ExternalCommitStartedAt)
+	}
+	return sameStart &&
+		w.FirstChangeAt.Equal(other.FirstChangeAt) &&
+		w.LastChangeAt.Equal(other.LastChangeAt) &&
+		w.LastCommitAt.Equal(other.LastCommitAt)
 }
 
 // resolveAutosavePolicy fills in what a caller left out, so that the zero

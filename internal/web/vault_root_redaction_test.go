@@ -3,12 +3,72 @@ package web
 import (
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/journal"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
+
+// Three surfaces write an error's text into a body of their own rather than
+// through the shared management error writer: a failed source save (whose
+// snapshot failure carries git's stderr), a property plan's blockers, and a
+// history comparison that could not be read. Each must redact for a hosted
+// reader exactly as the shared writer does, and keep the path for a local one.
+func TestServer_HostedErrorBodiesNeverNameTheVaultRoot(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		mode   Mode
+		redact bool
+	}{
+		{"local", ModeLocal, false},
+		{"hosted", ModeHosted, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// readerFor stands in for requestGuard: it installs the redacting
+			// writer exactly when the mode's capabilities ask for one.
+			readerFor := func(root string) (*httptest.ResponseRecorder, http.ResponseWriter) {
+				recorder := httptest.NewRecorder()
+				redactor := vaultRootRedactorFor(capabilitiesFor(tc.mode), root)
+				if !redactor.active() {
+					return recorder, recorder
+				}
+				return recorder, &redactingResponseWriter{ResponseWriter: recorder, redactor: redactor}
+			}
+
+			_, srv, root := newSourceTestServer(t, Options{Hosted: tc.mode == ModeHosted})
+			recorder, w := readerFor(root)
+			srv.writeSourceSaveError(w, noteops.SaveSourceRequest{RelPath: "Alpha.md"}, nil,
+				noteops.Errorf(noteops.CodeSnapshotFailed, "git add: fatal: unable to index %s", filepath.Join(root, "Alpha.md")))
+			payload := decodeSourceError(t, recorder.Result(), http.StatusInternalServerError, noteops.CodeSnapshotFailed)
+			assertVaultRootRedaction(t, "source save error", payload.Message, root, tc.redact)
+
+			_, w = readerFor(root)
+			response := propertyMutationResponseForPlan(w, &propertyPlan{Blockers: []propertyBlocker{{
+				Kind: propertyBlockerConfigConflict, Detail: "patch " + filepath.Join(root, config.FileName) + ": conflict",
+			}}}, ConfigStatus{})
+			assertVaultRootRedaction(t, "property blocker", response.Blockers[0].Detail, root, tc.redact)
+
+			// A real recorded change whose manifest is gone fails its comparison
+			// read with the manifest's absolute path.
+			_, historyRoot, entry := newRestorableVault(t)
+			manifest := filepath.Join(noteops.JournalRoot(historyRoot), entry, journal.ManifestFileName)
+			if err := os.Remove(manifest); err != nil {
+				t.Fatalf("remove manifest: %v", err)
+			}
+			preview := historyPreviewResponse{EntryID: entry, Changes: []historyPreviewChange{{Path: "Source.md", Class: "note"}}}
+			_, w = readerFor(historyRoot)
+			(&Server{vault: &vault.Vault{Root: historyRoot}}).addHistoryComparisons(w, &preview, nil)
+			assertVaultRootRedaction(t, "history comparison", preview.Changes[0].ComparisonUnavailable, historyRoot, tc.redact)
+		})
+	}
+}
 
 // An invalid configuration's error names the file that failed, and the file is
 // named by its absolute path. A reader on another machine is told which file and

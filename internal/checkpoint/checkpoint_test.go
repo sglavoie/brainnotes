@@ -245,6 +245,29 @@ func TestHoldRefusesNewWritersUntilRelease(t *testing.T) {
 	}
 }
 
+// An expired budget reaches acquireShared as a negative wait. It must be one
+// look at the barrier, not a fresh DefaultWriterWait: the caller holds its slot
+// mutex for the whole call, so a renewed wait would stall every writer in the
+// process behind a deadline that has already passed.
+func TestAcquireSharedWithExpiredBudgetMakesOneAttempt(t *testing.T) {
+	root := newBarrierVault(t)
+	held := mustHold(t, root, "copying the vault")
+	defer func() { _ = held.Release() }()
+
+	paths, err := resolve(root)
+	if err != nil {
+		t.Fatalf("resolve: %v", err)
+	}
+	started := time.Now()
+	_, err = acquireShared(context.Background(), paths, remaining(time.Now().Add(-time.Second)))
+	if !errors.Is(err, ErrBarrierHeld) {
+		t.Fatalf("acquireShared with an expired budget = %v, want ErrBarrierHeld", err)
+	}
+	if elapsed := time.Since(started); elapsed >= DefaultWriterWait/2 {
+		t.Fatalf("an expired budget waited %v; it must refuse after one attempt", elapsed)
+	}
+}
+
 // A vault can be quiet for one checkpoint at a time, so a second client is
 // refused rather than queued — and refused without disturbing the first, whose
 // announcement a queued client would eventually overwrite.

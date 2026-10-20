@@ -267,9 +267,15 @@ func (r *Record) set(name WorkerName, worker WorkerRecord) {
 
 // ready reports whether a worker may run at now. A worker with no record has
 // never run and is always ready.
+//
+// A stored deadline further ahead than MaxBackoff is ready too. No failure can
+// schedule one that far out, so it is evidence the wall clock stepped backwards
+// since it was written, and honouring it would park the worker for as long as
+// the clock had jumped.
 func (r *Record) ready(name WorkerName, now time.Time) bool {
 	next := r.worker(name).NextAttemptAfter
-	return next.IsZero() || !now.UTC().Before(next)
+	now = now.UTC()
+	return next.IsZero() || !now.Before(next) || next.Sub(now) > MaxBackoff
 }
 
 // WorkerStatus is one worker's scheduling as a status read reports it.

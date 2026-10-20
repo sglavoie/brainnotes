@@ -304,9 +304,12 @@ func sourceSaveMessage(result *noteops.SaveSourceResult) string {
 // the history does not cover it, and a client told only "500" would resubmit
 // against a revision its own save replaced.
 func (s *Server) writeSourceSaveError(w http.ResponseWriter, req noteops.SaveSourceRequest, result *noteops.SaveSourceResult, err error) {
+	// The message goes through the reader's redaction like every other management
+	// error: a snapshot failure carries git's stderr, which names files by their
+	// absolute path.
 	payload := sourceSaveErrorResponse{
 		Code:    string(noteops.CodeOf(err)),
-		Message: noteops.MessageOf(err),
+		Message: redactForReader(w, noteops.MessageOf(err)),
 	}
 	switch {
 	case result != nil:

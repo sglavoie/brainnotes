@@ -6,9 +6,36 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
 )
+
+// openMediaFile opens a resolved media path for serving and reports ok only
+// when the descriptor it opened is a regular file.
+//
+// resolveContainedRegularFile already checked the path, but by name: between
+// that check and this open the entry can be swapped for a FIFO or a device.
+// Judging the opened descriptor closes that window, and O_NONBLOCK keeps the
+// open itself from waiting forever on a FIFO nobody writes to. A regular file
+// ignores the flag.
+func openMediaFile(path string) (*os.File, os.FileInfo, bool, error) {
+	//bn:direct-write O_RDONLY: this opens a media file for reading only and creates, truncates or writes nothing
+	file, err := os.OpenFile(path, os.O_RDONLY|syscall.O_NONBLOCK, 0)
+	if err != nil {
+		return nil, nil, false, err
+	}
+	info, err := file.Stat()
+	if err != nil {
+		_ = file.Close()
+		return nil, nil, false, err
+	}
+	if !info.Mode().IsRegular() {
+		_ = file.Close()
+		return nil, nil, false, nil
+	}
+	return file, info, true, nil
+}
 
 func mediaPathForTarget(root, target string) (string, bool, error) {
 	rel, err := normalizeVaultRelativePath(target)

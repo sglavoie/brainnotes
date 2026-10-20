@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -199,5 +200,38 @@ func TestSearch_Context_NoFrontmatter(t *testing.T) {
 	// First line should be the match at line 1 (1-based).
 	if !strings.Contains(lines[0], ":1:") {
 		t.Fatalf("expected match at line 1, got: %q", lines[0])
+	}
+}
+
+// readBodyLines must start the body exactly where frontmatter.Parse does, so a
+// BOM-prefixed block is still skipped and an indented "---" is body text.
+func TestReadBodyLinesAgreesWithFrontmatterParse(t *testing.T) {
+	tests := []struct {
+		name    string
+		content string
+		want    int
+	}{
+		{name: "plain_frontmatter", content: "---\ntitle: a\n---\nbody\n", want: 3},
+		{name: "bom_frontmatter", content: "\ufeff---\ntitle: a\n---\nbody\n", want: 3},
+		{name: "crlf_frontmatter", content: "---\r\ntitle: a\r\n---\r\nbody\r\n", want: 3},
+		{name: "closer_at_eof", content: "---\ntitle: a\n---", want: 3},
+		{name: "indented_opener_is_body", content: "  ---\nbody\n  ---\nmore\n", want: 0},
+		{name: "unterminated_block_is_body", content: "---\nbody\n", want: 0},
+		{name: "no_frontmatter", content: "body\n", want: 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "note.md")
+			if err := os.WriteFile(path, []byte(tt.content), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			_, got, err := readBodyLines(path)
+			if err != nil {
+				t.Fatalf("readBodyLines: %v", err)
+			}
+			if got != tt.want {
+				t.Fatalf("bodyStart = %d, want %d", got, tt.want)
+			}
+		})
 	}
 }

@@ -10,7 +10,6 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -283,18 +282,16 @@ func (s *Server) handleMedia(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	file, err := os.Open(mediaPath)
+	file, info, ok, err := openMediaFile(mediaPath)
 	if err != nil {
 		http.Error(w, "media open error", http.StatusInternalServerError)
 		return
 	}
-	defer file.Close()
-
-	info, err := file.Stat()
-	if err != nil {
-		http.Error(w, "media stat error", http.StatusInternalServerError)
+	if !ok {
+		http.NotFound(w, r)
 		return
 	}
+	defer file.Close()
 
 	contentType := mime.TypeByExtension(strings.ToLower(filepath.Ext(mediaPath)))
 	declared := contentType != ""

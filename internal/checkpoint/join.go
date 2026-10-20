@@ -186,8 +186,14 @@ func Joined(root string) bool {
 // slips in between the check and the acquisition is admitted, and the
 // checkpoint's drain budget covers it — the record is written once, so at most
 // the writers already in flight at that instant can win the race.
+//
+// Only a zero wait means the default. A negative wait is what remaining hands
+// over once the caller's deadline has passed, and it buys exactly one look and
+// one lock attempt: admit holds the per-root mutex here, so turning an expired
+// budget into a fresh DefaultWriterWait would stall every other writer in the
+// process for that long.
 func acquireShared(ctx context.Context, paths vaultPaths, wait time.Duration) (func(), error) {
-	if wait <= 0 {
+	if wait == 0 {
 		wait = DefaultWriterWait
 	}
 	deadline := time.Now().Add(wait)

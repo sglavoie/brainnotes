@@ -97,6 +97,22 @@ func unsafeArchiveCases() []unsafeArchiveCase {
 			wantErr: "duplicate entry",
 		},
 		{
+			name: "file over earlier descendant",
+			entries: []archiveFixtureEntry{
+				{name: "Notes/Inbox/Daily.md", body: "one"},
+				{name: "Notes", body: "two"},
+			},
+			wantErr: `conflicts with descendant "notes/inbox/daily.md"`,
+		},
+		{
+			name: "descendant under earlier file",
+			entries: []archiveFixtureEntry{
+				{name: "Notes", body: "one"},
+				{name: "Notes/Daily.md", body: "two"},
+			},
+			wantErr: `conflicts with file "notes"`,
+		},
+		{
 			name: "symlink entry",
 			entries: []archiveFixtureEntry{
 				{name: "Daily.md", kind: tar.TypeSymlink, linkname: "Other.md"},

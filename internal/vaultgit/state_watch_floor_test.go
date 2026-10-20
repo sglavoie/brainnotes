@@ -104,7 +104,7 @@ func TestAPreSchedulingRecordIsUpgradedInPlace(t *testing.T) {
 	}
 
 	policy := testPolicy(t, "5m")
-	refreshed, err := state.RefreshWatchState(policy)
+	refreshed, err := state.RefreshWatchState(policy, watchStart.Add(time.Minute))
 	if err != nil {
 		t.Fatalf("RefreshWatchState: %v", err)
 	}
@@ -143,7 +143,7 @@ func TestChangingTheIntervalRepublishesTheSchedule(t *testing.T) {
 		t.Fatalf("autosave_min_interval = %q, want %q", first.AutosaveMinInterval, "1m")
 	}
 
-	if _, err := state.RefreshWatchState(long); err != nil {
+	if _, err := state.RefreshWatchState(long, watchStart.Add(time.Minute)); err != nil {
 		t.Fatalf("RefreshWatchState: %v", err)
 	}
 	second := state.LoadWatchState()
@@ -165,7 +165,7 @@ func TestWatchStateSerializationIsStable(t *testing.T) {
 	state := newState(t)
 	policy := testPolicy(t, "5m")
 
-	if _, err := state.RefreshWatchState(policy); err != nil {
+	if _, err := state.RefreshWatchState(policy, watchStart.Add(time.Minute)); err != nil {
 		t.Fatalf("RefreshWatchState: %v", err)
 	}
 	assertIdleWatchJSON(t, state)

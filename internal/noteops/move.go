@@ -1,6 +1,7 @@
 package noteops
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -254,7 +255,7 @@ func CheckMoveDestination(targetPath, newPath string, force bool) error {
 	}
 	newInfo, err := os.Lstat(newPath)
 	if err != nil {
-		if errorsIs(err, fs.ErrNotExist) {
+		if errors.Is(err, fs.ErrNotExist) {
 			return nil
 		}
 		return WrapError(CodeConflict, fmt.Sprintf("move: stat %q", newPath), err)

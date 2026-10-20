@@ -9,6 +9,7 @@ import (
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/frontmatter"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/query"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/wikilink"
 )
 
 // statusProperty is the frontmatter key the review-metadata rules read a note's
@@ -141,9 +142,6 @@ func isHubNote(front *frontmatter.Map, hubTypes []string) bool {
 // surrounding whitespace are trimmed by the caller.
 var atxHeading = regexp.MustCompile(`^\s{0,3}(#{1,6})\s+(.*?)\s*#*\s*$`)
 
-// codeFence matches an opening or closing fenced-code delimiter (``` or ~~~).
-var codeFence = regexp.MustCompile("^\\s{0,3}(```+|~~~+)")
-
 // emptyHubHeadings returns the subset of wanted heading titles that appear in
 // body as ATX headings but have no non-blank content between the heading and the
 // next heading (or the end of the note). Titles are matched case-insensitively
@@ -156,35 +154,7 @@ func emptyHubHeadings(body string, wanted []string) []string {
 		return nil
 	}
 
-	// emptyByTitle records, per lowercased heading title, whether any occurrence
-	// of that heading had an empty section.
-	emptyByTitle := map[string]bool{}
-	lines := strings.Split(body, "\n")
-	inFence := false
-	for i := 0; i < len(lines); i++ {
-		line := lines[i]
-		if codeFence.MatchString(line) {
-			inFence = !inFence
-			continue
-		}
-		if inFence {
-			continue
-		}
-		match := atxHeading.FindStringSubmatch(line)
-		if match == nil {
-			continue
-		}
-		title := strings.ToLower(strings.TrimSpace(match[2]))
-		if title == "" {
-			continue
-		}
-		empty := sectionIsEmpty(lines[i+1:])
-		if empty {
-			emptyByTitle[title] = true
-		} else if _, seen := emptyByTitle[title]; !seen {
-			emptyByTitle[title] = false
-		}
-	}
+	emptyByTitle := emptyHeadingTitles(body)
 
 	var out []string
 	seen := map[string]bool{}
@@ -201,15 +171,39 @@ func emptyHubHeadings(body string, wanted []string) []string {
 	return out
 }
 
+// emptyHeadingTitles records, per lowercased heading title outside fenced code,
+// whether any occurrence of that heading had an empty section.
+func emptyHeadingTitles(body string) map[string]bool {
+	emptyByTitle := map[string]bool{}
+	lines := strings.Split(body, "\n")
+	var fence wikilink.FenceScanner
+	for i, line := range lines {
+		if fence.Line(line) {
+			continue
+		}
+		match := atxHeading.FindStringSubmatch(line)
+		if match == nil {
+			continue
+		}
+		title := strings.ToLower(strings.TrimSpace(match[2]))
+		if title == "" {
+			continue
+		}
+		if sectionIsEmpty(lines[i+1:]) {
+			emptyByTitle[title] = true
+		} else if _, seen := emptyByTitle[title]; !seen {
+			emptyByTitle[title] = false
+		}
+	}
+	return emptyByTitle
+}
+
 // sectionIsEmpty reports whether the lines following a heading contain no
 // non-blank content before the next heading. A fenced-code delimiter counts as
 // content (an empty-looking fenced block is still a filled section), so the scan
 // stops at the first fence, heading, or non-blank line.
 func sectionIsEmpty(lines []string) bool {
 	for _, line := range lines {
-		if codeFence.MatchString(line) {
-			return false
-		}
 		if atxHeading.MatchString(line) {
 			return true
 		}

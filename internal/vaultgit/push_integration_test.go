@@ -129,4 +129,31 @@ func TestPushNeverForces(t *testing.T) {
 	_ = shared
 }
 
+// A remote that accepts the connection and then never answers must not hold
+// the push — and with it the watcher's poll loop — for longer than the push
+// timeout. The stand-in receive-pack sleeps far past the shortened timeout.
+func TestPushToAnUnresponsiveRemoteTimesOut(t *testing.T) {
+	h := newHarness(t)
+	h.write("Inbox/note.md", "one\n")
+	h.commitPending()
+
+	bare := t.TempDir()
+	rawGit(t, bare, "-c", "init.defaultBranch=main", "init", "--bare", "-q")
+	rawGit(t, h.root, "remote", "add", "origin", bare)
+	rawGit(t, h.root, "config", "remote.origin.receivepack", "sh -c 'sleep 30' --")
+	h.mgr.pushTimeout = 300 * time.Millisecond
+
+	started := time.Now()
+	_, err := h.mgr.Push(context.Background())
+	if elapsed := time.Since(started); elapsed > 10*time.Second {
+		t.Fatalf("Push to a hung remote returned after %v; the timeout did not bound it", elapsed)
+	}
+	if !IsPushFailure(err) {
+		t.Fatalf("Push to a hung remote = %v, want a push failure", err)
+	}
+	if state, ok := h.mgr.PushStatus(); !ok || state.Attempts != 1 {
+		t.Fatalf("a timed-out push must record retry state: %+v (ok=%v)", state, ok)
+	}
+}
+
 // --- Environment isolation ---------------------------------------------------

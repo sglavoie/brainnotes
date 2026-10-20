@@ -11,6 +11,7 @@ import (
 	"strings"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/frontmatter"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/textnorm"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
@@ -144,8 +145,17 @@ func mergeWindows(wins []window) []window {
 // trailing empty string), and returns the 0-based index of the first body
 // line (the line after the closing "---" of the frontmatter, or 0 if there
 // is no frontmatter).
+//
+// Where the body starts is frontmatter.Parse's decision, not a second guess at
+// the delimiters: the parser strips a leading BOM, ignores an indented "---",
+// and treats an unterminated block as body, so a line-level heuristic would
+// show or hide lines the note's own body does not.
 func readBodyLines(path string) (lines []string, bodyStart int, err error) {
 	raw, err := os.ReadFile(path)
+	if err != nil {
+		return nil, 0, err
+	}
+	doc, err := frontmatter.Parse(raw)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -156,13 +166,13 @@ func readBodyLines(path string) (lines []string, bodyStart int, err error) {
 	if len(lines) == 0 {
 		return nil, 0, nil
 	}
-	if strings.TrimSpace(lines[0]) == "---" {
-		for i := 1; i < len(lines); i++ {
-			if strings.TrimSpace(lines[i]) == "---" {
-				bodyStart = i + 1
-				break
-			}
-		}
+	// The body is always a suffix of the file, so what precedes it is the
+	// frontmatter block. A closing delimiter at end of file has no newline after
+	// it, and the body then starts one line past the last counted one.
+	prefix := string(raw[:len(raw)-len(doc.Body)])
+	bodyStart = strings.Count(prefix, "\n")
+	if prefix != "" && !strings.HasSuffix(prefix, "\n") {
+		bodyStart++
 	}
 	return lines, bodyStart, nil
 }

@@ -200,7 +200,7 @@ func (s *Server) handlePropertiesPreview(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	response := propertyMutationResponseForPlan(plan, status)
+	response := propertyMutationResponseForPlan(w, plan, status)
 	if !plan.blocked() {
 		receipt, err := s.propertyPreviews.store(propertyPreviewRecord{
 			Kind:       propertyPreviewNotes,
@@ -263,7 +263,7 @@ func (s *Server) handlePropertiesApply(w http.ResponseWriter, r *http.Request) {
 	s.finishPropertyWrite(true)
 
 	status = s.configState.Status()
-	response := propertyMutationResponseForPlan(plan, status)
+	response := propertyMutationResponseForPlan(w, plan, status)
 	response.JournalID = managementJournalID(entry)
 	writeManagementJSON(w, http.StatusOK, response)
 }
@@ -300,7 +300,14 @@ func propertyPlanMatchesReceipt(plan *propertyPlan, record propertyPreviewRecord
 	return nil
 }
 
-func propertyMutationResponseForPlan(plan *propertyPlan, status ConfigStatus) propertyMutationResponse {
+// propertyMutationResponseForPlan renders a plan for the reader w answers. A
+// blocker's detail is often an error's text — a configuration patch or parse
+// failure — and so is redacted the way a management error message is.
+func propertyMutationResponseForPlan(w http.ResponseWriter, plan *propertyPlan, status ConfigStatus) propertyMutationResponse {
+	blockers := sortedPropertyBlockers(plan.Blockers)
+	for i := range blockers {
+		blockers[i].Detail = redactForReader(w, blockers[i].Detail)
+	}
 	response := propertyMutationResponse{
 		OK:         true,
 		Generation: status.Generation,
@@ -310,7 +317,7 @@ func propertyMutationResponseForPlan(plan *propertyPlan, status ConfigStatus) pr
 		Selected:   plan.Selected,
 		Affected:   len(plan.Notes),
 		Previews:   plan.previews(),
-		Blockers:   sortedPropertyBlockers(plan.Blockers),
+		Blockers:   blockers,
 		ConfigDiff: []propertyConfigDiffLine{},
 		Projected:  plan.Projection,
 		Config:     status,

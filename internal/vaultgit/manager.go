@@ -97,6 +97,11 @@ type Manager struct {
 	// backoff the remote never earned.
 	pushMu    sync.Mutex
 	pushStale bool
+
+	// pushTimeout bounds one remote push. It is [PushTimeout] in production and
+	// shortened only by tests in this package, which cannot wait two minutes for
+	// a remote that never answers.
+	pushTimeout time.Duration
 }
 
 // Open prepares the safety engine for a vault.
@@ -133,8 +138,9 @@ func Open(ctx context.Context, vaultRoot string, opts Options) (*Manager, error)
 			name:  strings.TrimSpace(opts.AuthorName),
 			email: strings.TrimSpace(opts.AuthorEmail),
 		},
-		now:      opts.Now,
-		autosave: resolveAutosavePolicy(opts.Autosave),
+		now:         opts.Now,
+		autosave:    resolveAutosavePolicy(opts.Autosave),
+		pushTimeout: PushTimeout,
 	}
 	if m.remote == "" {
 		m.remote = defaultRemote
@@ -356,7 +362,7 @@ func (m *Manager) SetAutosavePolicy(policy config.AutosavePolicy) error {
 	m.autosave = resolved
 	m.autosaveMu.Unlock()
 	return m.checkpointMutation("publish autosave policy", func() error {
-		_, err := m.state.RefreshWatchState(resolved)
+		_, err := m.state.RefreshWatchState(resolved, m.now())
 		return err
 	})
 }
@@ -428,7 +434,7 @@ func (m *Manager) ExternalCommitDue() bool {
 		return m.state.LoadWatchState().DueAt(policy, m.now())
 	}
 	defer release()
-	state, _ := m.state.RefreshWatchState(policy)
+	state, _ := m.state.RefreshWatchState(policy, m.now())
 	return state.DueAt(policy, m.now())
 }
 

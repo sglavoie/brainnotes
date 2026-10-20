@@ -1,6 +1,8 @@
 package web
 
 import (
+	"net/http"
+
 	"github.com/sglavoie/sglavoie_brainnotes/internal/journal"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
 )
@@ -16,7 +18,9 @@ type historyTextComparison struct {
 
 // Comparisons use the same current-file digests the restore receipt pins. Large,
 // binary and private state paths remain reviewable by their path and effect.
-func (s *Server) addHistoryComparisons(response *historyPreviewResponse, pins []propertyPreviewFileState) {
+// A read failure is shown as its reason, redacted for the reader w answers,
+// because a journal or filesystem error names the file by its absolute path.
+func (s *Server) addHistoryComparisons(w http.ResponseWriter, response *historyPreviewResponse, pins []propertyPreviewFileState) {
 	digests := make(map[string]string, len(pins))
 	for _, pin := range pins {
 		digests[pin.RelPath] = pin.Digest
@@ -36,7 +40,7 @@ func (s *Server) addHistoryComparisons(response *historyPreviewResponse, pins []
 		attempted++
 		comparison, err := journal.ReadRestoreText(s.vault.Root, noteops.JournalRoot(s.vault.Root), response.EntryID, change.Path, min(historyComparisonFileLimit, int64(remaining/2)))
 		if err != nil {
-			change.ComparisonUnavailable = "Text comparison unavailable: " + err.Error()
+			change.ComparisonUnavailable = redactForReader(w, "Text comparison unavailable: "+err.Error())
 			continue
 		}
 		if comparison.CurrentDigest != digests[change.Path] {
