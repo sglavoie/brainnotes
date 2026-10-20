@@ -42,6 +42,7 @@ import {
   type SynthesisStorageLike,
 } from "./synthesize-storage";
 import type { RelatedMode } from "./related-types";
+import { requestErrorMessage } from "./request-outcome";
 
 export type WritableClipboard = Pick<Clipboard, "writeText">;
 
@@ -59,7 +60,7 @@ export type SynthesisController = {
 };
 
 export const errorMessage = (error: unknown, fallback: string): string =>
-  error instanceof Error && error.message !== "" ? error.message : fallback;
+  requestErrorMessage(error, fallback);
 
 export const errorCode = (error: unknown): string =>
   error instanceof SynthesisRequestError ? error.code : "";

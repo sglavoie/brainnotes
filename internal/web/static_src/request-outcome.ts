@@ -16,6 +16,24 @@ export const unansweredRequest = (purpose: RequestPurpose): RequestFailure => ({
       : "Couldn't load the current values. Check your connection, then refresh. If sign-in expired, sign in again.",
 });
 
+export const serverUnreachableMessage =
+  "Couldn't reach the bn server. Check it is still running, then retry.";
+
+// fetch rejects with a TypeError when no response arrives at all. Its wording
+// ("Failed to fetch", "Load failed", "NetworkError…") varies by browser and
+// tells a reader nothing, so it is never shown as is.
+export const isUnreachableError = (error: unknown): boolean => error instanceof TypeError;
+
+// requestErrorMessage turns a rejected request into one sentence: a network
+// failure says the server could not be reached, any other error keeps its own
+// message, and an empty one falls back to the caller's wording.
+export const requestErrorMessage = (error: unknown, fallback: string): string => {
+  if (isUnreachableError(error)) return serverUnreachableMessage;
+  if (typeof error === "string" && error.trim() !== "") return error.trim();
+  if (error instanceof Error && error.message.trim() !== "") return error.message.trim();
+  return fallback;
+};
+
 // A list or queue that failed to load says what is missing, the likely cause,
 // and which control on screen loads it again.
 export const loadFailureMessage = (subject: string, retryLabel: string): string =>

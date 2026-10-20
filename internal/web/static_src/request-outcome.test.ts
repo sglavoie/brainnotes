@@ -1,7 +1,7 @@
 import { applySyncResolution } from "./sync-requests";
 import { requestSynthesisApply } from "./api-synthesis";
 import { describe, expect, it } from "vitest";
-import { responseFailure, unansweredRequest } from "./request-outcome";
+import { requestErrorMessage, responseFailure, serverUnreachableMessage, unansweredRequest } from "./request-outcome";
 import { applySetting, applyTemplate, fetchSettings, previewSetting } from "./settings-requests";
 import { applySavedView } from "./saved-views-requests";
 import { applyPropertyMutation, undoJournalEntry } from "./properties-workbench-requests";
@@ -47,5 +47,19 @@ describe("uncertain writes", () => {
     expect(await fetchSettings(fetcher)).toEqual(unansweredRequest("read"));
     expect(await previewSetting(fetcher, "csrf", { token: "csrf", op: "unset", key: "capture.heading" }))
       .toEqual(unansweredRequest("preview"));
+  });
+});
+
+describe("requestErrorMessage", () => {
+  it("never shows the browser's own network failure wording", () => {
+    for (const wording of ["Failed to fetch", "Load failed", "NetworkError when attempting to fetch resource."]) {
+      expect(requestErrorMessage(new TypeError(wording), "fallback")).toBe(serverUnreachableMessage);
+    }
+  });
+  it("keeps a server's own message and falls back when there is none", () => {
+    expect(requestErrorMessage(new Error(" Note not found. "), "fallback")).toBe("Note not found.");
+    expect(requestErrorMessage("Rendering refused.", "fallback")).toBe("Rendering refused.");
+    expect(requestErrorMessage(new Error(""), "fallback")).toBe("fallback");
+    expect(requestErrorMessage(null, "fallback")).toBe("fallback");
   });
 });

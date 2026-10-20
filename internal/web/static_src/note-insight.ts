@@ -7,6 +7,7 @@ import {
 import { queryElement } from "./dom";
 import { copyWithFallback } from "./clipboard";
 import { setStatusText } from "./status";
+import { isUnreachableError, serverUnreachableMessage } from "./request-outcome";
 
 type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 type ConfirmLike = ConfirmAction;
@@ -45,6 +46,9 @@ const readResponsePayload = async (response: Response): Promise<unknown> => {
 };
 
 const describeClientError = (error: unknown): string => {
+  if (isUnreachableError(error)) {
+    return `Ask AI failed. ${serverUnreachableMessage}`;
+  }
   if (error instanceof Error && error.message.trim() !== "") {
     return `Ask AI failed: ${error.message}`;
   }

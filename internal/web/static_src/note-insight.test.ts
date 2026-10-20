@@ -119,7 +119,7 @@ describe("note insight controller", () => {
 
     await waitForExpect(() => {
       expect(document.querySelector("[data-note-insight-status]")?.textContent).toBe(
-        "Ask AI failed: Failed to fetch"
+        "Ask AI failed. Couldn't reach the bn server. Check it is still running, then retry."
       );
     });
   });

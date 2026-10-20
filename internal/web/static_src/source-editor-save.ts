@@ -2,6 +2,7 @@ import { classifySaveResponse, newSaveID, type SaveOutcome } from "./source-save
 import type { SourceEditorDeps, EditorState, SaveContext } from "./source-editor-controller";
 import type { SourceEditorElements } from "./source-editor-elements";
 import { hideConflict, showConflict } from "./source-editor-conflict";
+import { requestErrorMessage } from "./request-outcome";
 
 export const runSave = async (
   deps: SourceEditorDeps,
@@ -163,11 +164,7 @@ const oversizeMessage = (content: string, maxBytes: number): string => {
     : "";
 };
 
-export const errorMessage = (error: unknown, fallback: string): string => {
-  if (error instanceof Error && error.message.trim() !== "") {
-    return error.message.trim();
-  }
-  return fallback;
-};
+export const errorMessage = (error: unknown, fallback: string): string =>
+  requestErrorMessage(error, fallback);
 
 const currentDraft = (state: EditorState, submitted: string): string => state.surface?.getValue() ?? submitted;
