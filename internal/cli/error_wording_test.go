@@ -2,6 +2,7 @@ package cli
 
 import (
 	"errors"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -97,6 +98,19 @@ func TestNoArgsLeafCommandsSayTheyTakeNoArguments(t *testing.T) {
 		{"history has no -q", []string{"history", "x"}, `bn: history: takes no arguments (got "x"); see 'bn history --help'`},
 		{"nested leaf", []string{"views", "check", "x"}, `bn: views check: takes no arguments (got "x"); see 'bn views check --help'`},
 		{"parent keeps unknown command", []string{"views", "nope"}, `bn: views: unknown command "nope" for "bn views"; see 'bn views --help'`},
+	})
+}
+
+// TestRestoreMissingArchiveNamesWhatWasTyped pins `bn restore` on an archive
+// that does not exist: the restore label, the path as typed, and where a
+// relative path is looked up — not an lstat of an absolute path.
+func TestRestoreMissingArchiveNamesWhatWasTyped(t *testing.T) {
+	root := buildErrorWordingVault(t)
+	missingAbs := filepath.Join(t.TempDir(), "gone.tar.gz")
+	runErrorWordingCases(t, root, []errorWordingCase{
+		{"relative", []string{"restore", "nope.tar"}, "bn: restore: no archive at nope.tar (relative paths resolve from the vault root; see backups/)"},
+		{"relative dry run", []string{"restore", "--dry-run", "backups/nope.tar.gz"}, "bn: restore: no archive at backups/nope.tar.gz (relative paths resolve from the vault root; see backups/)"},
+		{"absolute", []string{"restore", missingAbs}, "bn: restore: no archive at " + missingAbs},
 	})
 }
 
