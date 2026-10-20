@@ -19,6 +19,12 @@ type-checks, lints, runs frontend tests, and rebuilds them. The lint step is
 complexity baseline, so existing offenders do not block while no new violation
 can land.
 
+TypeScript runs side by side, as the TypeScript 7 release recommends:
+`@typescript/native` is TypeScript 7 and provides the `tsc` that
+`npm run typecheck:web` uses, while the `typescript` name is an alias for
+`@typescript/typescript6` because typescript-eslint loads the TypeScript 6
+compiler API. Drop the alias once typescript-eslint supports TypeScript 7.
+
 The generated JavaScript is committed so Go-only builds do not need Node. The
 editor and Sync pages load `editing.js` for CodeMirror; note reading loads only
 `app.js`. Each workspace loads its own small page bundle.
