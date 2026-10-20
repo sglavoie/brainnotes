@@ -1,6 +1,7 @@
 package vault
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -245,7 +246,15 @@ func LockDir(root string) (string, error) {
 // goroutines inside one bn process would not contend and a barrier built on it
 // would exclude nothing.
 func LockFile(lockPath string, exclusive bool, wait time.Duration) (func(), error) {
-	lock, err := LockFileHandle(lockPath, exclusive, wait)
+	return LockFileContext(context.Background(), lockPath, exclusive, wait)
+}
+
+// LockFileContext is LockFile that also stops waiting when ctx is done. A
+// cancelled wait returns ctx's error wrapped, never *TxnLockBusyError: the lock
+// was not proven busy for the whole budget, the caller stopped asking. Nothing
+// is held on any error return.
+func LockFileContext(ctx context.Context, lockPath string, exclusive bool, wait time.Duration) (func(), error) {
+	lock, err := LockFileHandleContext(ctx, lockPath, exclusive, wait)
 	if err != nil {
 		return func() {}, err
 	}
@@ -255,6 +264,12 @@ func LockFile(lockPath string, exclusive bool, wait time.Duration) (func(), erro
 // LockFileHandle is LockFile with access to the held descriptor for exec
 // inheritance. It otherwise has identical acquisition semantics.
 func LockFileHandle(lockPath string, exclusive bool, wait time.Duration) (*FileLock, error) {
+	return LockFileHandleContext(context.Background(), lockPath, exclusive, wait)
+}
+
+// LockFileHandleContext is LockFileHandle with a cancellable wait; see
+// LockFileContext.
+func LockFileHandleContext(ctx context.Context, lockPath string, exclusive bool, wait time.Duration) (*FileLock, error) {
 	if lockPath == "" {
 		return nil, errors.New("vault: lock file: empty lock path")
 	}
@@ -271,7 +286,7 @@ func LockFileHandle(lockPath string, exclusive bool, wait time.Duration) (*FileL
 	if wait == 0 {
 		wait = pathLockTimeout
 	}
-	file, err := lockOne(lockPath, lockPath, exclusive, wait)
+	file, err := lockOneContext(ctx, lockPath, lockPath, exclusive, wait)
 	if err != nil {
 		return nil, err
 	}
@@ -439,6 +454,13 @@ func dedupeLockTargets(targets []lockTarget) []lockTarget {
 // means another writer is still working, not that anything changed, so it is
 // reported as a retryable *TxnLockBusyError.
 func lockOne(name, path string, exclusive bool, wait time.Duration) (*os.File, error) {
+	return lockOneContext(context.Background(), name, path, exclusive, wait)
+}
+
+// lockOneContext is lockOne whose poll also ends when ctx is done. The pause
+// between attempts is the only place it blocks, so cancellation is observed
+// there and nowhere else: an attempt that already holds the lock returns it.
+func lockOneContext(ctx context.Context, name, path string, exclusive bool, wait time.Duration) (*os.File, error) {
 	// A fresh descriptor per acquisition is required: flock locks belong to the
 	// open file description, so a cached descriptor would make a process fail to
 	// contend with itself.
@@ -460,7 +482,29 @@ func lockOne(name, path string, exclusive bool, wait time.Duration) (*os.File, e
 			_ = file.Close()
 			return nil, &TxnLockBusyError{Path: path}
 		}
-		time.Sleep(pathLockPollInterval)
+		if err := PauseContext(ctx, pathLockPollInterval); err != nil {
+			_ = file.Close()
+			return nil, fmt.Errorf("vault: lock %q: %w", path, err)
+		}
+	}
+}
+
+// PauseContext sleeps for d or until ctx is done, whichever comes first, and
+// reports ctx's error in the second case. Lock waits use it as their poll pause
+// so a caller holding a request context can walk away from a wait instead of
+// sleeping out a budget nobody is waiting for any more.
+func PauseContext(ctx context.Context, d time.Duration) error {
+	if ctx == nil || ctx.Done() == nil {
+		time.Sleep(d)
+		return nil
+	}
+	timer := time.NewTimer(d)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
 	}
 }
 
