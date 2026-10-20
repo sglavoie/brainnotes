@@ -5,11 +5,14 @@ Part of [Maintenance and bulk-edit commands](commands-maintenance.md).
 ### `bn rename` — change a note's title and rewrite wikilinks
 
 ```sh
-bn rename <note> <new-title> [--dry-run] [--force]
+bn rename [note] <new-title> [--dry-run] [--force]
 ```
 
 `<note>` may be an absolute path, a path with separators, a `.md`-suffixed
 filename, or a bare title (resolved case-insensitively against the vault).
+When it is omitted (`bn rename <new-title>`), an fzf picker selects one note;
+the new title is validated before the picker opens, and a picker that selects
+nothing exits 1.
 
 Rewrites every `[[wikilink]]` in the vault that pointed at the old title —
 including folder-prefixed (`[[Books/Old]]`), aliased (`[[Old|alt]]`), and
@@ -35,18 +38,21 @@ Examples:
 ```sh
 bn rename "References/Books/Old Title.md" "New Title" --dry-run
 bn rename "Old Title" "New Title"           # bare-title lookup
+bn rename "New Title"                       # pick the note with fzf
 ```
 
 ### `bn move` — move a note between folders
 
 ```sh
-bn move <note> <new-folder> [--dry-run] [--force]
+bn move [note] <new-folder> [--dry-run] [--force]
 ```
 
 Changes the folder portion of `<note>`'s path; the title stays the same. Every
 folder-prefixed wikilink that named the old `<folder>/<title>` is rewritten —
 including aliased and headed forms. Bare `[[Title]]` links without a folder
-prefix are left untouched (Obsidian resolves them by title alone).
+prefix are left untouched (Obsidian resolves them by title alone). When
+`<note>` is omitted (`bn move <new-folder>`), an fzf picker selects one note;
+a picker that selects nothing exits 1.
 
 `<new-folder>` is vault-relative; `.` or `""` means the vault root.
 Intermediate directories are created with mode `0755`. Atomicity and undo
@@ -63,6 +69,7 @@ Examples:
 bn move "References/Books/Dune.md" References    # promote to References/
 bn move Dune References/Books                    # demote, by bare title
 bn move "Old/Foo.md" .                           # move to vault root
+bn move Archive                                  # pick the note with fzf
 ```
 
 ### `bn replace` — rewrite a frontmatter value across notes
@@ -113,12 +120,14 @@ bn replace status wip done --dry-run                        # preview only
 ### `bn set` — write frontmatter properties
 
 ```sh
-bn set <note...> <key[=|+=|-=]value...> [--value-type date|datetime|int|bool|float|raw] [--dry-run] [-0]
+bn set [note...] <key[=|+=|-=]value...> [--value-type date|datetime|int|bool|float|raw] [--dry-run] [-0]
 ```
 
 Positional args are split: anything containing an operator (`=`, `+=`, `-=`)
 is a pair, and all preceding args are note paths. Use `-` as the sole note
-arg to read paths from stdin (so it composes with `bn find`).
+arg to read paths from stdin (so it composes with `bn find`). With no note
+args (`bn set status=done`), an fzf picker selects one or more notes
+(multi-select); a picker that selects nothing exits 1.
 
 Operators:
 
@@ -163,6 +172,7 @@ bn set note.md tags+=foo,bar                                # append multiple
 bn set note.md tags-=draft                                  # drop a tag
 bn set note.md tags+=alpha tags-=beta                       # combined
 bn set note.md status=done --dry-run                        # preview only
+bn set status=done                                          # pick notes with fzf
 bn find --tag drafts | bn set - status=done                 # stdin pipeline
 bn find --tag drafts | bn set - tags+=triage                # bulk append
 ```
@@ -170,7 +180,7 @@ bn find --tag drafts | bn set - tags+=triage                # bulk append
 ### `bn tags` — count tag occurrences
 
 ```sh
-bn tags [--sort count|name] [--count=false] [--files] [--json]
+bn tags [--sort count|name] [--count=false] [--files] [--json] [-v|--verbose]
 ```
 
 Alias for `bn values tags`. See `bn values` for flag behavior.
@@ -180,11 +190,15 @@ Alias for `bn values tags`. See `bn values` for flag behavior.
 ```sh
 bn unset <note> <property...> [--dry-run] [-0]
 bn unset <note...> -- <property...>
+bn unset -- <property...>
 ```
 
 Without `--`, the first positional is the note (or `-` for stdin) and the rest
 are property names. To pass multiple notes, use `--` to separate them from
-the property list.
+the property list. With nothing before `--` (`bn unset -- rating status`), an
+fzf picker selects one or more notes (multi-select); a picker that selects
+nothing exits 1. A single positional is always a note, so `bn unset rating`
+is refused for naming no property.
 
 Removing a missing property is a silent no-op. `--dry-run` previews the
 removal in the same shared format as `bn set --dry-run` (one
@@ -197,6 +211,7 @@ Examples:
 bn unset note.md rating
 bn unset a.md b.md -- title status                          # multi-note
 bn unset note.md rating --dry-run                           # preview only
+bn unset -- rating status                                   # pick notes with fzf
 bn find --has rating | bn unset - rating                    # bulk wipe
 ```
 
