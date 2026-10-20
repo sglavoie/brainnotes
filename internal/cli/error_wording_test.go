@@ -69,7 +69,9 @@ func TestFilterErrorsNameTheCommand(t *testing.T) {
 	noViews := `unknown view "nope": no views are defined in ` + config.FileName
 	runErrorWordingCases(t, root, []errorWordingCase{
 		{"age without operator hints", []string{"find", "--age", "30d"}, `bn: find: --age: invalid age expression "30d": must start with >, <, or =; did you mean >30d?`},
-		{"created bad unit has no hint", []string{"find", "--created", ">3x"}, `bn: find: --created: invalid age unit "x" in ">3x": must be one of s, m, h, d`},
+		{"created bad unit has no hint", []string{"find", "--created", ">3x"}, `bn: find: --created: invalid age unit "x" in ">3x": must be one of s (seconds), m (minutes), h (hours), d (days)`},
+		{"age missing unit", []string{"find", "--age", ">30"}, `bn: find: --age: invalid age expression ">30": missing unit; end it with one of s (seconds), m (minutes), h (hours), d (days), like >30d`},
+		{"age fractional count", []string{"find", "--age", ">1.5d"}, `bn: find: --age: invalid age value in ">1.5d": "1.5" is not a whole number`},
 		{"link bound range", []string{"find", "--min-links", "-3"}, `bn: find: --min-links must be 0 or more, or -1 to disable (got -3)`},
 		{"link bounds crossed", []string{"graph", "--min-links", "3", "--max-links", "1"}, `bn: graph: --min-links (3) cannot exceed --max-links (1)`},
 		{"find unknown view", []string{"find", "--view", "nope"}, "bn: find: " + noViews},

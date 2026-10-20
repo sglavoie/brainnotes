@@ -4,6 +4,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/sglavoie/sglavoie_brainnotes/internal/query"
 )
 
 // parseBoolLiteral reads true/false case-insensitively, matching how boolField
@@ -128,17 +130,8 @@ func parseOffset(text string) (n int, unit byte, ok bool) {
 // using query.ParseAge's units so `age>7d` and `modified>"-7d"` agree on what a
 // day is.
 func offsetDuration(n int, unit byte) (time.Duration, bool) {
-	var mult time.Duration
-	switch unit {
-	case 's':
-		mult = time.Second
-	case 'm':
-		mult = time.Minute
-	case 'h':
-		mult = time.Hour
-	case 'd':
-		mult = 24 * time.Hour
-	default:
+	mult, ok := query.AgeUnit(unit)
+	if !ok {
 		return 0, false
 	}
 	return time.Duration(n) * mult, true

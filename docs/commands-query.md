@@ -44,8 +44,14 @@ and each repeat narrows further: `--has rating --has source` (or
 `--has rating,source`) keeps only notes carrying both. The other value flags
 take one value, and giving one twice is refused rather than keeping the last
 (`bn: find: --status given more than once`). Age expressions take the form
-`>30d`, `<7d`, `=0d`; `--created` reads the `created` property, `--age` reads
-`last`.
+`>30d`, `<7d`, `=0d`: an operator (`>`, `<` or `=`), a whole number, and a
+unit, which is one of `s` (seconds), `m` (minutes), `h` (hours) or `d` (days).
+`m` is minutes, not months, and there is no week, month or year unit: write
+`7d`, `30d` or `365d`. The unit is required (`>30` is refused) and the count
+must be whole (`>1.5d` is refused; write `>36h`). `--created` reads the
+`created` property, `--age` reads `last`. The `age` query field and relative
+offsets on a declared `datetime` property (`reviewed>-2h`) use the same units;
+a declared `date` property takes day offsets only (`due<+30d`).
 
 `--min-backlinks n` / `--max-backlinks n` bound a note's inbound links from
 other notes, and `--min-links n` / `--max-links n` bound its outgoing links to
