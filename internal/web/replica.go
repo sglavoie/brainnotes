@@ -127,6 +127,7 @@ func readReplicaStatus(path string) replicaStatus {
 
 func (s *Server) handleReady(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {
+		w.Header().Set("Allow", http.MethodGet+", "+http.MethodHead)
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}

@@ -159,6 +159,23 @@ func TestReplicaStaleIsStillReady(t *testing.T) {
 	}
 }
 
+// A refused method names the ones the probe accepts, as every other 405 does.
+func TestReplicaReadyRefusalNamesAllowedMethods(t *testing.T) {
+	root, state := t.TempDir(), t.TempDir()
+	if err := os.WriteFile(filepath.Join(root, "Note.md"), []byte("hello"), 0444); err != nil {
+		t.Fatal(err)
+	}
+	srv := replicaFixture(t, root, state)
+	rec := httptest.NewRecorder()
+	srv.handleReady(rec, httptest.NewRequest(http.MethodPut, "/api/ready", nil))
+	if rec.Code != http.StatusMethodNotAllowed {
+		t.Fatalf("status = %d, want 405", rec.Code)
+	}
+	if got := rec.Header().Get("Allow"); got != "GET, HEAD" {
+		t.Fatalf("Allow = %q, want %q", got, "GET, HEAD")
+	}
+}
+
 func replicaCard(t *testing.T, srv *Server) *brief.Card {
 	t.Helper()
 	snap, err := srv.state.currentSnapshot()
