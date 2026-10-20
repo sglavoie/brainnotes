@@ -11,7 +11,12 @@ actions require an inline preview first: the server returns a one-use
 rewrite counts, and any failures, then the follow-up apply call must reuse that
 preview receipt before it expires. Note pages can move the current note to
 Trash, edit frontmatter in place, create a blank note for a broken wikilink
-target, and open the file in the configured editor for body edits. These web
+target, and edit the note body with **Edit in browser**, a raw-Markdown source
+editor with preview that saves through `/api/source/save` against the revision it
+loaded. **Edit in browser** is available in local and hosted modes and absent on
+read-only replicas, which refuse every `/api/source/*` route. In local mode,
+**Actions → Open in external editor** opens the file in the configured editor
+instead. These web
 actions use the same note-management code as the CLI where practical, refresh
 the served vault state after success, and return structured JSON for automation.
 The frontmatter sidebar reports success only after the server confirms it and
@@ -44,8 +49,8 @@ info string, such as `go`, `sh`, or `json`, on the server. Unlabeled fences
 remain plain escaped code blocks. Note bodies also auto-link GFM-style bare URLs
 such as `https://example.com`. Beyond that, rendering supports the GitHub
 Flavored Markdown extensions — tables, `~~strikethrough~~`, and task lists
-(`- [ ]` / `- [x]`, shown as read-only checkboxes since `bn serve` does not edit
-note bodies) — plus footnotes, definition lists, and typographic punctuation
+(`- [ ]` / `- [x]`, shown as read-only checkboxes on the rendered page; change
+them in **Edit in browser** or your editor) — plus footnotes, definition lists, and typographic punctuation
 (straight quotes become curly, `---` becomes an em dash, `--` an en dash, and
 `...` an ellipsis). Wide tables scroll horizontally so they stay readable on
 narrow viewports, and wikilinks resolve inside table cells just as they do in
@@ -164,6 +169,16 @@ deployments, so the pair is refused rather than resolved.
 | Open action | starts the editor | navigates to `/n/<key>` | navigates to `/n/<key>` |
 | Request body limit | 32 MiB | 1 MiB | 1 MiB |
 
+The body limit is the profile's default, not an absolute cap. A few routes whose
+payload is a whole note, draft, or file are widened wherever the profile is
+narrower, and each re-applies the same bound itself: `/api/source/preview`,
+`/api/source/save`, and `/api/source/create` accept up to 12 MiB + 32 KiB (three
+times the 4 MiB note-source limit, for form encoding), `/api/synthesis/preview` up
+to 3 MiB + 32 KiB, and `/api/attachments/upload` up to 25 MiB (the most any vault
+may configure). So a hosted server can save a full-size note or upload a full-size
+attachment; local serving's 32 MiB already covers all three. See
+[Serving modes](internals/serving-modes.md) for the rationale.
+
 Read-only is an allowlist: a route it does not name is unavailable, so its only
 writes are the Daily Brief visit and Open/Another activity records in the
 external `--state-dir`. Hosted is **not** read-only with writes re-enabled — the
@@ -189,7 +204,8 @@ validate note route keys, and reject paths outside the vault. A state-changing
 request must additionally be same-origin — judged from `Sec-Fetch-Site` when the
 browser sends it, otherwise from `Origin` against the request host; a request
 with neither header is not a browser request and is left to the token. A request
-body over the profile's limit is rejected with `413`. Every response is
+body over its route's limit (the profile's, or a widened one listed above) is
+rejected with `413`. Every response is
 `private, no-store` with `X-Content-Type-Options: nosniff`,
 `Referrer-Policy: same-origin`, and `X-Frame-Options: DENY`, so an upstream
 shared cache retains nothing, the note being read stays out of the `Referer` of

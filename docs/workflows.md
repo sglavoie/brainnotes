@@ -74,10 +74,20 @@ bn lint
 `bn` keeps a vault-local operation journal at `<vault>/.bnotes/journal/`.
 
 - Journaled commands (apply mode): `new`, `capture`, `set`, `unset`, `replace`,
-  `rename`, `move`, `repair`, `relink`, plus `bn serve` management actions such as
-  `bn web trash`, `bn web move`, `bn web frontmatter set`,
-  `bn web frontmatter unset`, `bn web capture`, broken-link stub creation, and
-  cockpit fixes (`bn cockpit fix`). `bn doctor` is read-only and never journals.
+  `rename`, `rename-key`, `move`, `remove`, `pin`, `unpin`, `repair`, `relink`,
+  and `config set` / `config unset` / `config migrate` (which restore
+  configuration files rather than notes). `bn serve` management actions journal
+  too, under their own command names: note writes such as `bn web source save`
+  (including any attachments uploaded with that save), `bn web create`,
+  `bn web rename`, `bn web move`, `bn web trash`, `bn web capture`,
+  `bn web frontmatter set` / `unset`, `bn web synthesize`, and the
+  `bn web bulk …` actions; pin changes (`bn web pins set`, `bn web pins remove`,
+  `bn web pins reorder`); broken-link stub creation; cockpit fixes
+  (`bn cockpit fix`, `bn serve exempt dead end`, `bn serve clean long tail`);
+  and configuration writes from Settings, templates, saved views, and sync
+  conflict resolution (`bn serve setting …`, `bn serve template …`,
+  `bn serve view …`, `bn serve sync resolve`). `bn doctor` is read-only and
+  never journals.
 - A capture entry snapshots the whole inbox note, so a restore replaces every
   byte of that note. Ordinary `bn undo` refuses once the inbox changed after the
   capture; `bn undo --force` restores the snapshot and overwrites those later
@@ -173,7 +183,7 @@ reason each remains omitted:
 | `batch`                              | Compose pipelines with `find` + `xargs` instead.                         |
 | `export`                             | The vault is already plain Markdown.                                     |
 | `categories` / `discover`  | Hub-style navigation; the editor's outline + `find --orphan` cover it.   |
-| `attachments`                        | Attachments folder is ignored; binary asset management isn't a fit.      |
+| `attachments`                        | No CLI command: the browser source editor uploads files into `[attachments].dir`, and they are ordinary files beside your notes. |
 | `timeline`                           | `git log` is the canonical long-term history source; recall feedback is ranking state, not content history. |
 | `properties` / `content`             | Subsumed by `bn set` / `bn unset` / `bn find`.                           |
 

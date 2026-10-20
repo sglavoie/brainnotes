@@ -137,7 +137,10 @@ and the `[agent].command` routes behind Ask AI, daily review, and synthesis
 generation — is refused, and the pages that would offer those actions say why
 instead of pointing at a config file on the wrong machine. Open navigates to the
 rendered note, as in read-only mode. Request bodies are bounded at 1 MiB (local
-serving keeps 32 MiB), state-changing requests must be same-origin as well as
+serving keeps 32 MiB), except the few routes whose payload is a whole note, draft,
+or file: source preview, save, and create (12 MiB + 32 KiB), synthesis preview
+(3 MiB + 32 KiB), and attachment upload (25 MiB) — see
+[Serving modes](docs/internals/serving-modes.md). State-changing requests must be same-origin as well as
 carry the CSRF token, responses are `private, no-store`, and an attachment whose
 type a browser would execute is sandboxed and sent as a download.
 `--read-only` and `--hosted` are mutually exclusive. There is still no auth

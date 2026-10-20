@@ -77,10 +77,11 @@ bn find --tag drafts | bn search "review" -
 ### `bn backlinks` — list notes that link to a target
 
 ```sh
-bn backlinks <note> [-0] [-v|--verbose] [--json]
+bn backlinks [note] [-0] [-v|--verbose] [--json]
 ```
 
-`<note>` is either a bare title (case-insensitive stem lookup) or a path/glob.
+`[note]` is either a bare title (case-insensitive stem lookup) or a path/glob;
+with no argument, an fzf picker chooses the target interactively.
 Prints the absolute paths of every note whose body or frontmatter contains a
 `[[wikilink]]` to the target, one per line (or NUL-separated with `-0`). Links
 inside fenced, indented, or inline code are not counted.
@@ -100,7 +101,7 @@ Examples:
 ```sh
 bn backlinks "Crafting Interpreters"
 bn backlinks References/Books/Dune.md
-bn backlinks Dune | xargs bn set status=referenced
+bn backlinks Dune | bn set - status=referenced
 bn backlinks Dune --verbose | awk -F'\t' '{print $1}'
 ```
 
@@ -110,7 +111,7 @@ bn backlinks Dune --verbose | awk -F'\t' '{print $1}'
 bn links [note] [-0] [-v|--verbose] [--json]
 ```
 
-The outgoing counterpart of `bn backlinks`. `<note>` is either a bare title
+The outgoing counterpart of `bn backlinks`. `[note]` is either a bare title
 (case-insensitive stem lookup) or a path/glob; with no argument, an fzf picker
 chooses the target interactively. Prints the absolute path of every note the
 target references via a resolved `[[wikilink]]`, one per line, sorted (or

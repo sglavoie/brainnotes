@@ -111,8 +111,8 @@ query: operator ">" is not defined for field "pinned"; use ":", "=", or "!="; th
 | `degree` | Distinct linked neighbours, in either direction: `degree>=5`. |
 | `cluster-size` | The size of the note's connected component: `cluster-size:1`. |
 
-The last six read the link graph, so a query naming one costs a graph build;
-the others do not. A bare word is always free text, which is why the
+The fields from `orphan` down read the link graph, so a query naming one costs
+a graph build; the others do not. A bare word is always free text, which is why the
 flag-shaped fields are written `orphan:true` rather than bare `orphan` — typing
 `orphan` alone searches for that word. `!=` negates a comparison, and both `:`
 and `=` mean equality.

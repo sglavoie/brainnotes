@@ -202,7 +202,8 @@ review_statuses = []
 wip_statuses = []
 # Maximum concurrent WIP notes before the WIP-limit rule flags overflow.
 max_wip = 3
-# Age in days after which a note's status is treated as stale.
+# Age in days after which a review_statuses note's review_date_property date is
+# treated as stale. Non-positive disables the stale-status rule.
 stale_status_days = 30
 # Unprocessed captures under [capture].heading before the capture-backlog rule
 # fires. 0 (the default) disables the rule.
@@ -297,6 +298,9 @@ carrying its error** — a `STATUS` of `error` in `bn views`, a failure in
 the current query from the Library page of `bn serve`, which patches this file
 for you after showing the exact diff.
 
+The starter file has no `[attachments]` section either: uploads use the defaults
+shown above (`dir = "attachments"`, a 25 MiB per-file limit) until you add one.
+
 ### The autosave floor
 
 `[autosave].min_interval` is a floor on how often the vault's content history
@@ -337,7 +341,10 @@ guard, and how the health check reports a vault that is waiting on it.
 #### Reading and writing it from a script
 
 `autosave.min_interval` is the one configuration key with a scriptable
-read/write surface. Every other key is edited in the file.
+read/write surface. Other keys are edited in the file, or — for portable keys in
+`brainnotes.toml` — from the browser's
+[Settings](web-server.md#adjust-settings) page, which previews and journals each
+change.
 
 ```sh
 bn config get   autosave.min_interval

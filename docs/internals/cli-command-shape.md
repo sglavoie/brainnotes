@@ -71,11 +71,12 @@ report cannot produce). Not every command needs the parameter: `find` reads
 a method holding a single `if` was ceremony. It is not, and the distribution
 settles it: eight commands now have a one-rule `validate()` (`unset`, `replace`,
 `relink`, `rename-key`, `repair`, `open`, `graph`, and the shared
-`linkListOptions`), two have enough to split the method (`find`, `search`), and
-three have none (`new`, `undo`, `lint`). `related`'s eight rules are the
-exception that proves the shape rather than a counterexample: they live in the
-package-level `validateRelatedOptions`, which predates this contract and carries
-a cyclop violation the ratchet pins in place, so it stays where it is.
+`linkListOptions`), three have enough to split the method (`find`, `search`,
+`related`), and three have none (`new`, `undo`, `lint`). `related` is the
+largest: its `validate()` checks the flag matrix, then `--limit`, then `--mode`,
+and delegates the matrix to `validateFlagCombos`, which splits it into the
+`--interactive` cluster and the `--json`/`--paths`/`--null` cluster so neither
+half grows past the complexity threshold when a flag is added.
 
 The method is where the *second* rule goes, and a rule that starts as a
 package-level function has to be found and moved when that happens, so the cost

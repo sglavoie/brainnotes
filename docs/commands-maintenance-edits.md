@@ -221,10 +221,10 @@ Examples:
 ```sh
 bn tags                                # count desc, project=42, meeting=18, …
 bn tags --sort=name                    # alphabetical
-bn values category                     # category-value hygiene
+bn values categories                   # category-value hygiene
 bn values tags --count=false | fzf     # pick a tag to inspect
 bn tags --files                        # which notes have each tag?
-bn values category --files --sort=name # files per category, alphabetical
+bn values categories --files --sort=name # files per category, alphabetical
 ```
 
 

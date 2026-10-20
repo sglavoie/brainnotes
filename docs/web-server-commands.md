@@ -14,7 +14,7 @@ bn serve --read-only --state-dir DIR [--replica-status-file FILE] [--no-open]
 
 Starts a local HTTP server for vault browsing and lightweight note management:
 
-- `/` quick capture, Daily Brief cards (Continue, Rediscover, Connect), rolling seven-day activity, compact health snapshot, recent notes, and primary search
+- `/` Daily Brief cards (Continue, Rediscover, Connect), rolling seven-day activity, quick capture, compact health snapshot, recent notes, and primary search
 - `/library` faceted search, bulk note operations, change history, and recent notes
 - `/health` Daily Fixes, vault metrics, and full diagnostics from the shared snapshot
 - `/properties` property catalog and `/properties/<key>` the interactive property workbench
@@ -26,6 +26,7 @@ Starts a local HTTP server for vault browsing and lightweight note management:
 - `GET /api/query/validate` compile one query expression and `GET /api/query/completions` field and value candidates at a caret, both read-only
 - `GET /api/views` the saved views, and `POST /api/views/preview` then `POST /api/views/apply` to save, rename, or delete one
 - `POST /api/capture` quick capture into the configured inbox note, echoing the exact line written
+- `POST /api/notes/rename`, `POST /api/notes/move`, and `POST /api/notes/trash` rename (with a new `title`), move (to a vault-relative `folder`), or trash one note; each journals an undoable entry and answers with the note's new route. Local and hosted only; read-only replicas refuse them
 - `POST /api/pins/set`, `POST /api/pins/remove`, and `POST /api/pins/reorder` pin, unpin, and reorder, addressed by note key only
 - `GET /api/history` recent journal entries and `POST /api/undo` for web-originated undo
 - `POST /api/brief/view` idempotent per-day visit recording that refreshes the rolling activity summary
@@ -53,7 +54,7 @@ previously skipped note. This bound is server-only: `bn doctor` and every other
 CLI command keep their original
 full-vault loading semantics and read every note without a per-note timeout.
 
-The home page opens with a **Quick capture** panel above Today's brief: the
+Below Today's brief, the home page has a **Quick capture** panel: the
 configured destination (`Inbox.md · ## Captures`), a two-row text box capped at
 2,000 characters, a Capture button, and `Ctrl`/`⌘` + `Enter` as the keyboard
 submit. Type `[[` to search for note targets, use Up/Down and Enter to insert
@@ -69,10 +70,11 @@ timestamp to disagree with the file. Successful captures list newest-first below
 the box (session-scoped, capped at five entries, empty again after a reload), and
 each one writes an undo journal entry named `bn web capture` — undoable with
 `bn undo <journal_id>` or from the change-history panel on `/library`, with the
-same whole-note caveat as the CLI. When `[capture].inbox_note` or `[capture].heading` is not
-configured, the panel still renders but is disabled. **Configure capture** opens Settings at
-the inbox-note field, with the heading field alongside it. Set both values,
-then return to Brief to capture a thought. The setup link is hidden on read-only replicas.
+same whole-note caveat as the CLI. Capture needs no setup: `[capture].inbox_note`
+defaults to `Inbox.md` and `[capture].heading` to `## Captures` (see
+[Configuration](configuration.md)), and the inbox note is created on the first
+capture when absent. To change the destination, open Settings at the inbox-note
+field, with the heading field alongside it.
 
 An unfinished capture is kept in this tab's session storage, separately for
 each vault, inbox path, and heading. Reloading or navigating away and back

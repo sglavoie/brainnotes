@@ -34,7 +34,7 @@ serve-time refresh, and CI drift checks.
 The stylesheet is generated the same way but by Go: `internal/web/static/app.css`
 is the concatenation of the parts under `internal/web/static_src/css/` in the
 order `index.css` lists them, rebuilt by `just web-build` (or
-`go run ./internal/web/cssbuild/gen`) and checked for drift by `go test ./...`,
+`go run ./internal/web/cssbuild/gen`) and checked for drift by the Go test suite (`just test`, and so `just ci`),
 so editing CSS needs no Node at all. Edit the parts, never the generated file.
 
 Local `just build` and `just install` stamp this checkout path into the binary

@@ -23,7 +23,8 @@ with no per-note timeout; the one intended exception is that `bn serve` bounds
 each note read to a fixed 2-second timeout and quarantines a timed-out note (it
 appears in the server's "Skipped notes" diagnostic and is absent from the web
 queue until you **restart** the server), whereas `bn doctor` still includes that
-note. See `bn serve` above for the full description of this server-only bound.
+note. See [Resilient note loading](web-server-commands.md#bn-serve--run-the-local-vault-browser)
+under `bn serve` for the full description of this server-only bound.
 
 Detected rule kinds:
 
@@ -38,7 +39,7 @@ Detected rule kinds:
 | `long_tail_value` | rare frontmatter values that a dominant sibling value can absorb (e.g. a `status` typo to merge into the common value) |
 | `sensitive_content` | notes whose body matches a built-in secret detector (AWS/GitHub/Slack/Google keys, JWTs, private-key blocks, secret assignments); off unless `sensitive_scan = true` |
 | `missing_review_date` | notes in a `review_statuses` status that lack the `review_date_property` |
-| `stale_status` | notes whose status has not changed in more than `stale_status_days` days |
+| `stale_status` | notes in a `review_statuses` status whose `review_date_property` date is more than `stale_status_days` days old |
 | `wip_limit` | more concurrent `wip_statuses` notes than `max_wip` allows |
 | `hub_needs_synthesis` | hub/MOC notes (by `hub_type_values`) with a `hub_empty_headings` heading present but empty |
 | `capture_backlog` | more unprocessed captures under `[capture].heading` in the inbox note than `max_captures` allows; off unless `max_captures` is set |
@@ -107,5 +108,5 @@ bn doctor --review-context | my-review-agent   # no secrets/bodies leave the vau
 
 The same redacted snapshot backs the web review surface
 (`GET /api/daily-review/context`) and the optional AI route
-(`POST /api/daily-review/agent`); see `bn serve` below.
+(`POST /api/daily-review/agent`); see [Daily Fixes](web-health.md#daily-fixes).
 

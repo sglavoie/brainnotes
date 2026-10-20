@@ -113,11 +113,15 @@ history panel on `/library`, like any other web write. Building a context and
 generating a candidate are read-only: neither writes Markdown, recall state, nor
 the journal, and neither leaves anything on disk.
 
-Your selection and the text you typed are kept in the browser's local storage,
-namespaced by vault and anchor, so a refresh or an accidental close does not lose
-them. Only note keys and your own text are stored — never note bodies, excerpts,
-the packet, or rendered HTML — and note identities are rehydrated on load, which is
-also how a note that has left the vault is detected and reported. A restored
+Your selection, the text you typed, and the last generated AI candidate are kept
+in the browser's local storage, namespaced by vault and anchor, so a refresh or an
+accidental close does not lose them. Only note keys, your own text, and that
+candidate's Markdown are stored — never note bodies, excerpts, the packet, or
+rendered HTML. Because the candidate is model output drawn from your selected
+notes, it can quote or paraphrase their content, so treat the stored record as
+holding note-derived text until you **Discard** it or apply. Note identities are
+rehydrated on load, which is also how a note that has left the vault is detected
+and reported. A restored
 candidate is shown as Markdown, because its rendering was never saved. A context
 is never restored: after a refresh you prepare it again. **Discard** clears the
 saved record and the whole selection, and asks for confirmation whenever there is
