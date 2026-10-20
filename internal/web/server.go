@@ -395,6 +395,9 @@ func newServeVaultState(v *vault.Vault, caps capabilities) (*vaultState, error) 
 	if err != nil {
 		return nil, err
 	}
+	// Set before the first snapshot can be built, so no unredacted one is ever
+	// cached for a remote reader.
+	state.redactor = vaultRootRedactorFor(caps, v.Root)
 	if !caps.documentWrites {
 		state.source, err = newIndexNoteSource(v, index.WithMemoryOnly())
 	}

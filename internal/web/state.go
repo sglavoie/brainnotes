@@ -189,6 +189,13 @@ type vaultState struct {
 	// indexes derived from one snapshot under one configuration generation.
 	relatedCorpus    *relatedCorpus
 	relatedCorpusKey derivedCacheKey
+
+	// redactor takes the vault root out of the error text a snapshot carries. A
+	// parse failure names the note by its absolute path, and the snapshot's
+	// diagnostics reach every page that reports them (Health, Daily Fixes,
+	// property blockers), so the root is removed once, here, for a mode that
+	// serves remote readers. The zero value, the local profile's, keeps it.
+	redactor vaultRootRedactor
 }
 
 // derivedCacheKey pairs a note load with the configuration generation that
@@ -272,10 +279,24 @@ func (s *vaultState) currentSnapshot() (vaultSnapshot, error) {
 		graph:       query.BuildGraphForRoot(s.vault.Root, notes),
 		loadedAt:    now,
 		serial:      s.serial,
-		parseErrors: result.parseErrors,
-		skipped:     result.skipped,
+		parseErrors: s.redactFileErrors(result.parseErrors),
+		skipped:     s.redactFileErrors(result.skipped),
 	}
 	return s.snapshot, nil
+}
+
+// redactFileErrors returns errs with the vault root taken out of each message.
+// It copies rather than rewriting in place, because the load result's errors
+// already fed its fingerprint.
+func (s *vaultState) redactFileErrors(errs []diagnosticFileError) []diagnosticFileError {
+	if !s.redactor.active() || len(errs) == 0 {
+		return errs
+	}
+	out := make([]diagnosticFileError, len(errs))
+	for i, e := range errs {
+		out[i] = diagnosticFileError{Path: e.Path, Error: s.redactor.redact(e.Error)}
+	}
+	return out
 }
 
 // propertyIndexFor returns the property intelligence for snapshot under the
