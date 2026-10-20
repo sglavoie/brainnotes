@@ -114,5 +114,5 @@ func resolveSetPaths(cmd *cobra.Command, v *vault.Vault, cfg *config.Config, not
 		}
 		return selected, nil
 	}
-	return resolveNoteInputs(v.Root, noteArgs, cmd.InOrStdin(), nullSep)
+	return resolveNoteInputs("set", v.Root, noteArgs, cmd.InOrStdin(), nullSep)
 }

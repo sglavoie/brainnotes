@@ -107,7 +107,7 @@ func resolveUnsetPaths(cmd *cobra.Command, v *vault.Vault, cfg *config.Config, n
 		}
 		return selected, len(selected) > 0, nil
 	}
-	paths, err := resolveNoteInputs(v.Root, noteArgs, cmd.InOrStdin(), nullSep)
+	paths, err := resolveNoteInputs("unset", v.Root, noteArgs, cmd.InOrStdin(), nullSep)
 	if err != nil {
 		return nil, false, err
 	}

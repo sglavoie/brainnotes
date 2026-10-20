@@ -1,16 +1,12 @@
 package cli
 
 import (
-	"fmt"
-	"strings"
-
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
+// resolveMoveTarget resolves the note `bn move` acts on. It goes through the
+// shared resolver under its own name, so its errors stay wrapped (errors.Is
+// still sees vault.ErrNoteNotFound) instead of being re-spelled from text.
 func resolveMoveTarget(v *vault.Vault, noteArg string) (*vault.Note, error) {
-	target, err := resolveRenameTarget(v, noteArg)
-	if err != nil {
-		return nil, fmt.Errorf("move: %s", strings.TrimPrefix(err.Error(), "rename: "))
-	}
-	return target, nil
+	return resolveNoteTarget("move", v, noteArg)
 }

@@ -97,7 +97,7 @@ func TestResolveNoteInputs_DashMixedWithOtherArgs(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(root, "a.md"), []byte("body"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	_, err := resolveNoteInputs(root, []string{filepath.Join(root, "a.md"), "-"}, strings.NewReader(""), false)
+	_, err := resolveNoteInputs("", root, []string{filepath.Join(root, "a.md"), "-"}, strings.NewReader(""), false)
 	if err == nil {
 		t.Fatal("expected error for '-' mixed with other args")
 	}
@@ -111,7 +111,7 @@ func TestResolveNoteInputs_DashMixedWithOtherArgs(t *testing.T) {
 // stat error downstream.
 func TestResolveNoteInputs_EmptyArg(t *testing.T) {
 	root := t.TempDir()
-	_, err := resolveNoteInputs(root, []string{""}, nil, false)
+	_, err := resolveNoteInputs("", root, []string{""}, nil, false)
 	if err == nil {
 		t.Fatal("expected error for empty arg")
 	}
@@ -126,7 +126,7 @@ func TestResolveNoteInputs_EmptyArg(t *testing.T) {
 // succeeded even though it had no effect).
 func TestResolveNoteInputs_GlobNoMatch(t *testing.T) {
 	root := t.TempDir()
-	_, err := resolveNoteInputs(root, []string{"missing/*.md"}, nil, false)
+	_, err := resolveNoteInputs("", root, []string{"missing/*.md"}, nil, false)
 	if err == nil {
 		t.Fatal("expected error for glob with no matches")
 	}
@@ -148,7 +148,7 @@ func TestResolveNoteInputs_DedupePreservesOrder(t *testing.T) {
 		}
 	}
 
-	got, err := resolveNoteInputs(root, []string{a, b, a}, nil, false)
+	got, err := resolveNoteInputs("", root, []string{a, b, a}, nil, false)
 	if err != nil {
 		t.Fatalf("resolveNoteInputs: %v", err)
 	}
@@ -172,7 +172,7 @@ func TestResolveNoteInputs_DedupesCaseVariantsOfOneFile(t *testing.T) {
 	if !sameExistingFile(upper, lower) {
 		want = []string{upper, lower}
 	}
-	got, err := resolveNoteInputs(root, []string{upper, lower, upper}, nil, false)
+	got, err := resolveNoteInputs("", root, []string{upper, lower, upper}, nil, false)
 	if err != nil {
 		t.Fatalf("resolveNoteInputs: %v", err)
 	}

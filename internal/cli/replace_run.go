@@ -119,7 +119,7 @@ func coerceReplaceValue(raw string, isWikilink bool) (any, error) {
 // the notes the equivalent `bn find` prints.
 func collectReplaceCandidates(cmd *cobra.Command, v *vault.Vault, cfg *config.Config, noteArgs []string, ff *findFlags) ([]*vault.Note, error) {
 	if len(noteArgs) > 0 {
-		paths, err := resolveNoteInputs(v.Root, noteArgs, cmd.InOrStdin(), false)
+		paths, err := resolveNoteInputs(cmd.Name(), v.Root, noteArgs, cmd.InOrStdin(), false)
 		if err != nil {
 			return nil, err
 		}
