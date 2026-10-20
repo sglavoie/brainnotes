@@ -176,10 +176,13 @@ There is **no ESLint equivalent of `gocognit`**, so cognitive complexity stays
 unmeasured on the TypeScript side. `complexity` is cyclomatic only.
 
 Dependencies: `eslint` and `typescript-eslint` in `devDependencies`.
-`typescript-eslint` 8.69 declares `typescript >=4.8.4 <6.1.0`, which covers the
-repo's pinned `^6.0.3`. Only the parser and the one rule from that plugin are
-used — no `recommended` preset — so no type-aware linting runs and the whole
-tree lints in about two seconds.
+`typescript-eslint` 8.72.0 declares `typescript >=4.8.4 <6.1.0`, which covers
+the TypeScript 6 API the repo pins exactly as
+`"typescript": "npm:@typescript/typescript6@6.0.2"`. The TypeScript 7 compiler
+sits beside it as `@typescript/native` and is not what the linter loads. Only
+the parser and the one rule from that plugin are used — no `recommended`
+preset — so no type-aware linting runs and the whole tree lints in about two
+seconds.
 
 ### The measured baseline — this closes the audit §6 TypeScript blind spot
 
