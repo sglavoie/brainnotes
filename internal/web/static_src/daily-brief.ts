@@ -32,6 +32,7 @@ import {
 } from "./daily-brief-render";
 import { queryAllElements, queryElement } from "./dom";
 import { setStatusText, type StatusKind } from "./status";
+import { isSubmitChord } from "./submit-chord";
 
 export { briefNoteKeyFromRelPath, readDailyBriefConfig } from "./daily-brief-model";
 export type { DailyBriefConfig, DailyBriefDeps } from "./daily-brief-model";
@@ -269,7 +270,7 @@ const bindBriefEvents = (ctx: BriefActionContext): void => {
     }
   });
   root.addEventListener("keydown", (event) => {
-    if (event.key !== "Enter" || (!event.ctrlKey && !event.metaKey)) {
+    if (!isSubmitChord(event)) {
       return;
     }
     const target = event.target;
