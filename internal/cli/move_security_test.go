@@ -20,10 +20,6 @@ func TestMoveRejectsOutsideVault(t *testing.T) {
 }
 
 func TestMoveRejectsSymlinkDestinationOutsideVault(t *testing.T) {
-	if os.Getenv("GO_SKIP_SYMLINK_TEST") == "1" {
-		t.Skip("symlink tests disabled")
-	}
-
 	root := buildMoveFixture(t)
 	outside := t.TempDir()
 	symlinkDir := filepath.Join(root, "escaped")

@@ -210,9 +210,6 @@ func TestReadStdinPaths_LineSeparatedTrimsCRLF(t *testing.T) {
 // rejected by absInVault. Previously only a lexical filepath.Rel check was
 // performed, which allowed symlinks through.
 func TestAbsInVault_SymlinkDirEscapingVaultRejected(t *testing.T) {
-	if os.Getenv("GO_SKIP_SYMLINK_TEST") == "1" {
-		t.Skip("symlink tests disabled")
-	}
 	vault := t.TempDir()
 	outside := t.TempDir()
 
@@ -243,9 +240,6 @@ func TestAbsInVault_SymlinkDirEscapingVaultRejected(t *testing.T) {
 // so a file-level symlink like vault/link.md -> /outside/secret.md passed the
 // containment check because the parent (vault/) resolved correctly.
 func TestAbsInVault_SymlinkFileEscapingVaultRejected(t *testing.T) {
-	if os.Getenv("GO_SKIP_SYMLINK_TEST") == "1" {
-		t.Skip("symlink tests disabled")
-	}
 	vault := t.TempDir()
 	outside := t.TempDir()
 
