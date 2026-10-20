@@ -108,7 +108,7 @@ func (s *Server) handleQueryValidate(w http.ResponseWriter, r *http.Request) {
 
 	snapshot, err := s.state.currentSnapshot()
 	if err != nil {
-		http.Error(w, "snapshot error", http.StatusInternalServerError)
+		writeInternalError(w, "could not load the vault", err)
 		return
 	}
 
@@ -225,7 +225,7 @@ func (s *Server) handleQueryCompletions(w http.ResponseWriter, r *http.Request) 
 
 	snapshot, err := s.state.currentSnapshot()
 	if err != nil {
-		http.Error(w, "snapshot error", http.StatusInternalServerError)
+		writeInternalError(w, "could not load the vault", err)
 		return
 	}
 

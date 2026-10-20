@@ -3,6 +3,7 @@ package web
 import (
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"path"
 	"path/filepath"
@@ -103,6 +104,23 @@ func writeManagementErrorStatus(w http.ResponseWriter, status int, err error) {
 	response := noteops.ErrorResponse(err)
 	response.Message = redactForReader(w, response.Message)
 	writeManagementJSON(w, status, response)
+}
+
+// writeInternalError reports a server-side failure on a JSON route as a 500
+// management error. message is the public description; the cause stays wrapped
+// in the error and out of the response, so it cannot carry a path to a reader.
+func writeInternalError(w http.ResponseWriter, message string, err error) {
+	if err == nil {
+		err = errors.New(message)
+	}
+	writeManagementError(w, noteops.WrapError(noteops.CodeInternal, message, err))
+}
+
+// logEncodeError records a JSON body that failed part way through encoding. The
+// status and possibly part of the body are already on the wire, so writing an
+// error response now would only append a second document to the first.
+func logEncodeError(route string, err error) {
+	log.Printf("web: %s: encode response: %v", route, err)
 }
 
 func writeManagementJSON(w http.ResponseWriter, status int, payload any) {

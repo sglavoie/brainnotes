@@ -158,7 +158,7 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 
 	snapshot, err := s.state.currentSnapshot()
 	if err != nil {
-		http.Error(w, "snapshot error", http.StatusInternalServerError)
+		writeInternalError(w, "could not load the vault", err)
 		return
 	}
 
@@ -184,7 +184,7 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 
 	payload, err := buildSearchResponse(snapshot, s.vault.Root, filters, shape, rank)
 	if err != nil {
-		http.Error(w, "search error", http.StatusInternalServerError)
+		writeInternalError(w, "search failed", err)
 		return
 	}
 
@@ -193,7 +193,7 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("X-BN-Search-Cap", strconv.Itoa(searchResultLimit))
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	if err := json.NewEncoder(w).Encode(payload.Results); err != nil {
-		http.Error(w, "encode error", http.StatusInternalServerError)
+		logEncodeError(searchAPIRoutePath, err)
 	}
 }
 
@@ -210,19 +210,19 @@ func (s *Server) handleFacets(w http.ResponseWriter, r *http.Request) {
 
 	snapshot, err := s.state.currentSnapshot()
 	if err != nil {
-		http.Error(w, "snapshot error", http.StatusInternalServerError)
+		writeInternalError(w, "could not load the vault", err)
 		return
 	}
 
 	payload, err := buildFacetsResponse(snapshot, s.vault.Root)
 	if err != nil {
-		http.Error(w, "facets error", http.StatusInternalServerError)
+		writeInternalError(w, "facets failed", err)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	if err := json.NewEncoder(w).Encode(payload); err != nil {
-		http.Error(w, "encode error", http.StatusInternalServerError)
+		logEncodeError("/api/facets", err)
 	}
 }
 
@@ -239,7 +239,7 @@ func (s *Server) handleGraphJSON(w http.ResponseWriter, r *http.Request) {
 
 	snapshot, err := s.state.currentSnapshot()
 	if err != nil {
-		http.Error(w, "snapshot error", http.StatusInternalServerError)
+		writeInternalError(w, "could not load the vault", err)
 		return
 	}
 
@@ -256,13 +256,13 @@ func (s *Server) handleGraphJSON(w http.ResponseWriter, r *http.Request) {
 
 	payload, err := buildGraphResponse(snapshot, s.vault.Root, filters, focusQuery)
 	if err != nil {
-		http.Error(w, "graph error", http.StatusInternalServerError)
+		writeInternalError(w, "graph failed", err)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json; charset=utf-8")
 	if err := json.NewEncoder(w).Encode(payload); err != nil {
-		http.Error(w, "encode error", http.StatusInternalServerError)
+		logEncodeError("/api/graph.json", err)
 	}
 }
 
