@@ -118,6 +118,46 @@ func TestGitArgumentsRejectNULBytes(t *testing.T) {
 	}
 }
 
+// Every engine git invocation must sync loose objects: update-ref moves the
+// branch durably, so an unsynced commit or tree object would let power loss
+// leave the branch naming an object that is not on disk. The setting has to win
+// over a repository config that weakens it and over a stray GIT_CONFIG_* entry
+// in the caller's environment.
+func TestEngineGitForcesLooseObjectFsync(t *testing.T) {
+	exe := requireGit(t)
+	t.Setenv("GIT_CONFIG_COUNT", "1")
+	t.Setenv("GIT_CONFIG_KEY_0", "core.fsync")
+	t.Setenv("GIT_CONFIG_VALUE_0", "none")
+	for _, remote := range []bool{false, true} {
+		env := strings.Join(buildEnv(gitCall{remote: remote}), "\n")
+		for _, want := range []string{"GIT_CONFIG_COUNT=1", "GIT_CONFIG_KEY_0=core.fsync", "GIT_CONFIG_VALUE_0=committed,reference"} {
+			if !strings.Contains(env, want) {
+				t.Fatalf("buildEnv(remote=%v) lacks %q", remote, want)
+			}
+		}
+		if strings.Contains(env, "GIT_CONFIG_VALUE_0=none") {
+			t.Fatalf("buildEnv(remote=%v) forwarded the caller's GIT_CONFIG entry", remote)
+		}
+	}
+
+	dir := t.TempDir()
+	g := &gitExec{exe: exe, dir: dir}
+	ctx := context.Background()
+	if _, err := g.run(ctx, gitCall{args: []string{"init", "-q"}}); err != nil {
+		t.Fatalf("git init: %v", err)
+	}
+	if _, err := g.run(ctx, gitCall{args: []string{"config", "core.fsync", "none"}}); err != nil {
+		t.Fatalf("git config: %v", err)
+	}
+	out, err := g.run(ctx, gitCall{args: []string{"config", "--get", "core.fsync"}})
+	if err != nil {
+		t.Fatalf("git config --get: %v", err)
+	}
+	if got := strings.TrimSpace(string(out)); got != "committed,reference" {
+		t.Fatalf("core.fsync seen by the engine = %q, want committed,reference", got)
+	}
+}
+
 func TestOpenRequiresAVaultRoot(t *testing.T) {
 	t.Parallel()
 	if _, err := Open(context.Background(), "  ", Options{}); err == nil {

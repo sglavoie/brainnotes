@@ -8,6 +8,7 @@ import (
 	"io"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"time"
 
@@ -133,6 +134,7 @@ func buildEnv(c gitCall) []string {
 		"LANG=C",
 		"TZ=UTC",
 	)
+	env = append(env, engineConfigEnv()...)
 	if !c.remote {
 		env = append(env, "GIT_CONFIG_GLOBAL="+os.DevNull)
 	}
@@ -150,6 +152,37 @@ func buildEnv(c gitCall) []string {
 	if !c.when.IsZero() {
 		stamp := c.when.UTC().Format("2006-01-02T15:04:05Z")
 		env = append(env, "GIT_AUTHOR_DATE="+stamp, "GIT_COMMITTER_DATE="+stamp)
+	}
+	return env
+}
+
+// engineConfig is configuration the engine forces on every git invocation,
+// local or remote, through the GIT_CONFIG_COUNT channel. Configuration passed
+// that way outranks the repository's own file, so a vault whose .git/config
+// weakens it cannot opt the engine out.
+//
+// core.fsync is the reason the list exists. Git's default
+// (`committed,-loose-object`) leaves the loose objects that hash-object,
+// write-tree and commit-tree create unsynced, while update-ref then moves the
+// branch, the ref directory is synced, and the recovery intent is retired. A
+// power loss in that window would leave a durable branch naming an object that
+// never reached the disk. `committed` restores loose objects; `reference` is
+// added because `committed` is only `objects`, and syncing the ref's directory
+// entry does not flush the ref file's own bytes. core.fsyncMethod keeps git's
+// default.
+var engineConfig = [][2]string{
+	{"core.fsync", "committed,reference"},
+}
+
+// engineConfigEnv renders engineConfig as GIT_CONFIG_COUNT/KEY_n/VALUE_n. The
+// parent's GIT_CONFIG_* variables are never forwarded (both passthrough lists
+// are allowlists), so numbering from zero cannot clobber an inherited entry.
+func engineConfigEnv() []string {
+	env := make([]string, 0, 1+2*len(engineConfig))
+	env = append(env, "GIT_CONFIG_COUNT="+strconv.Itoa(len(engineConfig)))
+	for i, kv := range engineConfig {
+		n := strconv.Itoa(i)
+		env = append(env, "GIT_CONFIG_KEY_"+n+"="+kv[0], "GIT_CONFIG_VALUE_"+n+"="+kv[1])
 	}
 	return env
 }
