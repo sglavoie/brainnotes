@@ -319,8 +319,10 @@ are.
 
 ## 3. Test coverage
 
-`docs/internals/coverage-baseline.txt` records `go test -cover ./...` at this
-same commit — all packages pass. This closes the audit §6 blind spot: the 1.32
+`docs/internals/coverage-baseline.txt` recorded `go test -cover ./...` at this
+same commit — all packages pass. The figures below are from that capture; the
+file itself is now regenerated with `just coverage`, which uses the justfile's
+`node_modules`-filtered package list. This closes the audit §6 blind spot: the 1.32
 Go test ratio is a volume number, and sessions S15–S18 and S24–S25 both assume
 the safety tests are as strong as they are large.
 
