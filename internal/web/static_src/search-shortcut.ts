@@ -1,13 +1,29 @@
 const editableSelector = 'input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="textbox"]';
 const dialogSelector = 'dialog[open], [role="dialog"]:not([hidden]), [role="alertdialog"]:not([hidden])';
 
-const isSearchShortcut = (event: KeyboardEvent): boolean =>
+// A page whose own search field carries this attribute owns "/" instead of the
+// header search, which then drops its shortcut and hint.
+const pageShortcutOwnerSelector = "[data-page-search-shortcut]";
+
+export const isSearchShortcut = (event: KeyboardEvent): boolean =>
   event.key === "/" && !event.ctrlKey && !event.metaKey && !event.altKey &&
   !event.isComposing && !event.defaultPrevented && !event.repeat;
+
+export const isEditableTarget = (target: EventTarget | null): boolean =>
+  target instanceof Element && target.closest(editableSelector) !== null;
+
+const yieldToPageShortcut = (input: HTMLInputElement, scope: HTMLElement): boolean => {
+  const owner = input.ownerDocument.querySelector(pageShortcutOwnerSelector);
+  if (!owner || owner === input) return false;
+  input.removeAttribute("aria-keyshortcuts");
+  scope.querySelector(".search-shortcut-hint")?.remove();
+  return true;
+};
 
 export const bindSearchShortcut = (input: HTMLInputElement): (() => void) => {
   const doc = input.ownerDocument;
   const scope = input.closest<HTMLElement>("[data-search-box]") || input;
+  if (yieldToPageShortcut(input, scope)) return () => {};
   let returnTarget: HTMLElement | null = null;
   const returnFocus = (): void => {
     const target = returnTarget;
@@ -30,8 +46,7 @@ export const bindSearchShortcut = (input: HTMLInputElement): (() => void) => {
     if (!isSearchShortcut(event) || !input.isConnected || input.disabled || doc.querySelector(dialogSelector)) {
       return;
     }
-    const target = event.target;
-    if (target instanceof Element && target.closest(editableSelector)) {
+    if (isEditableTarget(event.target)) {
       return;
     }
     event.preventDefault();

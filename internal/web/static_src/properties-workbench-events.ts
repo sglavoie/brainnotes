@@ -1,5 +1,6 @@
 import type { PropertyMutationAction } from "./api";
 import { queryElement } from "./dom";
+import { isEditableTarget, isSearchShortcut } from "./search-shortcut";
 import type { WorkbenchEditor } from "./properties-workbench-editor";
 import type { WorkbenchMutations } from "./properties-workbench-mutations";
 import type { SelectionView, WorkbenchState } from "./properties-workbench-selection";
@@ -126,19 +127,20 @@ const bindToolbar = (ctx: WorkbenchEventContext): void => {
   );
 };
 
-const isTyping = (target: EventTarget | null): boolean =>
-  target instanceof HTMLInputElement ||
-  target instanceof HTMLTextAreaElement ||
-  target instanceof HTMLSelectElement;
+const isPlainEscape = (event: KeyboardEvent): boolean =>
+  event.key === "Escape" && !event.ctrlKey && !event.metaKey && !event.altKey &&
+  !event.shiftKey && !event.isComposing;
 
+// Runs after controls inside the page, the Workspace popover and the header
+// search have had the key: whichever of them used it first keeps it.
 const bindDocumentKeys = (ctx: WorkbenchEventContext): void => {
   const searchEl = queryElement(ctx.root, "[data-property-filter-query]", HTMLInputElement);
   ctx.root.ownerDocument.addEventListener("keydown", (event) => {
-    if (ctx.dialog.isOpen()) {
+    if (event.defaultPrevented || ctx.dialog.isOpen()) {
       return;
     }
-    if (event.key === "/" && searchEl) {
-      if (isTyping(event.target)) {
+    if (isSearchShortcut(event) && searchEl) {
+      if (isEditableTarget(event.target)) {
         return;
       }
       event.preventDefault();
@@ -146,7 +148,7 @@ const bindDocumentKeys = (ctx: WorkbenchEventContext): void => {
       searchEl.select();
       return;
     }
-    if (event.key !== "Escape") {
+    if (!isPlainEscape(event)) {
       return;
     }
     if (ctx.editor.isOpen()) {
