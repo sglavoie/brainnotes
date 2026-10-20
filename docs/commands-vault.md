@@ -2,6 +2,23 @@
 
 ## Command reference
 
+### Global options
+
+```sh
+bn --vault <path> <command> ...
+bn --version
+bn [command] --help
+```
+
+`--vault` selects the vault root for any command and overrides
+`$BNOTES_VAULT` and the upward search for `brainnotes.toml`. `bn --version`
+prints the build identifier — the Git revision the binary was built from,
+`-dirty` for an uncommitted tree — which `bn-vault-guard -version` and
+`bn-vault-sync -version` also print, so the three installed binaries can be
+compared (see [vault safety](operations/vault-safety.md)). It has no `-v`
+shorthand: `-v` is the `--verbose` of `links`, `backlinks`, `values` and
+`tags`.
+
 ### `bn init` — mark a directory as a vault root
 
 ```sh
