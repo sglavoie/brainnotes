@@ -142,7 +142,7 @@ the same way `=` does (`tags+=foo,bar` adds two entries). Operators can be
 mixed in one invocation and apply left-to-right.
 
 Type coercion is automatic: `true`/`false` → bool, integer → int, `YYYY-MM-DD`
-→ date, else string. Use `--value-type` to force (`--type` is a deprecated alias that still works, with a note on stderr; elsewhere `--type` is the note filter). Wikilink-typed properties are
+→ date, else string. Use `--value-type` to force (`--type` is a deprecated alias that still works, with `set: warning: --type is deprecated; use --value-type` on stderr; elsewhere `--type` is the note filter). Wikilink-typed properties are
 wrapped in `[[ ]]` on write; for `+=`/`-=` the
 wrapping happens before the comparison so `tags+=Books` matches an existing
 `[[Books]]` entry.

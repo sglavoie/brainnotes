@@ -1,6 +1,10 @@
 package cli
 
-import "github.com/spf13/cobra"
+import (
+	"fmt"
+
+	"github.com/spf13/cobra"
+)
 
 // NewSetCmd returns the `set` subcommand. Exported for tests.
 func NewSetCmd() *cobra.Command {
@@ -46,6 +50,9 @@ unchanged files are omitted.`,
 		SilenceErrors: true,
 		Args:          cobra.MinimumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if cmd.Flags().Changed("type") {
+				_, _ = fmt.Fprintln(cmd.ErrOrStderr(), "set: warning: --type is deprecated; use --value-type")
+			}
 			return runSetCommand(cmd, args, opts)
 		},
 	}
@@ -54,8 +61,11 @@ unchanged files are omitted.`,
 	f.StringVar(&opts.typeFlag, "value-type", "", "force value type: date|datetime|int|bool|float|raw (default: auto)")
 	// --type is the old spelling. It still works, hidden, with a note on
 	// stderr, because on every find-scoped command --type is a note filter.
+	// It is hidden rather than MarkDeprecated, whose note pflag prints in its
+	// own fixed wording ("Flag --type has been deprecated, ..."); RunE prints
+	// bn's `set: warning:` line instead.
 	f.StringVar(&opts.typeFlag, "type", "", "deprecated spelling of --value-type")
-	_ = f.MarkDeprecated("type", "use --value-type")
+	_ = f.MarkHidden("type")
 	f.BoolVarP(&opts.nullSep, "null", "0", false, "read NUL-separated paths from stdin")
 	f.BoolVar(&opts.dryRun, "dry-run", false, "preview changes without writing")
 	return cmd
