@@ -71,43 +71,16 @@ func resolveNoteInputs(name, vaultRoot string, args []string, in io.Reader, null
 
 func collectNoteInputs(name, vaultRoot string, args []string, in io.Reader, nullSep bool) ([]string, error) {
 	if len(args) == 1 && args[0] == "-" {
-		hintTerminalStdin(in)
-		paths, err := readStdinPaths(in, vaultRoot, nullSep)
-		if err != nil {
-			return nil, err
-		}
-		for _, p := range paths {
-			if err := requireNoteFile(name, vaultRoot, displayVaultPath(vaultRoot, p), p); err != nil {
-				return nil, err
-			}
-		}
-		return paths, nil
+		return collectStdinNoteInputs(name, vaultRoot, in, nullSep)
 	}
-
 	var paths []string
 	seen := newNoteInputSet()
 	for _, a := range args {
-		if a == "-" {
-			return nil, errors.New("'-' may only be used as the sole note argument")
-		}
-		if strings.TrimSpace(a) == "" {
-			return nil, errors.New("empty note path argument")
-		}
-		matches, err := expandGlob(vaultRoot, a)
+		matches, err := resolveNoteArg(name, vaultRoot, a)
 		if err != nil {
 			return nil, err
 		}
-		literal := !strings.ContainsAny(a, "*?[")
-		for _, m := range matches {
-			abs, err := absInVault(vaultRoot, m)
-			if err != nil {
-				return nil, err
-			}
-			if literal {
-				if err := requireNoteFile(name, vaultRoot, a, abs); err != nil {
-					return nil, err
-				}
-			}
+		for _, abs := range matches {
 			if seen.add(abs) {
 				paths = append(paths, abs)
 			}
@@ -116,9 +89,54 @@ func collectNoteInputs(name, vaultRoot string, args []string, in io.Reader, null
 	return paths, nil
 }
 
+// collectStdinNoteInputs reads the `-` form and refuses a path naming no file.
+func collectStdinNoteInputs(name, vaultRoot string, in io.Reader, nullSep bool) ([]string, error) {
+	hintTerminalStdin(in)
+	paths, err := readStdinPaths(in, vaultRoot, nullSep)
+	if err != nil {
+		return nil, err
+	}
+	for _, p := range paths {
+		if err := requireNoteFile(name, displayVaultPath(vaultRoot, p), p); err != nil {
+			return nil, err
+		}
+	}
+	return paths, nil
+}
+
+// resolveNoteArg expands one positional note argument to in-vault absolute
+// paths. A literal path (no glob meta-characters) must name an existing file.
+func resolveNoteArg(name, vaultRoot, a string) ([]string, error) {
+	if a == "-" {
+		return nil, errors.New("'-' may only be used as the sole note argument")
+	}
+	if strings.TrimSpace(a) == "" {
+		return nil, errors.New("empty note path argument")
+	}
+	matches, err := expandGlob(vaultRoot, a)
+	if err != nil {
+		return nil, err
+	}
+	literal := !strings.ContainsAny(a, "*?[")
+	out := make([]string, 0, len(matches))
+	for _, m := range matches {
+		abs, err := absInVault(vaultRoot, m)
+		if err != nil {
+			return nil, err
+		}
+		if literal {
+			if err := requireNoteFile(name, a, abs); err != nil {
+				return nil, err
+			}
+		}
+		out = append(out, abs)
+	}
+	return out, nil
+}
+
 // requireNoteFile refuses a note path that does not exist, naming it as arg.
 // Any other stat failure is left for the read that follows to report.
-func requireNoteFile(name, vaultRoot, arg, abs string) error {
+func requireNoteFile(name, arg, abs string) error {
 	if _, err := os.Stat(abs); errors.Is(err, fs.ErrNotExist) {
 		return &noteTargetNotFoundError{name: name, arg: arg, pathOnly: true}
 	}

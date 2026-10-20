@@ -231,20 +231,11 @@ func resolveServeConfig(base config.ServeConfig, addrFlag string, addrChanged bo
 		return config.ServeConfig{}, rangeValueError("serve", "port", "between 0 and 65535", port)
 	}
 	out := base
-	out.Addr = strings.TrimSpace(out.Addr)
-	if out.Addr == "" {
-		out.Addr = config.DefaultServeAddr
+	addr, err := resolveServeAddr(base.Addr, addrFlag, addrChanged)
+	if err != nil {
+		return config.ServeConfig{}, err
 	}
-
-	if addrChanged {
-		out.Addr = strings.TrimSpace(addrFlag)
-		if out.Addr == "" {
-			return config.ServeConfig{}, errors.New("serve: --addr cannot be empty")
-		}
-		if _, _, err := net.SplitHostPort(out.Addr); err != nil {
-			return config.ServeConfig{}, fmt.Errorf("serve: invalid --addr %q: %w", out.Addr, err)
-		}
-	}
+	out.Addr = addr
 	// --port composes with --addr: it rewrites only the port of whichever
 	// address won, so `--addr 0.0.0.0:8080 --port 9000` serves on 0.0.0.0:9000.
 	if portChanged {
@@ -261,6 +252,25 @@ func resolveServeConfig(base config.ServeConfig, addrFlag string, addrChanged bo
 	}
 
 	return out, nil
+}
+
+// resolveServeAddr picks the listen address before --port is applied: --addr
+// when given, which must be host:port, else [serve].addr, else the default.
+func resolveServeAddr(configured, addrFlag string, addrChanged bool) (string, error) {
+	if !addrChanged {
+		if addr := strings.TrimSpace(configured); addr != "" {
+			return addr, nil
+		}
+		return config.DefaultServeAddr, nil
+	}
+	addr := strings.TrimSpace(addrFlag)
+	if addr == "" {
+		return "", errors.New("serve: --addr cannot be empty")
+	}
+	if _, _, err := net.SplitHostPort(addr); err != nil {
+		return "", fmt.Errorf("serve: invalid --addr %q: %w", addr, err)
+	}
+	return addr, nil
 }
 
 func replaceAddressPort(addr string, port int) (string, error) {
