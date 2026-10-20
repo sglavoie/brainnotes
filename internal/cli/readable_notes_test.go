@@ -90,6 +90,10 @@ func TestLintReportsUnparsableNoteAsViolation(t *testing.T) {
 	if lintErr.Count != 1 {
 		t.Fatalf("violation count = %d, want 1:\n%s", lintErr.Count, stdout)
 	}
+	// Named like `views check`, so the rendered line reads `bn: lint: ...`.
+	if got, want := err.Error(), "lint: 1 violation(s) found"; got != want {
+		t.Fatalf("lint error = %q, want %q", got, want)
+	}
 	if !strings.Contains(stdout, "frontmatter: unparsable in 1 note (") || !strings.Contains(stdout, "  bad.md\n") {
 		t.Fatalf("lint did not report bad.md as unparsable:\n%s", stdout)
 	}
