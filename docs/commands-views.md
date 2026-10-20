@@ -80,9 +80,11 @@ the cap on `bn replace --view "Top 10"` would have rewritten every match.
 
 On `bn find`, an explicit `--sort` (or `--relative-to`) replaces the view's
 ordering wholesale — including an explicit `--sort path`, which is a request for
-path order and not an absent flag. The cap has no flag, so it survives an
-ordering override: choosing how results are ordered is not a request for more of
-them. A view storing no `sort` leaves `bn find --pinned`'s implicit pinned
+path order and not an absent flag. The cap survives an ordering override:
+choosing how results are ordered is not a request for more of them. To change the
+cap, pass `--limit N` (N of 1 or more), which replaces the view's stored `limit`
+the way `--sort` replaces its ordering — `bn find --view "Top 10" --limit 3`
+keeps the first three. A view storing no `sort` leaves `bn find --pinned`'s implicit pinned
 ordering intact.
 
 Examples:

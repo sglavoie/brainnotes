@@ -15,6 +15,7 @@ rules, read [locking](locking.md), [serving modes](serving-modes.md),
 | [cmd/bn/main.go](packages/cmd-bn-main-go.md) | CLI entry point |
 | [cmd/bn-vault-guard](../../cmd/bn-vault-guard) | Private companion that keeps content history current while `bn` is idle; installed and versioned with `bn` |
 | [cmd/bn-vault-sync](../../cmd/bn-vault-sync) | Private companion that exchanges packages with the peer while `bn` is idle; installed and versioned with `bn` |
+| [internal/buildinfo](../../internal/buildinfo) | Build identifier (Git revision, `-dirty` when uncommitted) each binary reports so mismatched `bn` and companion builds are detected |
 | [internal/cli](packages/cli.md) | Command composition and output |
 | [internal/config](packages/config.md) | Layered configuration, ownership and migration |
 | [internal/vault](packages/vault.md) | Paths, walking, locks and file transactions |
