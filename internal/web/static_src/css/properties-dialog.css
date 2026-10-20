@@ -1,16 +1,15 @@
-.properties-dialog-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 40;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1rem;
-  background: var(--bn-backdrop);
+/* The preview is a native modal <dialog>: the top layer stacks it, so it needs
+   no z-index. Older engines do not let ::backdrop inherit custom properties. */
+.properties-preview-dialog {
+  color: var(--bn-text);
 }
 
-.properties-dialog-backdrop[hidden] {
+.properties-preview-dialog:not([open]) {
   display: none;
+}
+
+.properties-preview-dialog::backdrop {
+  background: var(--bn-backdrop, rgba(0, 0, 0, 0.45));
 }
 
 .properties-dialog {

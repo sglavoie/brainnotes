@@ -33,3 +33,20 @@ export const jsonResponse = (body: unknown, status = 200): Response =>
     status,
     headers: { "Content-Type": "application/json" },
   });
+
+// jsdom has no modal dialog. installDialogPolyfill gives HTMLDialogElement the
+// open state and close event that the code under test relies on.
+export const installDialogPolyfill = (): void => {
+  if (typeof HTMLDialogElement === "undefined") return;
+  const existing: { showModal?: unknown } = HTMLDialogElement.prototype;
+  if (typeof existing.showModal === "function") return;
+  HTMLDialogElement.prototype.showModal = function showModal(this: HTMLDialogElement): void {
+    this.open = true;
+  };
+  HTMLDialogElement.prototype.close = function close(this: HTMLDialogElement, value?: string): void {
+    if (!this.open) return;
+    this.open = false;
+    if (value !== undefined) this.returnValue = value;
+    this.dispatchEvent(new Event("close"));
+  };
+};

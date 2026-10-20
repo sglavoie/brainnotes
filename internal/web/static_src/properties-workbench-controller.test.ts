@@ -112,7 +112,7 @@ describe("property detail workbench", () => {
     ).click();
 
     await waitForExpect(() => {
-      expect(requireElement("[data-property-dialog]", HTMLElement).hidden).toBe(false);
+      expect(requireElement("[data-property-dialog]", HTMLDialogElement).open).toBe(true);
     });
     const previewCall = fetchMock.mock.calls.find(
       ([url]) => String(url) === "/api/properties/preview"

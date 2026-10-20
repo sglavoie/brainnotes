@@ -2,35 +2,12 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import {
-  buildPropertyDetailURL,
-  normalizePropertiesResponse,
-  normalizePropertyDetailResponse,
-  normalizePropertyRowFilterStatus,
-  normalizePropertyValue,
-} from "./api";
-import {
-  catalogStatusMessage,
-  configStatusMessage,
-  coverageLabel,
-  detailStatusMessage,
-  filterCatalog,
-  buildOpenConfigFetchRequest,
-  inferredDefinition,
-  initPropertiesCatalog,
-  initPropertyDetail,
-  issueLabel,
-  paginationLabel,
-  propertyKindLabel,
-  valueDisplayText,
-} from "./properties";
+import { buildOpenConfigFetchRequest, initPropertiesCatalog } from "./properties";
 
 import {
   catalogPayload,
-  detailPayload,
   jsonResponse,
   mountCatalog,
-  mountDetail,
   waitForExpect,
 } from "./properties.test-helpers";
 
@@ -83,7 +60,9 @@ describe("catalog controller", () => {
     expect(root.querySelectorAll("[data-properties-proposal-add]")).toHaveLength(1);
     expect(root.querySelectorAll("button[disabled]").length).toBe(0);
   });
+});
 
+describe("catalog controller definitions", () => {
   it("previews and applies an inferred definition", async () => {
     const root = mountCatalog();
     const preview = {
@@ -126,7 +105,7 @@ describe("catalog controller", () => {
 
     await waitForExpect(() => {
       expect(fetchMock).toHaveBeenCalledTimes(2);
-      expect(root.querySelector<HTMLElement>("[data-property-dialog]")?.hidden).toBe(false);
+      expect(root.querySelector<HTMLDialogElement>("[data-property-dialog]")?.open).toBe(true);
       expect(root.querySelector<HTMLButtonElement>("[data-property-preview-confirm]")?.disabled)
         .toBe(false);
     });
@@ -147,7 +126,9 @@ describe("catalog controller", () => {
       "Added tags to brainnotes.toml."
     );
   });
+});
 
+describe("catalog controller tools", () => {
   it("opens brainnotes.toml through the configured editor endpoint", async () => {
     const root = mountCatalog();
     const fetchMock = vi

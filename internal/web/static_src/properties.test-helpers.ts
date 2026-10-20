@@ -1,4 +1,6 @@
-import { jsonResponse, waitForExpect } from "./shared.test-helpers";
+import { installDialogPolyfill, jsonResponse, waitForExpect } from "./shared.test-helpers";
+
+installDialogPolyfill();
 
 export const catalogPayload = () => ({
   ok: true,
