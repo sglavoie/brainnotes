@@ -142,7 +142,7 @@ be forgotten in the other.
    script test, not a hand-kept list.
 8. `go mod tidy -diff`: fails when `go.mod` or `go.sum` is not tidy.
 
-Run it before declaring work complete (`scripts/health.py` runs exactly this).
+Run it before declaring work complete.
 `app.css` drift is checked by `go test` itself.
 
 The GitHub workflow additionally runs the ratchet and phase-gate self-tests, the
