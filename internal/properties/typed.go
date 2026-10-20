@@ -24,26 +24,6 @@ type TypedValue struct {
 	Items []TypedValue `json:"items,omitempty"`
 }
 
-// NewTypedValue renders a classified value in transport form. It reports false
-// for any value that has no reproducible spelling; such a value is read-only.
-func NewTypedValue(v Value) (TypedValue, bool) {
-	if v.IsList() {
-		items := make([]TypedValue, 0, len(v.Items))
-		for _, item := range v.Items {
-			typed, ok := NewTypedValue(item)
-			if !ok {
-				return TypedValue{}, false
-			}
-			items = append(items, typed)
-		}
-		return TypedValue{Kind: config.KindList, Text: v.Text, Items: items}, true
-	}
-	if !v.Supported {
-		return TypedValue{}, false
-	}
-	return TypedValue{Kind: v.Kind, Text: v.Text}, true
-}
-
 // Decode converts the transport value into the Go-native frontmatter value that
 // will be stored. A wikilink decodes to its wrapped `[[target]]` spelling so the
 // written note matches what a wikilink-typed property already holds.

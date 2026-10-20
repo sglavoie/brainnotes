@@ -22,11 +22,6 @@ type ErrorResult struct {
 	Message string    `json:"message"`
 }
 
-// Success builds a management success response.
-func Success(message string) Result {
-	return Result{OK: true, Message: message}
-}
-
 // ResultForPath builds a success response for a note path operation.
 func ResultForPath(message, key, path, relPath, journalID string) Result {
 	return Result{

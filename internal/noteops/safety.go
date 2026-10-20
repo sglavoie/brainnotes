@@ -65,20 +65,6 @@ func SafetyForContext(ctx context.Context, vaultRoot string) (Safety, error) {
 	return safety, nil
 }
 
-// SetSafetyResolverForTest installs a stub engine resolver and returns a
-// function that restores the production one.
-func SetSafetyResolverForTest(resolve func(vaultRoot string) (Safety, error)) func() {
-	safetyResolverMu.Lock()
-	previous := safetyResolver
-	safetyResolver = func(_ context.Context, vaultRoot string) (Safety, error) { return resolve(vaultRoot) }
-	safetyResolverMu.Unlock()
-	return func() {
-		safetyResolverMu.Lock()
-		safetyResolver = previous
-		safetyResolverMu.Unlock()
-	}
-}
-
 // SnapshotError reports a mutation that completed on disk and whose safety
 // snapshot did not. It is the engine's type, aliased here because it is part of
 // this package's contract with the CLI and the web layer: every mutation that

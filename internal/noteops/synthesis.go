@@ -90,13 +90,6 @@ type synthesisOptions struct {
 // SynthesisOption customizes ApplySynthesisNote.
 type SynthesisOption func(*synthesisOptions)
 
-// WithSynthesisCommand sets the command stored in the undo journal entry.
-func WithSynthesisCommand(command string) SynthesisOption {
-	return func(o *synthesisOptions) {
-		o.command = strings.TrimSpace(command)
-	}
-}
-
 // WithSynthesisJournalOptions passes recorder options through to the undo journal.
 func WithSynthesisJournalOptions(opts ...journal.RecorderOption) SynthesisOption {
 	return func(o *synthesisOptions) {

@@ -88,12 +88,6 @@ func cleanDestinationDir(destDir string) (string, error) {
 	return dir, nil
 }
 
-// Dir is the vault-relative directory committed attachments are filed in.
-func (s *Store) Dir() string { return s.dir }
-
-// MaxBytes is the per-file limit this store enforces while receiving.
-func (s *Store) MaxBytes() int64 { return s.maxBytes }
-
 func (s *Store) stagingDir() string { return filepath.Join(s.root, filepath.FromSlash(stagingRel)) }
 func (s *Store) namesDir() string   { return filepath.Join(s.stagingDir(), namesRel) }
 func (s *Store) blobPath(id string) string {

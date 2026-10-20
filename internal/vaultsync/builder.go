@@ -84,10 +84,6 @@ func NewBuilder(local *Enrollment, sequence uint64, at time.Time) (*Builder, err
 	}, nil
 }
 
-// PackageID is the identity this package will be published under. It exists
-// before the package does, so a caller can record the attempt.
-func (b *Builder) PackageID() string { return b.manifest.PackageID }
-
 // Require records a package this one must be applied after.
 func (b *Builder) Require(originDevice string, sequence uint64) *Builder {
 	if b.err != nil {

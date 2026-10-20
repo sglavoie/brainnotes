@@ -259,13 +259,6 @@ func WithSourceCommand(command string) SourceOption {
 	}
 }
 
-// WithSourceJournalOptions passes recorder options through to the undo journal.
-func WithSourceJournalOptions(opts ...journal.RecorderOption) SourceOption {
-	return func(o *sourceOptions) {
-		o.journalOptions = append(o.journalOptions, opts...)
-	}
-}
-
 // WithSourceRequire pins a file the save depends on but never writes.
 //
 // The transaction verifies it at the commit boundary, so a save validated
