@@ -17,9 +17,13 @@ heading (`[[Old#Section]]`) forms, and the table-escaped alias Obsidian writes
 inside a Markdown table (`[[Old\|alt]]`), which keeps its `\|`. Wikilink-typed frontmatter values
 (`categories`, `parent`, …) are also rewritten.
 
-Atomicity: each affected file is rewritten via temp-file + rename. There is no
-cross-file transaction — if a mid-apply error occurs, prior writes stand. Use
-`git diff` to inspect.
+Atomicity: the rename is one undo journal entry. Each affected file is
+rewritten via temp-file + rename, and the destination is re-checked just before
+the first rewrite. If a rewrite or the final move fails, every backlink already
+rewritten is put back, so the vault is left as it was found; only a put-back
+that is itself refused (a note edited meanwhile) leaves rewritten links behind,
+and the error names those notes. Reverse a completed rename with `bn undo`
+(`bn history` lists entry IDs). `bn move` behaves the same way.
 
 `--dry-run` prints the shared preview format: a `--- <relpath>` header per
 affected note, a leading `path: <old> -> <new>` line on the renamed note, then
@@ -45,7 +49,9 @@ including aliased and headed forms. Bare `[[Title]]` links without a folder
 prefix are left untouched (Obsidian resolves them by title alone).
 
 `<new-folder>` is vault-relative; `.` or `""` means the vault root.
-Intermediate directories are created with mode `0755`.
+Intermediate directories are created with mode `0755`. Atomicity and undo
+work as for `bn rename`: a failed move puts rewritten backlinks back, and
+`bn undo` reverses a completed one.
 
 `--dry-run` prints the same shared preview format as `bn rename --dry-run`: a
 `--- <relpath>` header per affected note, a leading `path: <old> -> <new>` line
@@ -85,9 +91,10 @@ have both ends wrapped in `[[ ]]` before comparison so
 `bn replace categories Books Films` rewrites a stored `[[Books]]` to
 `[[Films]]`.
 
-Each file is rewritten atomically, but there is no cross-file transaction: if
-an error stops the run mid-way, prior writes stand — use `git diff` to
-recover.
+Each file is rewritten atomically. The run is one undo journal entry, so `bn undo` reverses a completed run
+(`bn history` lists entry IDs). There is no cross-file transaction: if an
+error stops the run mid-way, prior writes stand and the unfinished entry
+cannot be undone — use `git diff` to recover.
 
 `--dry-run` prints the same shared preview as `bn set --dry-run`
 (`--- <relpath>`, then `frontmatter[<key>]: <old> -> <new>` lines) and skips all
@@ -132,8 +139,10 @@ wrapping happens before the comparison so `tags+=Books` matches an existing
 `[[Books]]` entry.
 
 Frontmatter is rewritten with **alphabetically sorted top-level keys**. Each
-file is rewritten atomically, but there is no cross-file transaction: if an
-error stops the run mid-way, prior writes stand — use `git diff` to recover.
+file is rewritten atomically. The run is one undo journal entry, so `bn undo` reverses a completed run
+(`bn history` lists entry IDs). There is no cross-file transaction: if an
+error stops the run mid-way, prior writes stand and the unfinished entry
+cannot be undone — use `git diff` to recover.
 
 `--dry-run` prints the shared preview format and skips all writes: a
 `--- <relpath>` header per changed note, then one `frontmatter[<key>]: <old> ->
