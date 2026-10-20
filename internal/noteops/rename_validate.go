@@ -1,6 +1,7 @@
 package noteops
 
 import (
+	"errors"
 	"fmt"
 	"io"
 	"io/fs"
@@ -74,7 +75,7 @@ func CheckRenameDestination(targetPath, newPath string, force bool) error {
 	}
 	newInfo, err := os.Lstat(newPath)
 	if err != nil {
-		if errorsIs(err, fs.ErrNotExist) {
+		if errors.Is(err, fs.ErrNotExist) {
 			return nil
 		}
 		return WrapError(CodeConflict, fmt.Sprintf("rename: stat %q", newPath), err)
@@ -358,8 +359,4 @@ func renameCaseOnly(target, newPath, op string, force bool) error {
 		return fmt.Errorf("%s: pivot %q -> %q: %w", op, tmpPath, newPath, err)
 	}
 	return nil
-}
-
-func errorsIs(err, target error) bool {
-	return err != nil && target != nil && (err == target || os.IsNotExist(err))
 }
