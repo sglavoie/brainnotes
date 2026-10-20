@@ -155,10 +155,10 @@ func runViewsShow(cmd *cobra.Command, rawName string, asJSON bool) error {
 	name := strings.TrimSpace(rawName)
 	view, ok := lookupResolvedView(views, name)
 	if !ok {
-		return unknownViewError(cfg, name)
+		return fmt.Errorf("views show: %w", unknownViewError(cfg, name))
 	}
 	if !view.Enabled() {
-		return view.Err
+		return fmt.Errorf("views show: %w", view.Err)
 	}
 	record := viewShowJSON{
 		Name:        view.Saved.Name,
@@ -221,9 +221,10 @@ rotted — a property it names was renamed, a field was removed — therefore lo
 without complaint, and is reported as a disabled entry wherever views are
 listed. Run 'bn views check' to find out why.
 
-It exits non-zero when any view fails, so it is usable as a config health gate.
-With --json the report is printed first and the exit status is the same.`,
-		Args:          cobra.NoArgs,
+It exits 1 when any view fails, like 'bn lint' finding violations, so it is
+usable as a config health gate; 2 means the check itself could not run. With
+--json the report is printed first and the exit status is the same.`,
+		Args:          noArgs("views check"),
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -292,8 +293,10 @@ func writeViewsCheckJSON(out io.Writer, configPath string, views []queryexpr.Vie
 	return nil
 }
 
+// viewsCheckFailure is a completed check with a negative answer, so it exits 1
+// like `bn lint` finding violations, not 2 like a config that did not load.
 func viewsCheckFailure(failed, total int) error {
-	return fmt.Errorf("views check: %d of %d saved views failed to compile", failed, total)
+	return checkFailed("views check", fmt.Sprintf("%d of %d saved views failed to compile", failed, total))
 }
 
 // resolveConfigViews loads the config from the command context and resolves

@@ -19,6 +19,10 @@ var (
 	// ErrNoMatch is a search that completed and found nothing, which is
 	// grep's exit 1.
 	ErrNoMatch = errors.New("no matches")
+	// ErrCheckFailed is a health gate that ran to completion and found
+	// something wrong, like lint finding violations: `bn views check` with a
+	// saved view that no longer compiles.
+	ErrCheckFailed = errors.New("check failed")
 )
 
 // negativeOutcome is a negative answer with a message naming the command.
@@ -45,6 +49,11 @@ func canceled(name string) error {
 	return &negativeOutcome{msg: prefixed(name, "canceled"), kind: ErrCanceled}
 }
 
+// checkFailed reports that name's health gate completed and failed, and why.
+func checkFailed(name, why string) error {
+	return &negativeOutcome{msg: prefixed(name, why), kind: ErrCheckFailed}
+}
+
 func prefixed(name, msg string) string {
 	if name == "" {
 		return msg
@@ -57,5 +66,6 @@ func prefixed(name, msg string) string {
 func IsNegativeOutcome(err error) bool {
 	var lint *LintError
 	return errors.As(err, &lint) || errors.Is(err, ErrNothingSelected) ||
-		errors.Is(err, ErrCanceled) || errors.Is(err, ErrNoMatch)
+		errors.Is(err, ErrCanceled) || errors.Is(err, ErrNoMatch) ||
+		errors.Is(err, ErrCheckFailed)
 }

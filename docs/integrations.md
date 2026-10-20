@@ -47,7 +47,7 @@ does not load completes nothing.
 | Status | Meaning |
 | --- | --- |
 | `0` | Success. |
-| `1` | The command ran and the answer was negative: `bn lint` found violations, `bn search` found no match, a picker came back empty (an empty vault, no related notes or properties to offer, or an fzf query that matched nothing), or a confirmation was declined. |
+| `1` | The command ran and the answer was negative: `bn lint` found violations, `bn views check` found a saved view that no longer compiles, `bn search` found no match, a picker came back empty (an empty vault, no related notes or properties to offer, or an fzf query that matched nothing), or a confirmation was declined. |
 | `2` | An error: an unknown flag, a vault that does not load, a refused write, a confirmation refused for want of a terminal. |
 | `126`/`127` | A program you asked bn to run (editor, fzf, the `checkpoint run` command) could not be run or was not found. |
 | `130` | Interrupted: Ctrl-C, or a dismissed fzf picker. |

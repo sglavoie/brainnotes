@@ -98,6 +98,26 @@ func TestViews_CheckInvalid(t *testing.T) {
 	assertGolden(t, "views-check-invalid.golden", normalizeConfigPath(got))
 }
 
+// TestViews_CheckFailureIsANegativeOutcome pins `views check` as a health gate
+// like lint: a view that does not compile is a completed check with a negative
+// answer (exit 1), in both the text and the JSON form, not an error (exit 2).
+func TestViews_CheckFailureIsANegativeOutcome(t *testing.T) {
+	root := buildViewsFixtureVault(t, viewsFixtureConfig)
+	for _, args := range [][]string{{"views", "check"}, {"views", "check", "--json"}} {
+		cmd := NewRootCmd()
+		cmd.SetOut(&bytes.Buffer{})
+		cmd.SetErr(&bytes.Buffer{})
+		cmd.SetArgs(append([]string{"--vault", root}, args...))
+		err := cmd.Execute()
+		if err == nil || !IsNegativeOutcome(err) {
+			t.Fatalf("%v: err = %v, want a negative outcome (exit 1)", args, err)
+		}
+		if want := "views check: 2 of 3 saved views failed to compile"; err.Error() != want {
+			t.Fatalf("%v: err = %q, want %q", args, err, want)
+		}
+	}
+}
+
 // TestViews_CheckAllValid pins the clean path: every view compiles, nothing is
 // reported, and the command succeeds.
 func TestViews_CheckAllValid(t *testing.T) {
@@ -134,7 +154,7 @@ query = "((status:wip)) -folder:Archive"
 func TestViews_ShowUnknownName(t *testing.T) {
 	root := buildViewsFixtureVault(t, viewsFixtureConfig)
 	got := runViews(t, root, true, "views", "show", "nope")
-	want := "bn: unknown view \"nope\": defined views are Active work, Stale query, Bad ordering\n"
+	want := "bn: views show: unknown view \"nope\": defined views are Active work, Stale query, Bad ordering\n"
 	if got != want {
 		t.Fatalf("views show nope:\n got=%q\nwant=%q", got, want)
 	}
