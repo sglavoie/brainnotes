@@ -38,9 +38,13 @@ interactively. <new-folder> is vault-relative ("." or empty means the vault
 root); intermediate directories are created with mode 0755. Use 'bn rename' to
 change the title.
 
-Atomicity: each affected file is rewritten via a temp-file + rename. There is
-no transaction across files: if a mid-apply error occurs, prior writes stand.
-Inspect with 'git diff' to recover.`,
+Atomicity: the move is one undo journal entry. Each affected file is
+rewritten via a temp-file + rename, and the destination is re-checked just
+before the first rewrite. If a rewrite or the final move fails, every backlink
+already rewritten is put back, so the vault is left as it was found; only a
+put-back that is itself refused (a note edited meanwhile) leaves rewritten
+links behind, and the error names those notes. Reverse a completed move with
+'bn undo' (entry IDs: 'bn history').`,
 		Args:          cobra.RangeArgs(1, 2),
 		SilenceUsage:  true,
 		SilenceErrors: true,

@@ -34,8 +34,10 @@ date|datetime|int|bool|float|raw. Wikilink-typed properties are auto-wrapped
 before mutation. (--type is a deprecated spelling of --value-type: elsewhere
 --type filters notes by their type property.)
 
-Each file is rewritten atomically, but there is no cross-file transaction: if
-an error stops the run mid-way, prior writes stand. Use 'git diff' to recover.
+Each file is rewritten atomically and the run is one undo journal entry:
+reverse a completed run with 'bn undo' (entry IDs: 'bn history'). There is no
+cross-file transaction: if an error stops the run mid-way, prior writes stand
+and the unfinished entry cannot be undone. Use 'git diff' to recover.
 
 Use --dry-run to preview changes without writing. Each affected file is
 printed with a --- path header and frontmatter[key]: old -> new lines;

@@ -23,8 +23,9 @@ The scope is selected as follows:
   - Positional notes: only those notes (mutually exclusive with find flags).
 
 Atomicity: each file is rewritten in place, never vacating its own name. There
-is no transaction across files: if a mid-apply error occurs, prior writes stand.
-Every rewritten file is journaled, so 'bn undo' reverts the whole run.
+is no transaction across files: if a mid-apply error occurs, prior writes stand
+and the unfinished entry cannot be undone; use 'git diff' to recover. A completed
+run is one journal entry, so 'bn undo' reverts the whole run.
 
 Use --dry-run to preview changes without writing.`,
 		Args:          cobra.MinimumNArgs(2),

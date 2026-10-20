@@ -186,8 +186,20 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
+def bn_command(remainder: list[str]) -> list[str]:
+    """The bn arguments: the remainder minus the one `--` that separates them.
+
+    Only a leading `--` belongs to this script. Any later one is the bn
+    command's own — `unset a.md b.md -- title` and `checkpoint run -- true`
+    both mean something different without it.
+    """
+    if remainder and remainder[0] == "--":
+        return remainder[1:]
+    return list(remainder)
+
+
 def run(args: argparse.Namespace) -> int:
-    command = [arg for arg in args.command if arg != "--"]
+    command = bn_command(args.command)
     if not command:
         raise Refusal("no bn command was given; put the bn arguments after `--`")
     if any(arg == "--vault" or arg.startswith("--vault=") for arg in command):

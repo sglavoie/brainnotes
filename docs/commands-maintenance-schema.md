@@ -60,8 +60,10 @@ Scope is the same three-way rule `bn replace` uses: the whole vault with no
 notes and no find flags, the filtered set with find flags, or exactly the
 positional notes — find flags and positional notes are mutually exclusive.
 
-Each file is rewritten atomically, but there is no cross-file transaction: if
-an error stops the run mid-way, prior writes stand — use `git diff` to recover.
+Each file is rewritten atomically. The run is one undo journal entry, so `bn undo` reverses a completed run
+(`bn history` lists entry IDs). There is no cross-file transaction: if an
+error stops the run mid-way, prior writes stand and the unfinished entry
+cannot be undone — use `git diff` to recover.
 `--dry-run` prints the shared preview (`--- <relpath>`, then the removal of the
 old key and the addition of the new one as `frontmatter[<key>]` lines) and
 writes nothing.
@@ -109,8 +111,10 @@ Scope:
 
 `--property` restricts repair to a single declared property.
 
-Each file is rewritten atomically, but there is no cross-file transaction: if a
-mid-apply error occurs, prior writes stand — use `git diff` to recover.
+Each file is rewritten atomically. The run is one undo journal entry, so `bn undo` reverses a completed run
+(`bn history` lists entry IDs). There is no cross-file transaction: if an
+error stops the run mid-way, prior writes stand and the unfinished entry
+cannot be undone — use `git diff` to recover.
 
 `--dry-run` previews changes in the same shared preview format as `bn set
 --dry-run` (`--- <relpath>`, then `frontmatter[<key>]: <old> -> <new>` lines)

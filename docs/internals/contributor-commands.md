@@ -6,6 +6,9 @@ for every recipe below.
 
 ## Build and install
 
+- `just help` — `just --list`, the default recipe: every public recipe with its
+  one-line summary.
+- `just clean` — remove the `bn` binary `just build` left in the repo root.
 - `just build` — build the `bn` binary in the repo root with
   `go build -ldflags '<source checkout stamp>' -o bn ./cmd/bn`. The stamp records
   this checkout path (see `bn serve` below).
@@ -36,6 +39,11 @@ path.
   recipe and its own CI job rather than part of `just ci`.
 - `just fmt` — `gofmt -w` on the files `gofmt -l` reports, skipping
   `node_modules`.
+- `just vet` — `go vet` alone over the filtered package list; `just lint` and
+  `just ci` run it inside `_go-static`.
+- `just coverage` — `go test -cover` over the filtered package list, written to
+  `docs/internals/coverage-baseline.txt` with the commit and date it was taken
+  at. A snapshot, not a gate; a failing package leaves the file untouched.
 - Run a single test with standard Go selectors, for example
   `go test ./internal/cli -run TestFindByTag`. Integration tests in
   `internal/cli/integration_test.go` use golden files under
@@ -103,6 +111,21 @@ source tree; their Go issue totals must agree and must not move merely because
 - `just lint-full` — the same config over the whole tree, exit 0. A report, not a
   gate; it is how the remaining count is measured. Deliberately absent from
   `just lint` and `just ci`, like `just metrics`.
+- `just install-lint` — `go install` the golangci-lint version pinned as
+  `golangci_version` in the `justfile`; CI calls the same recipe, so the two
+  cannot drift onto different linters.
+- `just lint-phase-gate` — fails if any non-test file under `internal/cli`
+  carries a complexity violation, reading the whole-tree report because the
+  ratchet cannot see old code. `just lint-phase-gate-selftest`
+  (`scripts/lint_phase_gate_selftest.py`) proves it catches a violating
+  non-constructor function. Both are outside `just ci` (only one golangci-lint
+  may run at a time) and run as their own CI steps; see
+  [CLI command shape](cli-command-shape.md#verifying-a-decomposition) for the
+  rationale.
+- `just metrics` — `scripts/metrics.py`: file size, complexity, duplication and
+  dead-code measurements, compared against
+  [refactor-baseline.md](refactor-baseline.md). A read-only report on stdout,
+  absent from `just lint` and `just ci`.
 - `npm run lint:web` — the **TypeScript half of the same ratchet**:
   `eslint.config.js` (complexity 10, max-lines-per-function 100, max-depth 4,
   `@typescript-eslint/no-unused-vars`) over `internal/web/static_src/**/*.ts`.
@@ -142,7 +165,7 @@ be forgotten in the other.
    script test, not a hand-kept list.
 8. `go mod tidy -diff`: fails when `go.mod` or `go.sum` is not tidy.
 
-Run it before declaring work complete (`scripts/health.py` runs exactly this).
+Run it before declaring work complete.
 `app.css` drift is checked by `go test` itself.
 
 The GitHub workflow additionally runs the ratchet and phase-gate self-tests, the

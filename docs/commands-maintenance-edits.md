@@ -5,11 +5,14 @@ Part of [Maintenance and bulk-edit commands](commands-maintenance.md).
 ### `bn rename` — change a note's title and rewrite wikilinks
 
 ```sh
-bn rename <note> <new-title> [--dry-run] [--force]
+bn rename [note] <new-title> [--dry-run] [--force]
 ```
 
 `<note>` may be an absolute path, a path with separators, a `.md`-suffixed
 filename, or a bare title (resolved case-insensitively against the vault).
+When it is omitted (`bn rename <new-title>`), an fzf picker selects one note;
+the new title is validated before the picker opens, and a picker that selects
+nothing exits 1.
 
 Rewrites every `[[wikilink]]` in the vault that pointed at the old title —
 including folder-prefixed (`[[Books/Old]]`), aliased (`[[Old|alt]]`), and
@@ -17,9 +20,13 @@ heading (`[[Old#Section]]`) forms, and the table-escaped alias Obsidian writes
 inside a Markdown table (`[[Old\|alt]]`), which keeps its `\|`. Wikilink-typed frontmatter values
 (`categories`, `parent`, …) are also rewritten.
 
-Atomicity: each affected file is rewritten via temp-file + rename. There is no
-cross-file transaction — if a mid-apply error occurs, prior writes stand. Use
-`git diff` to inspect.
+Atomicity: the rename is one undo journal entry. Each affected file is
+rewritten via temp-file + rename, and the destination is re-checked just before
+the first rewrite. If a rewrite or the final move fails, every backlink already
+rewritten is put back, so the vault is left as it was found; only a put-back
+that is itself refused (a note edited meanwhile) leaves rewritten links behind,
+and the error names those notes. Reverse a completed rename with `bn undo`
+(`bn history` lists entry IDs). `bn move` behaves the same way.
 
 `--dry-run` prints the shared preview format: a `--- <relpath>` header per
 affected note, a leading `path: <old> -> <new>` line on the renamed note, then
@@ -31,21 +38,26 @@ Examples:
 ```sh
 bn rename "References/Books/Old Title.md" "New Title" --dry-run
 bn rename "Old Title" "New Title"           # bare-title lookup
+bn rename "New Title"                       # pick the note with fzf
 ```
 
 ### `bn move` — move a note between folders
 
 ```sh
-bn move <note> <new-folder> [--dry-run] [--force]
+bn move [note] <new-folder> [--dry-run] [--force]
 ```
 
 Changes the folder portion of `<note>`'s path; the title stays the same. Every
 folder-prefixed wikilink that named the old `<folder>/<title>` is rewritten —
 including aliased and headed forms. Bare `[[Title]]` links without a folder
-prefix are left untouched (Obsidian resolves them by title alone).
+prefix are left untouched (Obsidian resolves them by title alone). When
+`<note>` is omitted (`bn move <new-folder>`), an fzf picker selects one note;
+a picker that selects nothing exits 1.
 
 `<new-folder>` is vault-relative; `.` or `""` means the vault root.
-Intermediate directories are created with mode `0755`.
+Intermediate directories are created with mode `0755`. Atomicity and undo
+work as for `bn rename`: a failed move puts rewritten backlinks back, and
+`bn undo` reverses a completed one.
 
 `--dry-run` prints the same shared preview format as `bn rename --dry-run`: a
 `--- <relpath>` header per affected note, a leading `path: <old> -> <new>` line
@@ -57,6 +69,7 @@ Examples:
 bn move "References/Books/Dune.md" References    # promote to References/
 bn move Dune References/Books                    # demote, by bare title
 bn move "Old/Foo.md" .                           # move to vault root
+bn move Archive                                  # pick the note with fzf
 ```
 
 ### `bn replace` — rewrite a frontmatter value across notes
@@ -85,9 +98,10 @@ have both ends wrapped in `[[ ]]` before comparison so
 `bn replace categories Books Films` rewrites a stored `[[Books]]` to
 `[[Films]]`.
 
-Each file is rewritten atomically, but there is no cross-file transaction: if
-an error stops the run mid-way, prior writes stand — use `git diff` to
-recover.
+Each file is rewritten atomically. The run is one undo journal entry, so `bn undo` reverses a completed run
+(`bn history` lists entry IDs). There is no cross-file transaction: if an
+error stops the run mid-way, prior writes stand and the unfinished entry
+cannot be undone — use `git diff` to recover.
 
 `--dry-run` prints the same shared preview as `bn set --dry-run`
 (`--- <relpath>`, then `frontmatter[<key>]: <old> -> <new>` lines) and skips all
@@ -106,12 +120,14 @@ bn replace status wip done --dry-run                        # preview only
 ### `bn set` — write frontmatter properties
 
 ```sh
-bn set <note...> <key[=|+=|-=]value...> [--value-type date|datetime|int|bool|float|raw] [--dry-run] [-0]
+bn set [note...] <key[=|+=|-=]value...> [--value-type date|datetime|int|bool|float|raw] [--dry-run] [-0]
 ```
 
 Positional args are split: anything containing an operator (`=`, `+=`, `-=`)
 is a pair, and all preceding args are note paths. Use `-` as the sole note
-arg to read paths from stdin (so it composes with `bn find`).
+arg to read paths from stdin (so it composes with `bn find`). With no note
+args (`bn set status=done`), an fzf picker selects one or more notes
+(multi-select); a picker that selects nothing exits 1.
 
 Operators:
 
@@ -132,8 +148,10 @@ wrapping happens before the comparison so `tags+=Books` matches an existing
 `[[Books]]` entry.
 
 Frontmatter is rewritten with **alphabetically sorted top-level keys**. Each
-file is rewritten atomically, but there is no cross-file transaction: if an
-error stops the run mid-way, prior writes stand — use `git diff` to recover.
+file is rewritten atomically. The run is one undo journal entry, so `bn undo` reverses a completed run
+(`bn history` lists entry IDs). There is no cross-file transaction: if an
+error stops the run mid-way, prior writes stand and the unfinished entry
+cannot be undone — use `git diff` to recover.
 
 `--dry-run` prints the shared preview format and skips all writes: a
 `--- <relpath>` header per changed note, then one `frontmatter[<key>]: <old> ->
@@ -154,6 +172,7 @@ bn set note.md tags+=foo,bar                                # append multiple
 bn set note.md tags-=draft                                  # drop a tag
 bn set note.md tags+=alpha tags-=beta                       # combined
 bn set note.md status=done --dry-run                        # preview only
+bn set status=done                                          # pick notes with fzf
 bn find --tag drafts | bn set - status=done                 # stdin pipeline
 bn find --tag drafts | bn set - tags+=triage                # bulk append
 ```
@@ -161,7 +180,7 @@ bn find --tag drafts | bn set - tags+=triage                # bulk append
 ### `bn tags` — count tag occurrences
 
 ```sh
-bn tags [--sort count|name] [--count=false] [--files] [--json]
+bn tags [--sort count|name] [--count=false] [--files] [--json] [-v|--verbose]
 ```
 
 Alias for `bn values tags`. See `bn values` for flag behavior.
@@ -171,11 +190,15 @@ Alias for `bn values tags`. See `bn values` for flag behavior.
 ```sh
 bn unset <note> <property...> [--dry-run] [-0]
 bn unset <note...> -- <property...>
+bn unset -- <property...>
 ```
 
 Without `--`, the first positional is the note (or `-` for stdin) and the rest
 are property names. To pass multiple notes, use `--` to separate them from
-the property list.
+the property list. With nothing before `--` (`bn unset -- rating status`), an
+fzf picker selects one or more notes (multi-select); a picker that selects
+nothing exits 1. A single positional is always a note, so `bn unset rating`
+is refused for naming no property.
 
 Removing a missing property is a silent no-op. `--dry-run` previews the
 removal in the same shared format as `bn set --dry-run` (one
@@ -188,6 +211,7 @@ Examples:
 bn unset note.md rating
 bn unset a.md b.md -- title status                          # multi-note
 bn unset note.md rating --dry-run                           # preview only
+bn unset -- rating status                                   # pick notes with fzf
 bn find --has rating | bn unset - rating                    # bulk wipe
 ```
 

@@ -24,9 +24,11 @@ Scope:
   - One or more find flags (--tag, --folder, ...): matching notes only.
   - Positional notes: only those notes (mutually exclusive with find flags).
 
-Atomicity: each file is rewritten via a temp-file + rename. There is no
-transaction across files: if a mid-apply error occurs, prior writes stand.
-Use 'git diff' to inspect or recover.
+Atomicity: each file is rewritten via a temp-file + rename, and the run is one
+undo journal entry: reverse a completed run with 'bn undo' (entry IDs:
+'bn history'). There is no transaction across files: if a mid-apply error
+occurs, prior writes stand and the unfinished entry cannot be undone. Use
+'git diff' to inspect or recover.
 
 Use --dry-run to preview changes without writing.`,
 		SilenceUsage:  true,

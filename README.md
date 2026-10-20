@@ -27,6 +27,7 @@ available in a new shell.
 git clone https://github.com/sglavoie/brainnotes.git
 cd brainnotes
 just install
+bn --version    # the Git revision this build came from
 ```
 
 ## Quick start
