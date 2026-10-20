@@ -210,9 +210,7 @@ web-build:
     go run ./internal/web/cssbuild/gen
 
 # Type-check, lint, and build the browser assets
-web-check: _web-static
-    npm run build:web
-    go run ./internal/web/cssbuild/gen
+web-check: _web-static web-build
 
 # Run go vet across all packages
 vet:
