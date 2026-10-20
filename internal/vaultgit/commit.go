@@ -35,6 +35,17 @@ func (m *Manager) CommitPending(ctx context.Context) (CommitResult, error) {
 	return m.commitPendingLocked(ctx, op)
 }
 
+// completeExternalCommit anchors the external floor at a landed snapshot's
+// completion bound and retires its intent. An external intent remains live
+// until watch.json durably names the post-ref anchor and the ref's directory is
+// synced. If either is missing, or clearing fails, the next recovery pass proves
+// the commit landed, writes the same anchor again, and retires it.
+func (m *Manager) completeExternalCommit(result CommitResult) {
+	if _, err := m.state.NoteCommit(m.policy(), result.landedAt); err == nil && result.refDurable {
+		_ = m.clearIntent()
+	}
+}
+
 func (m *Manager) commitPendingLocked(ctx context.Context, op string) (CommitResult, error) {
 	if err := m.checkBlocked(ctx, op); err != nil {
 		return CommitResult{}, err
@@ -75,12 +86,7 @@ func (m *Manager) commitPendingLocked(ctx context.Context, op string) (CommitRes
 		// this is the one entry point that takes an external autosave. It also
 		// retires the write-ahead marker, replacing it with the later ref-landing
 		// boundary already persisted in the recovery intent.
-		if _, err := m.state.NoteCommit(m.policy(), result.landedAt); err == nil {
-			// An external intent remains live until watch.json durably names the
-			// post-ref anchor. If clearing fails, the next recovery pass proves the
-			// commit landed, writes the same anchor again, and retires it.
-			_ = m.clearIntent()
-		}
+		m.completeExternalCommit(result)
 		return result, nil
 	}
 	if !anchoredAt.IsZero() {

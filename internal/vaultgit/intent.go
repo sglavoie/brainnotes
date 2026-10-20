@@ -146,30 +146,7 @@ func (m *Manager) recoverIntentLocked(ctx context.Context, op string) (bool, err
 	}
 	if loadErr == nil && record.NewOID != "" && record.Ref != "" {
 		if landed, err := m.intentLanded(ctx, record); err == nil && landed {
-			if record.Operation == "commit-pending" {
-				// An external intent outlives its ref update until the floor anchor is
-				// durable. Prefer the post-ref bound the original process recorded;
-				// an older intent has no such field, so the instant recovery observes
-				// the landed commit is the conservative replacement.
-				landedAt := m.now().UTC()
-				if record.LandedAt != nil {
-					landedAt = record.LandedAt.UTC()
-				}
-				if _, noteErr := m.state.NoteCommit(m.policy(), landedAt); noteErr != nil {
-					return false, safetyErrorf(KindRepositoryState, op,
-						"the recovered external snapshot's floor could not be anchored: %s", agent.SanitizedDiagnostic(noteErr))
-				}
-				if clearErr := m.clearIntent(); clearErr != nil {
-					return false, safetyErrorf(KindRepositoryState, op,
-						"the finished snapshot's intent record could not be removed: %s", agent.SanitizedDiagnostic(clearErr))
-				}
-				return true, nil
-			}
-			if clearErr := m.clearIntent(); clearErr != nil {
-				return false, safetyErrorf(KindRepositoryState, op,
-					"the finished snapshot's intent record could not be removed: %s", agent.SanitizedDiagnostic(clearErr))
-			}
-			return false, nil
+			return m.retireLandedIntent(op, record)
 		}
 	}
 	return false, &SafetyError{
@@ -181,6 +158,40 @@ func (m *Manager) recoverIntentLocked(ctx context.Context, op string) (bool, err
 		NewOID: record.NewOID,
 		Err:    loadErr,
 	}
+}
+
+// retireLandedIntent finishes a record whose commit is proven reachable. The
+// ref's directory is synced again first, because a record can survive exactly
+// because that sync failed in the process that landed it: reachability proves
+// the ref moved, not that the move survives power loss. While the sync still
+// fails the record stays for a later pass. The verdict is unchanged — the
+// commit landed, so nothing is blocked — and a new snapshot replaces the record
+// with its own, whose landing makes this commit durable as its ancestor.
+func (m *Manager) retireLandedIntent(op string, record IntentRecord) (bool, error) {
+	durable := m.refDirDurable(record.Ref)
+	external := record.Operation == "commit-pending"
+	if external {
+		// An external intent outlives its ref update until the floor anchor is
+		// durable. Prefer the post-ref bound the original process recorded;
+		// an older intent has no such field, so the instant recovery observes
+		// the landed commit is the conservative replacement.
+		landedAt := m.now().UTC()
+		if record.LandedAt != nil {
+			landedAt = record.LandedAt.UTC()
+		}
+		if _, noteErr := m.state.NoteCommit(m.policy(), landedAt); noteErr != nil {
+			return false, safetyErrorf(KindRepositoryState, op,
+				"the recovered external snapshot's floor could not be anchored: %s", agent.SanitizedDiagnostic(noteErr))
+		}
+	}
+	if !durable {
+		return external, nil
+	}
+	if clearErr := m.clearIntent(); clearErr != nil {
+		return false, safetyErrorf(KindRepositoryState, op,
+			"the finished snapshot's intent record could not be removed: %s", agent.SanitizedDiagnostic(clearErr))
+	}
+	return external, nil
 }
 
 // intentLanded asks the repository whether the recorded commit is in the

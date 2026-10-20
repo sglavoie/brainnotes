@@ -102,6 +102,10 @@ type Manager struct {
 	// shortened only by tests in this package, which cannot wait two minutes for
 	// a remote that never answers.
 	pushTimeout time.Duration
+
+	// syncDir is a test seam: when set, it replaces vault.SyncDir for the ref
+	// directory sync that decides whether a landed snapshot's intent may retire.
+	syncDir func(dir string) error
 }
 
 // Open prepares the safety engine for a vault.

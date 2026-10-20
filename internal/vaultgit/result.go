@@ -42,6 +42,9 @@ type CommitResult struct {
 	// callers need only the commit verdict; the external floor protocol uses it
 	// to record the completion boundary.
 	landedAt time.Time
+	// refDurable reports that the ref directory sync after the update succeeded.
+	// When it is false the recovery intent is kept for the next recovery pass.
+	refDurable bool
 }
 
 // Unrecorded reports the paths this snapshot was asked to record and did not:

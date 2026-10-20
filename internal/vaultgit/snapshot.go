@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"path/filepath"
 	"time"
 
@@ -354,11 +355,12 @@ func (m *Manager) landSnapshot(ctx context.Context, op, head, ref, commit string
 	// The branch has moved. Git wrote the ref file, but the directory entry that
 	// names it is what makes the move survive power loss, and "the ref landing is
 	// durable" is exactly the condition under which the record may be retired.
-	// Best effort on purpose: the commit has landed either way, and turning a
-	// successful snapshot into a failure over a housekeeping fsync would be the
-	// destructive answer to the harmless problem. A packed ref has no such
-	// directory, and the failed sync is ignored for the same reason.
-	_ = vault.SyncDir(filepath.Dir(filepath.Join(m.gitDir, filepath.FromSlash(ref))))
+	// A failed sync does not fail the snapshot: the commit has landed either way,
+	// and turning a success into a failure over an fsync would be the destructive
+	// answer to the harmless problem. It does keep the record, so the recovery
+	// pass at the next Open or Preflight proves the landing, syncs again, and
+	// retires it then.
+	result.refDurable = m.refDirDurable(ref)
 	result.landedAt = m.now().UTC()
 	if plan.externalAdditions {
 		// The ref is now observably durable. Persist that upper bound in the intent
@@ -368,7 +370,7 @@ func (m *Manager) landSnapshot(ctx context.Context, op, head, ref, commit string
 		intent.LandedAt = &result.landedAt
 		intent.ObservedAt = result.landedAt
 		_ = m.state.SaveIntent(intent)
-	} else {
+	} else if result.refDurable {
 		// Explicit commits have no external floor to complete, so their durable ref
 		// update remains the point at which the recovery intent can be retired.
 		_ = m.clearIntent()
@@ -378,6 +380,18 @@ func (m *Manager) landSnapshot(ctx context.Context, op, head, ref, commit string
 	result.Commit = commit
 	m.refreshUserIndex(ctx, head, commit, result.Added, result.Deleted)
 	return result, nil
+}
+
+// refDirDurable syncs the directory holding ref's loose file and reports
+// whether the ref's landing is now durable. A missing directory means the ref
+// is packed and has no loose entry to sync, which counts as durable.
+func (m *Manager) refDirDurable(ref string) bool {
+	syncDir := vault.SyncDir
+	if m.syncDir != nil {
+		syncDir = m.syncDir
+	}
+	err := syncDir(filepath.Dir(filepath.Join(m.gitDir, filepath.FromSlash(ref))))
+	return err == nil || errors.Is(err, fs.ErrNotExist)
 }
 
 // withoutPaths returns list with every member of drop removed, preserving order.
