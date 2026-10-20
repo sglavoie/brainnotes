@@ -135,6 +135,7 @@ export const createPropertyWorkbench = (
         first.tabIndex = 0;
       }
       view.renderSelection();
+      editor.refocus();
     },
     selection: () => [...state.selected],
     previewSchema: mutations.previewSchema,
