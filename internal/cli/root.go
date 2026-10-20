@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 
@@ -87,7 +88,11 @@ func RenderError(w io.Writer, err error) {
 	}
 	var parseErr *queryexpr.ParseError
 	if errors.As(err, &parseErr) {
-		_, _ = fmt.Fprintln(w, parseErr.Render())
+		// Whatever wraps the parse error — the command name, normally — is
+		// kept as the prefix of the first line, so a caret block is spelled
+		// `bn: find: query: ...` like every other error.
+		prefix := strings.TrimSuffix(err.Error(), parseErr.Error())
+		_, _ = fmt.Fprintln(w, "bn: "+prefix+parseErr.Render())
 		return
 	}
 	_, _ = fmt.Fprintln(w, "bn:", err)

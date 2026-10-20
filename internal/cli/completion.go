@@ -1,7 +1,6 @@
 package cli
 
 import (
-	"io"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -99,6 +98,8 @@ func registerCompletions(root *cobra.Command) {
 		registerFlagValues(cmd, "tag", vaultCompleter(tagNames))
 		registerFlagValues(cmd, "property", vaultCompleter(definedPropertyNames))
 		registerFlagValues(cmd, "folder", vaultCompleter(folderNames))
+		registerFlagValues(cmd, "has", vaultCompleter(frontmatterKeys))
+		registerFlagValues(cmd, "missing", vaultCompleter(frontmatterKeys))
 		if cmd.ValidArgsFunction != nil {
 			return
 		}
@@ -202,7 +203,7 @@ func tagNames(_ *config.Config, v *vault.Vault) []string {
 	if err != nil {
 		return nil
 	}
-	counts, _ := collectValueCounts(v, notes, "tags", false, false, io.Discard)
+	counts, _ := collectValueCounts(v, notes, "tags", false, nil)
 	names := make([]string, 0, len(counts))
 	for name := range counts {
 		names = append(names, name)

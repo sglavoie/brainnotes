@@ -30,7 +30,7 @@ func newConfigMigrateCmd() *cobra.Command {
 			"refused rather than written if any key would end up with a different effective value.\n\n" +
 			"Running it again does nothing, and the originals are recoverable through `bn undo` — an interrupted run " +
 			"leaves either both files migrated or neither.",
-		Args: cobra.NoArgs,
+		Args: noArgs("config migrate"),
 		// The vault that most needs this is the one whose configuration the
 		// loader refuses: once a vault is enrolled in synchronization, a
 		// misplaced key stops it loading at all. Requiring a successful load

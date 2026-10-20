@@ -29,7 +29,7 @@ in [frontmatter.properties] and reports violations without modifying files.
 
 Exit code 0 means clean; exit code 1 means violations were found; exit code 2
 means lint could not run (for example, an unknown --property).`,
-		Args:          cobra.NoArgs,
+		Args:          noArgs("lint"),
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {

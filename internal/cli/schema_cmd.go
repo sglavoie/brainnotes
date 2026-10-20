@@ -21,7 +21,7 @@ func NewSchemaCmd() *cobra.Command {
 property is shown with its type, its item kind for lists, whether it is
 required, and its allowed values (if any). Use this as a reference when fixing
 lint or repair violations.`,
-		Args:          cobra.NoArgs,
+		Args:          noArgs("schema"),
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {

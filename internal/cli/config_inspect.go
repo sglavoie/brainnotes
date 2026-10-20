@@ -42,7 +42,7 @@ func runConfigExplain(cmd *cobra.Command, key string, asJSON bool) error {
 	cfg := ConfigFromContext(cmd.Context())
 	value, err := cfg.EffectiveValue(key)
 	if err != nil {
-		return err
+		return fmt.Errorf("config explain: %w", err)
 	}
 	var sourcePath *string
 	if layer, assigned := cfg.SourceOf(key); assigned {

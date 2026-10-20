@@ -2,7 +2,6 @@ package cli
 
 import (
 	"fmt"
-	"os"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -11,37 +10,12 @@ import (
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
-// resolveRenameTarget treats arg as a path when it looks like one (contains a
-// path separator, is absolute, or ends in .md), otherwise resolves it
-// case-insensitively as a bare title. Relative path-like args are interpreted
-// relative to the vault root rather than the process working directory.
+// resolveRenameTarget resolves the note `bn rename` acts on through the shared
+// resolver, so a missing note is refused in the same words as every other
+// note-targeting command (`rename: no note at Notes/Nope.md`) rather than with
+// a stat of an absolute path the user never typed.
 func resolveRenameTarget(v *vault.Vault, arg string) (*vault.Note, error) {
-	looksLikePath := filepath.IsAbs(arg) ||
-		strings.ContainsRune(arg, filepath.Separator) ||
-		strings.HasSuffix(strings.ToLower(arg), ".md")
-	if looksLikePath {
-		abs, err := resolveVaultPathArg(v.Root, arg)
-		if err != nil {
-			return nil, fmt.Errorf("rename: %w", err)
-		}
-		if _, err := os.Stat(abs); err != nil {
-			return nil, fmt.Errorf("rename: %w", err)
-		}
-		return &vault.Note{Path: abs}, nil
-	}
-	n, err := v.ResolveByTitle(arg, "")
-	if err != nil {
-		return nil, fmt.Errorf("rename: %w", err)
-	}
-	return n, nil
-}
-
-func resolveVaultPathArg(vaultRoot, arg string) (string, error) {
-	p := arg
-	if !filepath.IsAbs(p) {
-		p = filepath.Join(vaultRoot, filepath.FromSlash(p))
-	}
-	return absInVault(vaultRoot, p)
+	return resolveNoteTarget("rename", v, arg)
 }
 
 func ensureUniqueRenameDestinationTitle(v *vault.Vault, targetPath, newPath, title string, force bool) error {

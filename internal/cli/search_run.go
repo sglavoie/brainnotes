@@ -242,7 +242,7 @@ func selectSearchNotes(
 }
 
 func searchNotesByArgs(cmd *cobra.Command, v *vault.Vault, noteArgs []string, nullSep bool) ([]*vault.Note, error) {
-	paths, err := resolveNoteInputs(v.Root, noteArgs, cmd.InOrStdin(), nullSep)
+	paths, err := resolveNoteInputs("search", v.Root, noteArgs, cmd.InOrStdin(), nullSep)
 	if err != nil {
 		return nil, err
 	}

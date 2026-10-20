@@ -9,6 +9,7 @@ import (
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/pins"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/query"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/textnorm"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
@@ -92,28 +93,44 @@ func printShowBroken(out io.Writer, matched []*vault.Note, g *query.Graph, root 
 	return nil
 }
 
+// printListBrokenTargets prints each distinct unresolved target title once.
+// Titles are deduplicated by the graph's own unresolved-link key, which
+// NFC-normalizes as well as folding case, so `[[Café]]` typed composed in one
+// note and decomposed in another is one broken target rather than two lines
+// that look identical.
 func printListBrokenTargets(out io.Writer, matched []*vault.Note, g *query.Graph) error {
 	seen := make(map[string]string)
 	for _, n := range matched {
 		for _, bl := range query.UnresolvedLinks(n, g) {
 			title := bl.Link.Title()
-			key := strings.ToLower(title)
+			key := brokenTargetKey(g, title)
 			if _, ok := seen[key]; !ok {
 				seen[key] = title
 			}
 		}
 	}
-	targets := make([]string, 0, len(seen))
-	for _, title := range seen {
-		targets = append(targets, title)
+	keys := make([]string, 0, len(seen))
+	for key := range seen {
+		keys = append(keys, key)
 	}
-	sort.Slice(targets, func(i, j int) bool {
-		return strings.ToLower(targets[i]) < strings.ToLower(targets[j])
-	})
+	sort.Strings(keys)
+	targets := make([]string, 0, len(keys))
+	for _, key := range keys {
+		targets = append(targets, seen[key])
+	}
 	for _, t := range targets {
 		if _, err := fmt.Fprintf(out, "%s\n", t); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+// brokenTargetKey is the dedup key of one unresolved title: the graph's key
+// when it has one, else the same NFC-and-lowercase form it would build.
+func brokenTargetKey(g *query.Graph, title string) string {
+	if key := g.UnresolvedTargetKey(title); key != "" {
+		return key
+	}
+	return strings.ToLower(textnorm.NFC(title))
 }

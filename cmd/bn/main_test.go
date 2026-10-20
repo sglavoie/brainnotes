@@ -276,6 +276,7 @@ func TestRunMapsNegativeOutcomesToOne(t *testing.T) {
 		"lint":     &cli.LintError{Count: 3},
 		"selected": fmt.Errorf("open: %w", cli.ErrNothingSelected),
 		"canceled": fmt.Errorf("remove: %w", cli.ErrCanceled),
+		"check":    fmt.Errorf("views check: %w", cli.ErrCheckFailed),
 	} {
 		t.Run(name, func(t *testing.T) {
 			stderr := &bytes.Buffer{}

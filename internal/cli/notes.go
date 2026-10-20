@@ -53,37 +53,104 @@ func sameExistingFile(a, b string) bool {
 // from in instead (one per line, or NUL-separated when nullSep is true).
 // Globs are expanded with filepath.Glob; relative patterns are resolved
 // against vaultRoot before expansion. An empty match for a glob is an error.
-// Out-of-vault paths are rejected.
-func resolveNoteInputs(vaultRoot string, args []string, in io.Reader, nullSep bool) ([]string, error) {
-	if len(args) == 1 && args[0] == "-" {
-		hintTerminalStdin(in)
-		return readStdinPaths(in, vaultRoot, nullSep)
+// Out-of-vault paths are rejected, and so is a literal path that names no
+// file: it is reported under name as a *noteTargetNotFoundError, in the form
+// the user typed it, rather than surfacing later as a failed read of an
+// absolute path. Every other refusal is prefixed with name too.
+func resolveNoteInputs(name, vaultRoot string, args []string, in io.Reader, nullSep bool) ([]string, error) {
+	paths, err := collectNoteInputs(name, vaultRoot, args, in, nullSep)
+	if err == nil {
+		return paths, nil
 	}
+	var notFound *noteTargetNotFoundError
+	if errors.As(err, &notFound) || name == "" {
+		return nil, err
+	}
+	return nil, fmt.Errorf("%s: %w", name, err)
+}
 
+func collectNoteInputs(name, vaultRoot string, args []string, in io.Reader, nullSep bool) ([]string, error) {
+	if len(args) == 1 && args[0] == "-" {
+		return collectStdinNoteInputs(name, vaultRoot, in, nullSep)
+	}
 	var paths []string
 	seen := newNoteInputSet()
 	for _, a := range args {
-		if a == "-" {
-			return nil, errors.New("'-' may only be used as the sole note argument")
-		}
-		if strings.TrimSpace(a) == "" {
-			return nil, errors.New("empty note path argument")
-		}
-		matches, err := expandGlob(vaultRoot, a)
+		matches, err := resolveNoteArg(name, vaultRoot, a)
 		if err != nil {
 			return nil, err
 		}
-		for _, m := range matches {
-			abs, err := absInVault(vaultRoot, m)
-			if err != nil {
-				return nil, err
-			}
+		for _, abs := range matches {
 			if seen.add(abs) {
 				paths = append(paths, abs)
 			}
 		}
 	}
 	return paths, nil
+}
+
+// collectStdinNoteInputs reads the `-` form and refuses a path naming no file.
+func collectStdinNoteInputs(name, vaultRoot string, in io.Reader, nullSep bool) ([]string, error) {
+	hintTerminalStdin(in)
+	paths, err := readStdinPaths(in, vaultRoot, nullSep)
+	if err != nil {
+		return nil, err
+	}
+	for _, p := range paths {
+		if err := requireNoteFile(name, displayVaultPath(vaultRoot, p), p); err != nil {
+			return nil, err
+		}
+	}
+	return paths, nil
+}
+
+// resolveNoteArg expands one positional note argument to in-vault absolute
+// paths. A literal path (no glob meta-characters) must name an existing file.
+func resolveNoteArg(name, vaultRoot, a string) ([]string, error) {
+	if a == "-" {
+		return nil, errors.New("'-' may only be used as the sole note argument")
+	}
+	if strings.TrimSpace(a) == "" {
+		return nil, errors.New("empty note path argument")
+	}
+	matches, err := expandGlob(vaultRoot, a)
+	if err != nil {
+		return nil, err
+	}
+	literal := !strings.ContainsAny(a, "*?[")
+	out := make([]string, 0, len(matches))
+	for _, m := range matches {
+		abs, err := absInVault(vaultRoot, m)
+		if err != nil {
+			return nil, err
+		}
+		if literal {
+			if err := requireNoteFile(name, a, abs); err != nil {
+				return nil, err
+			}
+		}
+		out = append(out, abs)
+	}
+	return out, nil
+}
+
+// requireNoteFile refuses a note path that does not exist, naming it as arg.
+// Any other stat failure is left for the read that follows to report.
+func requireNoteFile(name, arg, abs string) error {
+	if _, err := os.Stat(abs); errors.Is(err, fs.ErrNotExist) {
+		return &noteTargetNotFoundError{name: name, arg: arg, pathOnly: true}
+	}
+	return nil
+}
+
+// displayVaultPath renders abs vault-relative with forward slashes when it
+// lies under vaultRoot, and as given otherwise.
+func displayVaultPath(vaultRoot, abs string) string {
+	rel, err := filepath.Rel(vaultRoot, abs)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return abs
+	}
+	return filepath.ToSlash(rel)
 }
 
 // expandGlob returns the list of files matching pattern. A pattern without

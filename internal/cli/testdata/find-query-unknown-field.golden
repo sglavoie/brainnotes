@@ -1,4 +1,4 @@
-query: unknown field "ratign"
+bn: find: query: unknown field "ratign"
   ratign>3
   ^^^^^^
   did you mean: rating

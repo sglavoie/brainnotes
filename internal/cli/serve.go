@@ -77,7 +77,7 @@ func NewServeCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "serve",
 		Short: "Serve a local web view of your vault",
-		Args:  cobra.NoArgs,
+		Args:  noArgs("serve"),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := refuseCombinedFlags(cmd, "serve", "read-only", "hosted"); err != nil {
 				return err
@@ -145,7 +145,7 @@ func NewServeCmd() *cobra.Command {
 	cmd.Flags().StringVar(&stateDir, "state-dir", "", "external directory for Daily Brief activity (required with --read-only)")
 	cmd.Flags().StringVar(&replicaStatusFile, "replica-status-file", "", "replica synchronization status JSON")
 	cmd.Flags().StringVar(&addr, "addr", "", "listen address host:port (overrides [serve].addr)")
-	cmd.Flags().IntVar(&port, "port", 0, "listen port (overrides the port from [serve].addr)")
+	cmd.Flags().IntVar(&port, "port", 0, "listen port (rewrites the port of --addr or [serve].addr)")
 	cmd.Flags().BoolVar(&noOpen, "no-open", false, "do not open a browser on startup")
 
 	return cmd
@@ -227,18 +227,18 @@ func fileExists(path string) bool {
 }
 
 func resolveServeConfig(base config.ServeConfig, addrFlag string, addrChanged bool, port int, portChanged bool, noOpen bool) (config.ServeConfig, error) {
-	out := base
-	out.Addr = strings.TrimSpace(out.Addr)
-	if out.Addr == "" {
-		out.Addr = config.DefaultServeAddr
+	if portChanged && (port < 0 || port > 65535) {
+		return config.ServeConfig{}, rangeValueError("serve", "port", "between 0 and 65535", port)
 	}
-
-	if addrChanged {
-		out.Addr = strings.TrimSpace(addrFlag)
-		if out.Addr == "" {
-			return config.ServeConfig{}, errors.New("serve: --addr cannot be empty")
-		}
-	} else if portChanged {
+	out := base
+	addr, err := resolveServeAddr(base.Addr, addrFlag, addrChanged)
+	if err != nil {
+		return config.ServeConfig{}, err
+	}
+	out.Addr = addr
+	// --port composes with --addr: it rewrites only the port of whichever
+	// address won, so `--addr 0.0.0.0:8080 --port 9000` serves on 0.0.0.0:9000.
+	if portChanged {
 		addr, err := replaceAddressPort(out.Addr, port)
 		if err != nil {
 			return config.ServeConfig{}, err
@@ -252,6 +252,25 @@ func resolveServeConfig(base config.ServeConfig, addrFlag string, addrChanged bo
 	}
 
 	return out, nil
+}
+
+// resolveServeAddr picks the listen address before --port is applied: --addr
+// when given, which must be host:port, else [serve].addr, else the default.
+func resolveServeAddr(configured, addrFlag string, addrChanged bool) (string, error) {
+	if !addrChanged {
+		if addr := strings.TrimSpace(configured); addr != "" {
+			return addr, nil
+		}
+		return config.DefaultServeAddr, nil
+	}
+	addr := strings.TrimSpace(addrFlag)
+	if addr == "" {
+		return "", errors.New("serve: --addr cannot be empty")
+	}
+	if _, _, err := net.SplitHostPort(addr); err != nil {
+		return "", fmt.Errorf("serve: invalid --addr %q: %w", addr, err)
+	}
+	return addr, nil
 }
 
 func replaceAddressPort(addr string, port int) (string, error) {

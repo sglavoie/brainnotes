@@ -38,7 +38,7 @@ surface, and they do the same thing.
 With no flags, 'bn index' prints the same report as '--status'. Neither form
 walks the vault: reporting on the cache must never be the thing that builds it.
 --json prints that report as a JSON object.`,
-		Args:          cobra.NoArgs,
+		Args:          noArgs("index"),
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {

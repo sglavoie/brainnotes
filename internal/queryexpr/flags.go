@@ -163,7 +163,7 @@ func validateFlagBounds(f query.Flags) error {
 		{flag: "--max-links", value: f.MaxLinks},
 	} {
 		if spec.value < -1 {
-			return fmt.Errorf("%s must be >= 0 (or -1 to disable), got %d", spec.flag, spec.value)
+			return fmt.Errorf("%s must be 0 or more, or -1 to disable (got %d)", spec.flag, spec.value)
 		}
 	}
 	for _, spec := range []struct {
@@ -188,7 +188,7 @@ func validateFlagBounds(f query.Flags) error {
 // so the split below can trust that the first byte is one of >, <, or =.
 func ageTerm(flag, prop, expr string) (*Term, error) {
 	if _, _, err := query.ParseAge(expr); err != nil {
-		return nil, fmt.Errorf("%s: %w", flag, err)
+		return nil, fmt.Errorf("%s: %w%s", flag, err, ageOperatorHint(expr))
 	}
 	var op Op
 	switch expr[0] {
@@ -207,6 +207,42 @@ func ageTerm(flag, prop, expr string) (*Term, error) {
 		t.Arg = Atom{Text: prop}
 	}
 	return t, nil
+}
+
+// PresenceTerms lowers repeated --has and --missing values to `has:` and
+// `missing:` terms, one per non-blank value, for the caller to AND with the
+// rest of its plan. query.Flags carries one Has and one Missing, which is all
+// the web's query parameters ever supply; the CLI's repeatable flags go
+// through here instead, so the two FromFlags lowerings stay unchanged.
+func PresenceTerms(has, missing []string) []Expr {
+	var ops []Expr
+	for _, spec := range []struct {
+		field  string
+		values []string
+	}{
+		{field: "has", values: has},
+		{field: "missing", values: missing},
+	} {
+		for _, value := range spec.values {
+			if value = strings.TrimSpace(value); value != "" {
+				ops = append(ops, matchTerm(spec.field, value))
+			}
+		}
+	}
+	return ops
+}
+
+// ageOperatorHint suggests the commonest fix for an age expression that is
+// only missing its operator: `30d` reads as "older than 30 days" far more often
+// than as anything else, so the hint offers `>30d` when that would parse.
+func ageOperatorHint(expr string) string {
+	if expr == "" || strings.ContainsAny(expr[:1], "><=") {
+		return ""
+	}
+	if _, _, err := query.ParseAge(">" + expr); err != nil {
+		return ""
+	}
+	return "; did you mean >" + expr + "?"
 }
 
 // matchTerm builds `field:value`, the `:` form every string and flag-shaped

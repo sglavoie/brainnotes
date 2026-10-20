@@ -23,10 +23,18 @@ func resolveNoteTarget(name string, v *vault.Vault, arg string) (*vault.Note, er
 	// have supplied a path or glob. Ambiguity and walk errors retain their
 	// original semantics.
 	if !errors.Is(err, vault.ErrNoteNotFound) {
-		return nil, err
+		if name == "" {
+			return nil, err
+		}
+		return nil, fmt.Errorf("%s: %w", name, err)
 	}
 
-	paths, pathErr := resolveNoteInputs(v.Root, []string{arg}, nil, false)
+	paths, pathErr := resolveNoteInputs(name, v.Root, []string{arg}, nil, false)
+	var notFound *noteTargetNotFoundError
+	if errors.As(pathErr, &notFound) {
+		// The title was tried first, so the refusal names both readings.
+		return nil, &noteTargetNotFoundError{name: name, arg: arg}
+	}
 	if pathErr != nil {
 		return nil, pathErr
 	}
@@ -50,10 +58,13 @@ func resolveNoteTarget(name string, v *vault.Vault, arg string) (*vault.Note, er
 type noteTargetNotFoundError struct {
 	name string
 	arg  string
+	// pathOnly is set by a command that takes note paths but never titles,
+	// so the refusal does not suggest a title lookup that never ran.
+	pathOnly bool
 }
 
 func (e *noteTargetNotFoundError) Error() string {
-	if looksLikePath(e.arg) {
+	if e.pathOnly || looksLikePath(e.arg) {
 		return prefixed(e.name, fmt.Sprintf("no note at %s", e.arg))
 	}
 	return prefixed(e.name, fmt.Sprintf("no note titled %q, and no note at that path", e.arg))

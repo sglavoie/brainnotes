@@ -276,70 +276,88 @@ func SplitFrontmatterListValues(rawVal, typeFlag string) ([]any, error) {
 }
 
 // CoerceFrontmatterValue converts raw text into a Go-native frontmatter value.
+// A forced type (--value-type) is applied strictly; otherwise the value is
+// inferred: bool, then a plain integer, then a YYYY-MM-DD date, else string.
 func CoerceFrontmatterValue(s, typeFlag string) (any, error) {
+	if typeFlag != "" && typeFlag != "auto" {
+		return coerceForcedValue(s, typeFlag)
+	}
+	return coerceInferredValue(s), nil
+}
+
+// coerceForcedValue parses s as exactly the type typeFlag names.
+func coerceForcedValue(s, typeFlag string) (any, error) {
 	switch typeFlag {
 	case "date":
-		t, err := time.Parse("2006-01-02", s)
-		if err != nil {
-			return nil, WrapError(CodeInvalidRequest, fmt.Sprintf("set: invalid date %q", s), err)
-		}
-		return t, nil
+		return parseForced(s, "date", func(v string) (any, error) { return time.Parse("2006-01-02", v) })
 	case "datetime":
-		t, err := time.Parse(time.RFC3339, s)
-		if err != nil {
-			return nil, WrapError(CodeInvalidRequest, fmt.Sprintf("set: invalid datetime %q", s), err)
-		}
-		return t, nil
+		return parseForced(s, "datetime", func(v string) (any, error) { return time.Parse(time.RFC3339, v) })
 	case "int":
-		n, err := strconv.Atoi(s)
-		if err != nil {
-			return nil, WrapError(CodeInvalidRequest, fmt.Sprintf("set: invalid int %q", s), err)
-		}
-		return n, nil
+		return parseForced(s, "int", func(v string) (any, error) { return strconv.Atoi(v) })
+	case "float":
+		return parseForced(s, "float", func(v string) (any, error) { return strconv.ParseFloat(v, 64) })
 	case "bool":
-		switch strings.ToLower(s) {
-		case "true":
-			return true, nil
-		case "false":
-			return false, nil
+		if b, ok := parseBoolWord(s); ok {
+			return b, nil
 		}
 		return nil, Errorf(CodeInvalidRequest, "set: invalid bool %q (expected true or false)", s)
-	case "float":
-		f, err := strconv.ParseFloat(s, 64)
-		if err != nil {
-			return nil, WrapError(CodeInvalidRequest, fmt.Sprintf("set: invalid float %q", s), err)
-		}
-		return f, nil
 	case "raw", "string":
 		return s, nil
-	case "", "auto":
 	default:
-		return nil, Errorf(CodeInvalidRequest, "set: unknown --type %q (want date|datetime|int|bool|float|raw)", typeFlag)
+		// The wording matches the CLI's enumValueError: <cmd>: --<flag> must be a, b, or c (got "x").
+		return nil, Errorf(CodeInvalidRequest, "set: --value-type must be date, datetime, int, bool, float, or raw (got %q)", typeFlag)
 	}
+}
 
+// parseForced runs parse and reports a failure as `set: invalid <kind> "s"`.
+func parseForced(s, kind string, parse func(string) (any, error)) (any, error) {
+	v, err := parse(s)
+	if err != nil {
+		return nil, WrapError(CodeInvalidRequest, fmt.Sprintf("set: invalid %s %q", kind, s), err)
+	}
+	return v, nil
+}
+
+func parseBoolWord(s string) (bool, bool) {
 	switch strings.ToLower(s) {
 	case "true":
-		return true, nil
+		return true, true
 	case "false":
-		return false, nil
+		return false, true
 	}
-	if intValueRe.MatchString(s) {
-		hasLeadingZero := len(s) > 1 && s[0] == '0'
-		if s[0] == '-' && len(s) > 2 && s[1] == '0' {
-			hasLeadingZero = true
-		}
-		if !hasLeadingZero {
-			if n, err := strconv.Atoi(s); err == nil {
-				return n, nil
-			}
-		}
+	return false, false
+}
+
+// coerceInferredValue infers a type for s. An integer with a leading zero
+// stays a string, so identifiers like 007 survive a round trip.
+func coerceInferredValue(s string) any {
+	if b, ok := parseBoolWord(s); ok {
+		return b
+	}
+	if n, ok := inferredInt(s); ok {
+		return n
 	}
 	if dateValueRe.MatchString(s) {
 		if t, err := time.Parse("2006-01-02", s); err == nil {
-			return t, nil
+			return t
 		}
 	}
-	return s, nil
+	return s
+}
+
+func inferredInt(s string) (int, bool) {
+	if !intValueRe.MatchString(s) {
+		return 0, false
+	}
+	hasLeadingZero := len(s) > 1 && s[0] == '0'
+	if s[0] == '-' && len(s) > 2 && s[1] == '0' {
+		hasLeadingZero = true
+	}
+	if hasLeadingZero {
+		return 0, false
+	}
+	n, err := strconv.Atoi(s)
+	return n, err == nil
 }
 
 var (

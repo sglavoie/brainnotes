@@ -44,9 +44,13 @@ func resolveVaultRoot(vaultRoot string) (string, error) {
 	return absRoot, nil
 }
 
+// resolveArchivePath turns the archive argument of `bn restore` into an
+// absolute regular file. Its refusals carry the `restore:` label the user typed
+// and name the path as given: a missing archive is the common mistake, and the
+// absolute path of a file that does not exist tells nobody where to look.
 func resolveArchivePath(root, archivePath string) (string, error) {
 	if strings.TrimSpace(archivePath) == "" {
-		return "", fmt.Errorf("backup restore: archive path is required")
+		return "", errors.New("restore: archive path is required")
 	}
 
 	var resolved string
@@ -61,25 +65,52 @@ func resolveArchivePath(root, archivePath string) (string, error) {
 	}
 
 	info, err := os.Stat(resolved)
+	if errors.Is(err, fs.ErrNotExist) {
+		return "", archiveNotFound(archivePath, err)
+	}
 	if err != nil {
-		return "", fmt.Errorf("backup restore: stat archive %s: %w", resolved, err)
+		return "", fmt.Errorf("restore: stat archive %s: %w", archivePath, err)
 	}
 	if !info.Mode().IsRegular() {
-		return "", fmt.Errorf("backup restore: archive %s is not a regular file", resolved)
+		return "", fmt.Errorf("restore: archive %s is not a regular file", archivePath)
 	}
 
 	return resolved, nil
 }
 
+// archiveNotFound reports an archive argument that names nothing. A relative
+// path resolves from the vault root rather than the working directory, which is
+// the surprise worth spelling out, along with where archives are written.
+func archiveNotFound(archivePath string, cause error) error {
+	msg := "restore: no archive at " + archivePath
+	if !filepath.IsAbs(archivePath) {
+		msg += " (relative paths resolve from the vault root; see " + backupDirName + "/)"
+	}
+	return &archiveNotFoundError{msg: msg, cause: cause}
+}
+
+// archiveNotFoundError keeps the underlying not-exist error reachable through
+// errors.Is without appending its absolute-path text to the message.
+type archiveNotFoundError struct {
+	msg   string
+	cause error
+}
+
+func (e *archiveNotFoundError) Error() string { return e.msg }
+func (e *archiveNotFoundError) Unwrap() error { return e.cause }
+
 func resolveRelativeWithinRoot(root, relativePath string) (string, error) {
 	joined := filepath.Join(root, relativePath)
 	resolved, err := filepath.EvalSymlinks(joined)
+	if errors.Is(err, fs.ErrNotExist) {
+		return "", archiveNotFound(relativePath, err)
+	}
 	if err != nil {
-		return "", fmt.Errorf("backup restore: resolve archive path %s: %w", relativePath, err)
+		return "", fmt.Errorf("restore: resolve archive path %s: %w", relativePath, err)
 	}
 
 	if !isWithinRoot(root, resolved) {
-		return "", fmt.Errorf("backup restore: archive path %s escapes the vault root", relativePath)
+		return "", fmt.Errorf("restore: archive path %s escapes the vault root", relativePath)
 	}
 
 	return resolved, nil

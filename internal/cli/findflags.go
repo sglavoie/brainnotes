@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -19,8 +20,8 @@ type findFlags struct {
 	categories   []string
 	status       string
 	typeProp     string
-	hasProp      string
-	missingProp  string
+	hasProps     []string
+	missingProps []string
 	age          string
 	created      string
 	folder       string
@@ -50,13 +51,15 @@ func (ff *findFlags) register(cmd *cobra.Command) {
 	f := cmd.Flags()
 	f.StringSliceVar(&ff.tags, "tag", nil, "filter by tag (repeatable; AND semantics)")
 	f.StringSliceVar(&ff.categories, "category", nil, "filter by category target (repeatable; AND semantics)")
-	f.StringVar(&ff.status, "status", "", "filter by status property")
-	f.StringVar(&ff.typeProp, "type", "", "filter by type/kind property")
-	f.StringVar(&ff.hasProp, "has", "", "require property present")
-	f.StringVar(&ff.missingProp, "missing", "", "require property absent")
-	f.StringVar(&ff.age, "age", "", "filter by 'last' property age, e.g. >30d, <7d, =0d")
-	f.StringVar(&ff.created, "created", "", "filter by 'created' property age, e.g. >30d, <7d, =0d")
-	f.StringVar(&ff.folder, "folder", "", "limit to a vault-relative folder (matches descendants)")
+	// The single-value flags refuse a repeat rather than keeping the last
+	// value, which would read as an AND that silently dropped a term.
+	singleStringVarP(f, &ff.status, "status", "", "filter by status property")
+	singleStringVarP(f, &ff.typeProp, "type", "", "filter by type/kind property")
+	f.StringSliceVar(&ff.hasProps, "has", nil, "require property present (repeatable; AND semantics)")
+	f.StringSliceVar(&ff.missingProps, "missing", nil, "require property absent (repeatable; AND semantics)")
+	singleStringVarP(f, &ff.age, "age", "", "filter by 'last' property age, e.g. >30d, <7d, =0d")
+	singleStringVarP(f, &ff.created, "created", "", "filter by 'created' property age, e.g. >30d, <7d, =0d")
+	singleStringVarP(f, &ff.folder, "folder", "", "limit to a vault-relative folder (matches descendants)")
 	f.BoolVar(&ff.orphan, "orphan", false, "only notes nothing in the vault links to")
 	f.BoolVar(&ff.pinned, "pinned", false, "only notes pinned via the 'pinned' property")
 	f.BoolVar(&ff.brokenLinks, "broken-links", false, "only notes with unresolved wikilinks")
@@ -65,8 +68,8 @@ func (ff *findFlags) register(cmd *cobra.Command) {
 	f.IntVar(&ff.minLinks, "min-links", -1, "minimum outgoing links to other notes")
 	f.IntVar(&ff.maxLinks, "max-links", -1, "maximum outgoing links to other notes")
 	f.BoolVar(&ff.deadEnd, "dead-end", false, "notes with zero outgoing links (except dead_end: false)")
-	f.StringVarP(&ff.query, "query", "q", "", "filter with a query expression, e.g. 'tag:foo and not folder:Archive'")
-	f.StringVar(&ff.view, "view", "", "filter with a saved view by name")
+	singleStringVarP(f, &ff.query, "query", "q", "filter with a query expression, e.g. 'tag:foo and not folder:Archive'")
+	singleStringVarP(f, &ff.view, "view", "", "filter with a saved view by name")
 }
 
 // needsGraph reports whether the link graph has to be built before the compiled
@@ -94,8 +97,6 @@ func (ff *findFlags) toQueryFlags(root string, g *query.Graph) query.Flags {
 		Categories:   ff.categories,
 		Status:       ff.status,
 		Type:         ff.typeProp,
-		Has:          ff.hasProp,
-		Missing:      ff.missingProp,
 		Age:          ff.age,
 		Created:      ff.created,
 		Folder:       ff.folder,
@@ -130,6 +131,9 @@ func (ff *findFlags) compile(cfg *config.Config, env queryexpr.Env) (*queryexpr.
 	if err != nil {
 		return nil, err
 	}
+	// The repeatable --has/--missing are lowered beside FromFlags, which only
+	// carries one of each; FromFlags always returns an *And to extend.
+	flagsExpr = appendOperands(flagsExpr, queryexpr.PresenceTerms(ff.hasProps, ff.missingProps))
 
 	resolved, err := ff.resolveViewFlag(cfg, env)
 	if err != nil {
@@ -148,6 +152,18 @@ func (ff *findFlags) compile(cfg *config.Config, env queryexpr.Env) (*queryexpr.
 	plan := &queryexpr.Plan{Expr: &queryexpr.And{Operands: operands}, Source: source}
 	applyViewOrdering(plan, resolved)
 	return plan, nil
+}
+
+// appendOperands ANDs extra onto expr, flattening into expr when it is
+// already an And so the rendered plan reads as one conjunction.
+func appendOperands(expr queryexpr.Expr, extra []queryexpr.Expr) queryexpr.Expr {
+	if len(extra) == 0 {
+		return expr
+	}
+	if and, ok := expr.(*queryexpr.And); ok {
+		return &queryexpr.And{Operands: append(append([]queryexpr.Expr{}, and.Operands...), extra...)}
+	}
+	return &queryexpr.And{Operands: append([]queryexpr.Expr{expr}, extra...)}
 }
 
 // resolveViewFlag resolves --view, or returns a nil view when the flag was not
@@ -305,7 +321,7 @@ func (ff *findFlags) selectNotes(ctx context.Context, cfg *config.Config, root s
 	}
 	plan, err := ff.compile(cfg, env)
 	if err != nil {
-		return findSelection{}, err
+		return findSelection{}, ff.commandError(err)
 	}
 	if env.Graph == nil && ff.needsGraph(plan) {
 		env.Graph = query.BuildGraphForRoot(root, notes)
@@ -321,9 +337,19 @@ func (ff *findFlags) selectNotes(ctx context.Context, cfg *config.Config, root s
 	filterPlan.Limit = 0
 	matched, err := queryexpr.NewMemoryEvaluator(root, notes, env).Evaluate(ctx, &filterPlan)
 	if err != nil {
-		return findSelection{}, err
+		return findSelection{}, ff.commandError(err)
 	}
 	return findSelection{notes: matched, plan: plan, graph: env.Graph}, nil
+}
+
+// commandError names the command a filter failure belongs to. A query parse
+// error keeps its type through the wrap, so RenderError still draws its carets,
+// under the same `bn: <cmd>:` prefix as every other refusal.
+func (ff *findFlags) commandError(err error) error {
+	if ff.command == "" || errors.Is(err, context.Canceled) {
+		return err
+	}
+	return fmt.Errorf("%s: %w", ff.command, err)
 }
 
 func noteKey(n *vault.Note) string {

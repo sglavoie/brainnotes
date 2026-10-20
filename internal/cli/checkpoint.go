@@ -89,7 +89,7 @@ blocks nothing — writers ignore it and the next checkpoint clears it — so it
 a diagnostic rather than a state to repair by hand.
 
 Exit status is 0 whether or not a checkpoint is held; this is a report.`,
-		Args:          cobra.NoArgs,
+		Args:          noArgs("checkpoint status"),
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {

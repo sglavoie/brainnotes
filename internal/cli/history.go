@@ -32,7 +32,7 @@ so on stderr.`,
 		Example: `  bn history
   bn history | head -n 10
   bn history --json | jq -r '.entries[0].id'`,
-		Args:          cobra.NoArgs,
+		Args:          noArgs("history"),
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {

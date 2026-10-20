@@ -107,7 +107,7 @@ func resolveUnsetPaths(cmd *cobra.Command, v *vault.Vault, cfg *config.Config, n
 		}
 		return selected, len(selected) > 0, nil
 	}
-	paths, err := resolveNoteInputs(v.Root, noteArgs, cmd.InOrStdin(), nullSep)
+	paths, err := resolveNoteInputs("unset", v.Root, noteArgs, cmd.InOrStdin(), nullSep)
 	if err != nil {
 		return nil, false, err
 	}
@@ -139,7 +139,7 @@ func unsetAll(cmd *cobra.Command, args []string, v *vault.Vault, cfg *config.Con
 			return err
 		}
 		if changed && dry == nil {
-			if _, err := fmt.Fprintf(out, "%s: updated\n", p); err != nil {
+			if _, err := fmt.Fprintf(out, "updated: %s\n", displayPath(p, v.Root)); err != nil {
 				return err
 			}
 		}

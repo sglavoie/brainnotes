@@ -61,7 +61,7 @@ func newUsageError(cmd *cobra.Command, err error) error {
 // a time, because Cobra calls each command's own.
 func installUsageErrors(root *cobra.Command) {
 	root.SetFlagErrorFunc(func(cmd *cobra.Command, err error) error {
-		return newUsageError(cmd, err)
+		return newUsageError(cmd, repeatedFlagCause(err))
 	})
 	wrapArgsValidators(root)
 }

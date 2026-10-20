@@ -31,7 +31,7 @@ snapshot.
 
 This is a vault-level safety snapshot, separate from the undo journal used by
 'bn history' and 'bn undo'.`,
-		Args:          cobra.NoArgs,
+		Args:          noArgs("backup"),
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {

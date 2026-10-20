@@ -225,6 +225,24 @@ func TestFind_BrokenLinks_Targets(t *testing.T) {
 	assertGolden(t, "find-broken-links-targets.golden", got)
 }
 
+// TestFind_BrokenLinks_TargetsDedupNormalizesUnicode pins that one broken
+// title written composed in one note and decomposed in another — as macOS
+// filenames and most editors respectively produce — and in another case is
+// listed once, not as several lines that render identically.
+func TestFind_BrokenLinks_TargetsDedupNormalizesUnicode(t *testing.T) {
+	isolateBnEnv(t)
+	root := buildVaultFromFiles(t, map[string]string{
+		"a.md": "---\ntitle: A\n---\nSee [[Café Notes]].\n",
+		"b.md": "---\ntitle: B\n---\nSee [[Café Notes]].\n",
+		"c.md": "---\ntitle: C\n---\nSee [[CAFÉ NOTES]] and [[Other]].\n",
+	})
+	got := runFindRaw(t, root, "find", "--broken-links", "--list-broken-targets")
+	lines := strings.Split(strings.TrimSpace(got), "\n")
+	if len(lines) != 2 || lines[1] != "Other" {
+		t.Fatalf("want one Café Notes line then Other, got %q", got)
+	}
+}
+
 func TestFind_BrokenLinks_ErrorCombinations(t *testing.T) {
 	root := buildBrokenLinkFixture(t)
 

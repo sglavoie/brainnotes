@@ -10,7 +10,7 @@
 
 ```sh
 bn find [--tag t]... [--category c]... [--status s] [--type t]
-        [--folder rel] [--has key] [--missing key]
+        [--folder rel] [--has key]... [--missing key]...
         [--created EXPR] [--age EXPR] [--orphan]
         [--min-backlinks n] [--max-backlinks n]
         [--min-links n] [--max-links n] [--dead-end]
@@ -39,8 +39,13 @@ A skipped note is absent from the link graph too, so a link to it can read as
 broken until it is fixed. `bn lint` reports it as a violation instead, and the
 commands that change notes still refuse to run until it parses.
 
-Filters AND together. Age expressions take the form `>30d`, `<7d`, `=0d`;
-`--created` reads the `created` property, `--age` reads `last`.
+Filters AND together. `--tag`, `--category`, `--has` and `--missing` repeat,
+and each repeat narrows further: `--has rating --has source` (or
+`--has rating,source`) keeps only notes carrying both. The other value flags
+take one value, and giving one twice is refused rather than keeping the last
+(`bn: find: --status given more than once`). Age expressions take the form
+`>30d`, `<7d`, `=0d`; `--created` reads the `created` property, `--age` reads
+`last`.
 
 `--min-backlinks n` / `--max-backlinks n` bound a note's inbound links from
 other notes, and `--min-links n` / `--max-links n` bound its outgoing links to
@@ -82,7 +87,7 @@ and a property of that name is declared, the error says so:
 
 ```
 $ bn find -q 'pinned>-1'
-query: operator ">" is not defined for field "pinned"; use ":", "=", or "!="; the reserved field "pinned" takes precedence over the declared property of that name, so write prop:pinned to compare the property
+bn: find: query: operator ">" is not defined for field "pinned"; use ":", "=", or "!="; the reserved field "pinned" takes precedence over the declared property of that name, so write prop:pinned to compare the property
   pinned>-1
   ^^^^^^^^^
 ```
@@ -128,7 +133,7 @@ span marked by carets:
 
 ```
 $ bn find -q 'status:wip and (rating>3'
-query: unclosed group opened at column 16: expected ")"
+bn: find: query: unclosed group opened at column 16: expected ")"
   status:wip and (rating>3
                           ^
 ```

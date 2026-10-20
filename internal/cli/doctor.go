@@ -40,7 +40,7 @@ does not change the queue or the exit code.
 
 Exit code is always 0 for a successful scan; an empty queue means the vault is
 clean.`,
-		Args:          cobra.NoArgs,
+		Args:          noArgs("doctor"),
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
