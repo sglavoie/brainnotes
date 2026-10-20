@@ -95,7 +95,7 @@ func NewTagsCmd() *cobra.Command {
 		Use:           "tags",
 		Short:         "Count tag occurrences across the vault (alias for `values tags`)",
 		Long:          "Alias for `bn values tags`. Walks every note and counts how often each tag appears in the `tags` frontmatter property.",
-		Args:          cobra.NoArgs,
+		Args:          noArgs("tags"),
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, _ []string) error {

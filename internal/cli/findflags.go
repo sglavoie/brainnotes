@@ -2,6 +2,7 @@ package cli
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"strings"
@@ -307,7 +308,7 @@ func (ff *findFlags) selectNotes(ctx context.Context, cfg *config.Config, root s
 	}
 	plan, err := ff.compile(cfg, env)
 	if err != nil {
-		return findSelection{}, err
+		return findSelection{}, ff.commandError(err)
 	}
 	if env.Graph == nil && ff.needsGraph(plan) {
 		env.Graph = query.BuildGraphForRoot(root, notes)
@@ -323,9 +324,19 @@ func (ff *findFlags) selectNotes(ctx context.Context, cfg *config.Config, root s
 	filterPlan.Limit = 0
 	matched, err := queryexpr.NewMemoryEvaluator(root, notes, env).Evaluate(ctx, &filterPlan)
 	if err != nil {
-		return findSelection{}, err
+		return findSelection{}, ff.commandError(err)
 	}
 	return findSelection{notes: matched, plan: plan, graph: env.Graph}, nil
+}
+
+// commandError names the command a filter failure belongs to. A query parse
+// error keeps its type through the wrap, so RenderError still draws its carets,
+// under the same `bn: <cmd>:` prefix as every other refusal.
+func (ff *findFlags) commandError(err error) error {
+	if ff.command == "" || errors.Is(err, context.Canceled) {
+		return err
+	}
+	return fmt.Errorf("%s: %w", ff.command, err)
 }
 
 func noteKey(n *vault.Note) string {

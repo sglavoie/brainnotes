@@ -17,7 +17,7 @@ func NewVaultCmd() *cobra.Command {
 		Use:           "vault",
 		Short:         "Open the vault root directory in [open].editor or $EDITOR",
 		Long:          "Exec-replace with the configured editor opened on the vault root directory ([open].editor in config, or $EDITOR as fallback).",
-		Args:          cobra.NoArgs,
+		Args:          noArgs("vault"),
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		RunE: func(cmd *cobra.Command, args []string) error {

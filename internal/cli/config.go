@@ -43,7 +43,7 @@ func newConfigEditCmd() *cobra.Command {
 			"Run `bn init` first if the vault has no configuration file yet.\n\n" +
 			"A configuration that no longer parses still opens: fixing it is what this command is for. The " +
 			"editor setting is then read from $EDITOR alone, since the file that names it cannot be read.",
-		Args: cobra.NoArgs,
+		Args: noArgs("config edit"),
 		// Requiring a successful load would put the editor behind the very
 		// syntax error the user is trying to fix.
 		Annotations:   map[string]string{skipConfigLoad: "opens a configuration that may not parse"},

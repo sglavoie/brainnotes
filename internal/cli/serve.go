@@ -77,7 +77,7 @@ func NewServeCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "serve",
 		Short: "Serve a local web view of your vault",
-		Args:  cobra.NoArgs,
+		Args:  noArgs("serve"),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := refuseCombinedFlags(cmd, "serve", "read-only", "hosted"); err != nil {
 				return err

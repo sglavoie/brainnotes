@@ -87,7 +87,7 @@ and a property of that name is declared, the error says so:
 
 ```
 $ bn find -q 'pinned>-1'
-query: operator ">" is not defined for field "pinned"; use ":", "=", or "!="; the reserved field "pinned" takes precedence over the declared property of that name, so write prop:pinned to compare the property
+bn: find: query: operator ">" is not defined for field "pinned"; use ":", "=", or "!="; the reserved field "pinned" takes precedence over the declared property of that name, so write prop:pinned to compare the property
   pinned>-1
   ^^^^^^^^^
 ```
@@ -133,7 +133,7 @@ span marked by carets:
 
 ```
 $ bn find -q 'status:wip and (rating>3'
-query: unclosed group opened at column 16: expected ")"
+bn: find: query: unclosed group opened at column 16: expected ")"
   status:wip and (rating>3
                           ^
 ```

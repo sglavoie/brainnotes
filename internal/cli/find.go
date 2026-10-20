@@ -36,7 +36,7 @@ same signals bn related does. Sorting never changes which notes match.
 
 --limit N keeps the first N notes after sorting; it replaces a view's stored
 limit.`,
-		Args:          cobra.NoArgs,
+		Args:          noArgs("find"),
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		// Args is NoArgs, so there are never positional arguments to hand on.

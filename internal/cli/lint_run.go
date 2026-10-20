@@ -35,7 +35,7 @@ type lintOptions struct {
 // --property nosuch` in a vault that declares nothing therefore prints the hint
 // and succeeds rather than reporting the unknown property.
 //
-// `lint` takes cobra.NoArgs, so the runner has no args parameter.
+// `lint` takes no arguments (noArgs), so the runner has no args parameter.
 func runLintCommand(cmd *cobra.Command, opts lintOptions) error {
 	cfg := ConfigFromContext(cmd.Context())
 	if cfg == nil {

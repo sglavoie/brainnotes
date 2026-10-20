@@ -5,6 +5,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
@@ -56,6 +57,46 @@ func TestErrorWordingNamesTheCommand(t *testing.T) {
 			args: []string{"set", "Notes/Beta.md", "--value-type", "x", "k=v"},
 			want: `bn: set: --value-type must be date, datetime, int, bool, float, or raw (got "x")`,
 		},
+	})
+}
+
+// TestFilterErrorsNameTheCommand pins the command prefix on refusals raised
+// inside the shared filter surface and the config inspector, which used to
+// reach the terminal as bare `--age: ...` or the wrong command's name.
+func TestFilterErrorsNameTheCommand(t *testing.T) {
+	root := buildErrorWordingVault(t)
+	noViews := `unknown view "nope": no views are defined in ` + config.FileName
+	runErrorWordingCases(t, root, []errorWordingCase{
+		{"age without operator hints", []string{"find", "--age", "30d"}, `bn: find: --age: invalid age expression "30d": must start with >, <, or =; did you mean >30d?`},
+		{"created bad unit has no hint", []string{"find", "--created", ">3x"}, `bn: find: --created: invalid age unit "x" in ">3x": must be one of s, m, h, d`},
+		{"link bound range", []string{"find", "--min-links", "-3"}, `bn: find: --min-links must be 0 or more, or -1 to disable (got -3)`},
+		{"link bounds crossed", []string{"graph", "--min-links", "3", "--max-links", "1"}, `bn: graph: --min-links (3) cannot exceed --max-links (1)`},
+		{"find unknown view", []string{"find", "--view", "nope"}, "bn: find: " + noViews},
+		{"search unknown view", []string{"search", "x", "--view", "nope"}, "bn: search: " + noViews},
+		{"views show unknown view", []string{"views", "show", "nope"}, "bn: views show: " + noViews},
+		{"config explain unknown key", []string{"config", "explain", "nope.key"}, `bn: config explain: unknown configuration key "nope.key"`},
+	})
+
+	// A parse error still renders as a caret block, under the same prefix.
+	got := runCLIOutcome(t, root, "find", "-q", "ratign>3")
+	if !strings.HasPrefix(got, "bn: find: query: unknown field") || !strings.Contains(got, "^") {
+		t.Fatalf("parse error render:\n%s", got)
+	}
+}
+
+// TestNoArgsLeafCommandsSayTheyTakeNoArguments pins the refusal of a stray
+// positional argument on a leaf command: it takes none, rather than cobra's
+// "unknown command", with a -q hint where -q exists. A parent command keeps
+// "unknown command", because there the word really is a subcommand name.
+func TestNoArgsLeafCommandsSayTheyTakeNoArguments(t *testing.T) {
+	root := buildErrorWordingVault(t)
+	runErrorWordingCases(t, root, []errorWordingCase{
+		{"find hints -q", []string{"find", "tag:foo"}, `bn: find: takes no arguments (got "tag:foo"); did you mean -q tag:foo?; see 'bn find --help'`},
+		{"lint hints -q with quoting", []string{"lint", "tag:a", "and", "tag:b"}, `bn: lint: takes no arguments (got "tag:a" "and" "tag:b"); did you mean -q "tag:a and tag:b"?; see 'bn lint --help'`},
+		{"graph hints -q", []string{"graph", "x"}, `bn: graph: takes no arguments (got "x"); did you mean -q x?; see 'bn graph --help'`},
+		{"history has no -q", []string{"history", "x"}, `bn: history: takes no arguments (got "x"); see 'bn history --help'`},
+		{"nested leaf", []string{"views", "check", "x"}, `bn: views check: takes no arguments (got "x"); see 'bn views check --help'`},
+		{"parent keeps unknown command", []string{"views", "nope"}, `bn: views: unknown command "nope" for "bn views"; see 'bn views --help'`},
 	})
 }
 
