@@ -65,6 +65,15 @@ source tree; their Go issue totals must agree and must not move merely because
 - Vitest helpers shared by many suites (`waitForExpect`, `jsonResponse`) live in
   `internal/web/static_src/shared.test-helpers.ts`. Only test files import it, so
   no bundle entry reaches it.
+- Vitest runs test files in shared workers (`isolate: false` in
+  `vitest.config.js`), so one jsdom window serves many files. Before and after
+  each file, `internal/web/static_src/vitest-setup.test-helpers.ts` resets the
+  module graph, removes listeners on window, document, `<html>`, `<head>` and
+  `<body>`, cancels pending timers, animation frames and MutationObservers,
+  restores real timers, stubbed or reassigned globals, and clears the DOM, URL,
+  Web Storage and cookies. If a test changes other shared state, such as a
+  prototype, it must restore it itself. Check order independence with
+  `npx vitest run internal/web/static_src --sequence.shuffle --sequence.seed=N`.
 
 ## Lint and complexity gates
 
