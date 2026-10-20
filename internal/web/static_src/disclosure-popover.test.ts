@@ -56,4 +56,18 @@ describe("workspace popover", () => {
     link.dispatchEvent(new Event("pointerdown", { bubbles: true }));
     expect(details.open).toBe(true);
   });
+
+  it("closes when focus moves to something outside", () => {
+    const { details, link, outside } = mount();
+    link.dispatchEvent(new FocusEvent("focusout", { bubbles: true, relatedTarget: outside }));
+    expect(details.open).toBe(false);
+  });
+
+  it("stays open when focus moves within it or leaves the page", () => {
+    const { details, summary, link } = mount();
+    link.dispatchEvent(new FocusEvent("focusout", { bubbles: true, relatedTarget: summary }));
+    expect(details.open).toBe(true);
+    link.dispatchEvent(new FocusEvent("focusout", { bubbles: true, relatedTarget: null }));
+    expect(details.open).toBe(true);
+  });
 });

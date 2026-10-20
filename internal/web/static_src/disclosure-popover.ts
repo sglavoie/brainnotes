@@ -33,9 +33,22 @@ export const closeDisclosureOnOutsidePointer = (details: HTMLDetailsElement): vo
   });
 };
 
+// Focus that moves out, such as Tab past the last link or a shortcut that
+// focuses a field elsewhere, closes the disclosure as well. A focusout with no
+// next target (the window losing focus, or a press on plain text inside) is
+// left to the other dismissals.
+export const closeDisclosureOnFocusOut = (details: HTMLDetailsElement): void => {
+  details.addEventListener("focusout", (event) => {
+    const next = event.relatedTarget;
+    if (!details.open || !(next instanceof Node) || details.contains(next)) return;
+    details.open = false;
+  });
+};
+
 export const initWorkspacePopovers = (doc: Document = document): void => {
   for (const details of doc.querySelectorAll<HTMLDetailsElement>("details.source-editor-workspace")) {
     closeDisclosureOnEscape(details);
     closeDisclosureOnOutsidePointer(details);
+    closeDisclosureOnFocusOut(details);
   }
 };
