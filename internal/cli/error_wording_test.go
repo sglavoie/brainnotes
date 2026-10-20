@@ -114,6 +114,17 @@ func TestRestoreMissingArchiveNamesWhatWasTyped(t *testing.T) {
 	})
 }
 
+// TestSetUnsetReportUpdatedLikeTheOtherMutators pins `updated: <relpath>`,
+// the verb-first, vault-relative form replace/relink/repair print, for set and
+// unset too.
+func TestSetUnsetReportUpdatedLikeTheOtherMutators(t *testing.T) {
+	root := buildErrorWordingVault(t)
+	runErrorWordingCases(t, root, []errorWordingCase{
+		{"set", []string{"set", "Notes/Beta.md", "status=wip"}, "updated: Notes/Beta.md"},
+		{"unset", []string{"unset", "Notes/Beta.md", "status"}, "updated: Notes/Beta.md"},
+	})
+}
+
 // TestMissingNoteErrorsNameWhatWasTyped pins one spelling for a note argument
 // that names nothing, across the commands that take one: the command, then the
 // argument as typed — never the vault package's sentinel, a bare stat of an

@@ -15,7 +15,7 @@ func TestSetAdd_AppendsNewValue(t *testing.T) {
 	if err != nil {
 		t.Fatalf("execute: %v\n%s", err, out)
 	}
-	if !strings.Contains(out, notePath+": updated") {
+	if !strings.Contains(out, "updated: "+filepath.Base(notePath)) {
 		t.Fatalf("expected updated report, got %q", out)
 	}
 	got := readNote(t, notePath)
@@ -60,7 +60,7 @@ func TestSetAdd_CreatesListWhenKeyAbsent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("execute: %v\n%s", err, out)
 	}
-	if !strings.Contains(out, notePath+": updated") {
+	if !strings.Contains(out, "updated: "+filepath.Base(notePath)) {
 		t.Fatalf("expected updated report, got %q", out)
 	}
 	got := readNote(t, notePath)
@@ -77,7 +77,7 @@ func TestSetAdd_MixOfNewAndExisting(t *testing.T) {
 	if err != nil {
 		t.Fatalf("execute: %v\n%s", err, out)
 	}
-	if !strings.Contains(out, notePath+": updated") {
+	if !strings.Contains(out, "updated: "+filepath.Base(notePath)) {
 		t.Fatalf("expected updated report, got %q", out)
 	}
 	got := readNote(t, notePath)
@@ -97,7 +97,7 @@ func TestSetRemove_DropsValue(t *testing.T) {
 	if err != nil {
 		t.Fatalf("execute: %v\n%s", err, out)
 	}
-	if !strings.Contains(out, notePath+": updated") {
+	if !strings.Contains(out, "updated: "+filepath.Base(notePath)) {
 		t.Fatalf("expected updated report, got %q", out)
 	}
 	got := readNote(t, notePath)
@@ -156,7 +156,7 @@ func TestSetOps_CombinedAddAndRemove(t *testing.T) {
 	if err != nil {
 		t.Fatalf("execute: %v\n%s", err, out)
 	}
-	if !strings.Contains(out, notePath+": updated") {
+	if !strings.Contains(out, "updated: "+filepath.Base(notePath)) {
 		t.Fatalf("expected updated report, got %q", out)
 	}
 	got := readNote(t, notePath)
@@ -176,7 +176,7 @@ func TestSetOps_MixedOperatorsAcrossKeys(t *testing.T) {
 	if err != nil {
 		t.Fatalf("execute: %v\n%s", err, out)
 	}
-	if !strings.Contains(out, notePath+": updated") {
+	if !strings.Contains(out, "updated: "+filepath.Base(notePath)) {
 		t.Fatalf("expected updated report, got %q", out)
 	}
 	got := readNote(t, notePath)
@@ -201,7 +201,7 @@ func TestSetOps_MultiNoteViaStdin(t *testing.T) {
 	if err != nil {
 		t.Fatalf("execute: %v\n%s", err, out)
 	}
-	if !strings.Contains(out, aPath+": updated") || !strings.Contains(out, bPath+": updated") {
+	if !strings.Contains(out, "updated: "+filepath.Base(aPath)) || !strings.Contains(out, "updated: "+filepath.Base(bPath)) {
 		t.Fatalf("expected both paths updated, got %q", out)
 	}
 	for _, p := range []string{aPath, bPath} {

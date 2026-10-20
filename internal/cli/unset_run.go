@@ -139,7 +139,7 @@ func unsetAll(cmd *cobra.Command, args []string, v *vault.Vault, cfg *config.Con
 			return err
 		}
 		if changed && dry == nil {
-			if _, err := fmt.Fprintf(out, "%s: updated\n", p); err != nil {
+			if _, err := fmt.Fprintf(out, "updated: %s\n", displayPath(p, v.Root)); err != nil {
 				return err
 			}
 		}

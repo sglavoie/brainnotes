@@ -95,7 +95,7 @@ func applySetPaths(paths []string, pairs []setPair, cfg *config.Config, vaultRoo
 			return err
 		}
 		if changed && dry == nil {
-			if _, err := fmt.Fprintf(out, "%s: updated\n", path); err != nil {
+			if _, err := fmt.Fprintf(out, "updated: %s\n", displayPath(path, vaultRoot)); err != nil {
 				return err
 			}
 		}
