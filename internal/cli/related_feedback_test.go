@@ -283,11 +283,13 @@ func TestRelatedFeedbackValidatesStateAndLocalDateBeforeOpeningVault(t *testing.
 		args []string
 		want string
 	}{
-		{name: "missing state", args: []string{"feedback", "Source", "Candidate"}, want: "--state must be useful, dismissed, later, or clear"},
+		{name: "missing state", args: []string{"feedback", "Source", "Candidate"}, want: "related feedback: --state is required (useful, dismissed, later, or clear)"},
+		{name: "blank state", args: []string{"feedback", "Source", "Candidate", "--state", " "}, want: "related feedback: --state is required (useful, dismissed, later, or clear)"},
+		{name: "word date", args: []string{"feedback", "Source", "Candidate", "--state", "later", "--until", "tomorrow"}, want: `related feedback: --until must be a date like 2026-01-31 (got "tomorrow")`},
 		{name: "unknown state", args: []string{"feedback", "Source", "Candidate", "--state", "maybe"}, want: "--state must be useful, dismissed, later, or clear"},
 		{name: "later requires until", args: []string{"feedback", "Source", "Candidate", "--state", "later"}, want: "--until is required with --state later"},
 		{name: "until only later", args: []string{"feedback", "Source", "Candidate", "--state", "useful", "--until", "2026-07-14"}, want: "--until is only valid with --state later"},
-		{name: "invalid date", args: []string{"feedback", "Source", "Candidate", "--state", "later", "--until", "07/14/2026"}, want: "YYYY-MM-DD"},
+		{name: "invalid date", args: []string{"feedback", "Source", "Candidate", "--state", "later", "--until", "07/14/2026"}, want: `--until must be a date like 2026-01-31 (got "07/14/2026")`},
 		{name: "today is not future", args: []string{"feedback", "Source", "Candidate", "--state", "later", "--until", "2026-07-13"}, want: "future local calendar date"},
 		{name: "past is not future", args: []string{"feedback", "Source", "Candidate", "--state", "later", "--until", "2026-07-12"}, want: "future local calendar date"},
 	}

@@ -65,6 +65,9 @@ func validateRelatedFeedbackOptions(
 	now time.Time,
 ) (recall.FeedbackState, time.Time, error) {
 	feedback := recall.FeedbackState(strings.TrimSpace(options.stateText))
+	if feedback == "" {
+		return "", time.Time{}, errors.New("related feedback: --state is required (useful, dismissed, later, or clear)")
+	}
 	if !feedback.Valid() {
 		return "", time.Time{}, enumValueError("related feedback", "state", options.stateText,
 			"useful", "dismissed", "later", "clear")
@@ -81,7 +84,9 @@ func validateRelatedFeedbackOptions(
 	}
 	until, err := time.ParseInLocation("2006-01-02", untilText, now.Location())
 	if err != nil {
-		return "", time.Time{}, fmt.Errorf("related feedback: --until must be a date in YYYY-MM-DD format: %w", err)
+		// Go's layout-parse error ("cannot parse ... as \"2006\"") says nothing
+		// a user can act on, so it is not wrapped.
+		return "", time.Time{}, fmt.Errorf("related feedback: --until must be a date like 2026-01-31 (got %q)", untilText)
 	}
 	year, month, day := now.Date()
 	today := time.Date(year, month, day, 0, 0, 0, 0, now.Location())
