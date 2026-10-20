@@ -62,8 +62,6 @@ func FromFlags(f query.Flags) (Expr, error) {
 	}{
 		{field: "tag", values: f.Tags},
 		{field: "category", values: f.Categories},
-		{field: "has", values: f.HasAll},
-		{field: "missing", values: f.MissingAll},
 	} {
 		for _, value := range spec.values {
 			value = strings.TrimSpace(value)
@@ -209,6 +207,29 @@ func ageTerm(flag, prop, expr string) (*Term, error) {
 		t.Arg = Atom{Text: prop}
 	}
 	return t, nil
+}
+
+// PresenceTerms lowers repeated --has and --missing values to `has:` and
+// `missing:` terms, one per non-blank value, for the caller to AND with the
+// rest of its plan. query.Flags carries one Has and one Missing, which is all
+// the web's query parameters ever supply; the CLI's repeatable flags go
+// through here instead, so the two FromFlags lowerings stay unchanged.
+func PresenceTerms(has, missing []string) []Expr {
+	var ops []Expr
+	for _, spec := range []struct {
+		field  string
+		values []string
+	}{
+		{field: "has", values: has},
+		{field: "missing", values: missing},
+	} {
+		for _, value := range spec.values {
+			if value = strings.TrimSpace(value); value != "" {
+				ops = append(ops, matchTerm(spec.field, value))
+			}
+		}
+	}
+	return ops
 }
 
 // ageOperatorHint suggests the commonest fix for an age expression that is

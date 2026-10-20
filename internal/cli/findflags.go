@@ -97,8 +97,6 @@ func (ff *findFlags) toQueryFlags(root string, g *query.Graph) query.Flags {
 		Categories:   ff.categories,
 		Status:       ff.status,
 		Type:         ff.typeProp,
-		HasAll:       ff.hasProps,
-		MissingAll:   ff.missingProps,
 		Age:          ff.age,
 		Created:      ff.created,
 		Folder:       ff.folder,
@@ -133,6 +131,9 @@ func (ff *findFlags) compile(cfg *config.Config, env queryexpr.Env) (*queryexpr.
 	if err != nil {
 		return nil, err
 	}
+	// The repeatable --has/--missing are lowered beside FromFlags, which only
+	// carries one of each; FromFlags always returns an *And to extend.
+	flagsExpr = appendOperands(flagsExpr, queryexpr.PresenceTerms(ff.hasProps, ff.missingProps))
 
 	resolved, err := ff.resolveViewFlag(cfg, env)
 	if err != nil {
@@ -151,6 +152,18 @@ func (ff *findFlags) compile(cfg *config.Config, env queryexpr.Env) (*queryexpr.
 	plan := &queryexpr.Plan{Expr: &queryexpr.And{Operands: operands}, Source: source}
 	applyViewOrdering(plan, resolved)
 	return plan, nil
+}
+
+// appendOperands ANDs extra onto expr, flattening into expr when it is
+// already an And so the rendered plan reads as one conjunction.
+func appendOperands(expr queryexpr.Expr, extra []queryexpr.Expr) queryexpr.Expr {
+	if len(extra) == 0 {
+		return expr
+	}
+	if and, ok := expr.(*queryexpr.And); ok {
+		return &queryexpr.And{Operands: append(append([]queryexpr.Expr{}, and.Operands...), extra...)}
+	}
+	return &queryexpr.And{Operands: append([]queryexpr.Expr{expr}, extra...)}
 }
 
 // resolveViewFlag resolves --view, or returns a nil view when the flag was not
