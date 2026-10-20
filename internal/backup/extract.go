@@ -43,7 +43,7 @@ func extractArchive(archivePath string) (string, []archiveEntry, error) {
 
 	reader := tar.NewReader(gzr)
 	entries := make([]archiveEntry, 0, 32)
-	seen := make(map[string]entryKind)
+	seen := newArchiveIndex()
 
 	for {
 		header, err := nextArchiveHeader(reader)
@@ -101,7 +101,7 @@ func extractArchiveEntry(stageDir string, entry archiveEntry, reader io.Reader) 
 	return nil
 }
 
-func normalizeArchiveEntry(header *tar.Header, seen map[string]entryKind) (archiveEntry, error) {
+func normalizeArchiveEntry(header *tar.Header, seen *archiveIndex) (archiveEntry, error) {
 	cleaned, err := normalizeArchivePath(header.Name)
 	if err != nil {
 		return archiveEntry{}, err
@@ -123,7 +123,7 @@ func normalizeArchiveEntry(header *tar.Header, seen map[string]entryKind) (archi
 	if err := checkArchiveConflicts(key, kind, seen); err != nil {
 		return archiveEntry{}, err
 	}
-	seen[key] = kind
+	seen.add(key, kind)
 
 	return archiveEntry{Path: cleaned, Kind: kind, Mode: header.FileInfo().Mode()}, nil
 }

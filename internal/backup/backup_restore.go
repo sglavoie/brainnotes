@@ -10,15 +10,48 @@ import (
 	"strings"
 )
 
-func checkArchiveConflicts(pathKey string, kind entryKind, seen map[string]entryKind) error {
-	if _, ok := seen[pathKey]; ok {
+// archiveIndex is what the extraction has seen so far: every entry by key, and
+// every directory those entries imply by being beneath it. The implied set is
+// what makes the file-over-descendant check a lookup rather than a scan of every
+// earlier entry, which made a large archive quadratic to validate.
+type archiveIndex struct {
+	entries map[string]entryKind
+	// implied maps a directory key to the first entry found beneath it, which is
+	// the path a conflict reports.
+	implied map[string]string
+}
+
+func newArchiveIndex() *archiveIndex {
+	return &archiveIndex{entries: map[string]entryKind{}, implied: map[string]string{}}
+}
+
+// add records pathKey and the directories it implies. Callers check first.
+func (idx *archiveIndex) add(pathKey string, kind entryKind) {
+	idx.entries[pathKey] = kind
+	for parent := pathKey; ; {
+		i := strings.LastIndexByte(parent, '/')
+		if i < 0 {
+			return
+		}
+		parent = parent[:i]
+		if _, ok := idx.implied[parent]; ok {
+			// Walking from the deepest parent up, every shorter prefix was
+			// recorded when this one was.
+			return
+		}
+		idx.implied[parent] = pathKey
+	}
+}
+
+func checkArchiveConflicts(pathKey string, kind entryKind, idx *archiveIndex) error {
+	if _, ok := idx.entries[pathKey]; ok {
 		return fmt.Errorf("backup restore: archive contains duplicate entry %q", pathKey)
 	}
 
 	parts := strings.Split(pathKey, "/")
 	prefix := parts[0]
 	for i := 1; i < len(parts); i++ {
-		if seenKind, ok := seen[prefix]; ok && seenKind != entryDir {
+		if seenKind, ok := idx.entries[prefix]; ok && seenKind != entryDir {
 			return fmt.Errorf("backup restore: archive path %q conflicts with file %q", pathKey, prefix)
 		}
 		prefix += "/" + parts[i]
@@ -28,11 +61,8 @@ func checkArchiveConflicts(pathKey string, kind entryKind, seen map[string]entry
 		return nil
 	}
 
-	prefix = pathKey + "/"
-	for seenPath := range seen {
-		if strings.HasPrefix(seenPath, prefix) {
-			return fmt.Errorf("backup restore: archive path %q conflicts with descendant %q", pathKey, seenPath)
-		}
+	if descendant, ok := idx.implied[pathKey]; ok {
+		return fmt.Errorf("backup restore: archive path %q conflicts with descendant %q", pathKey, descendant)
 	}
 
 	return nil
