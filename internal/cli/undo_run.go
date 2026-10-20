@@ -164,7 +164,9 @@ func latestJournalEntryID(journalRoot string) (string, []journal.Warning, error)
 		return "", nil, fmt.Errorf("undo: %w", err)
 	}
 	if len(entries) == 0 {
-		return "", warnings, errors.New("undo: no journal entries found")
+		// An empty journal is a completed run with nothing to undo, the same
+		// answer `bn history` gives as an empty list, so it exits 1, not 2.
+		return "", warnings, nothingSelected("undo", "no journal entries found")
 	}
 	return entries[0].ID, warnings, nil
 }

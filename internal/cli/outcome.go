@@ -11,7 +11,8 @@ import "errors"
 // printed, so the terminal says why nothing happened.
 var (
 	// ErrNothingSelected is a picker or prompt that produced nothing to act
-	// on: an empty vault, or an fzf query that matched nothing.
+	// on: an empty vault, an fzf query that matched nothing, or `bn undo`
+	// with an empty journal.
 	ErrNothingSelected = errors.New("nothing selected")
 	// ErrCanceled is a confirmation the user declined, or could not give
 	// because stdin ended first.
