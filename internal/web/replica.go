@@ -3,6 +3,8 @@ package web
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io/fs"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -24,14 +26,20 @@ func initializeServeSafety(root string, caps capabilities) error {
 	return err
 }
 
+// validateReplicaOptions checks the serving flags bn serve was given. Only
+// bn serve builds a Server, so its refusals carry the command's name rather
+// than the package's: `bn: serve: --state-dir: ...`.
 func validateReplicaOptions(root string, opts Options) error {
 	if opts.ReadOnly && opts.StateDir == "" {
-		return errors.New("web: --read-only requires an external --state-dir")
+		return errors.New("serve: --read-only requires an external --state-dir")
 	}
 	if opts.StateDir == "" {
 		return nil
 	}
-	return validateExternalState(root, opts.StateDir)
+	if err := validateExternalState(root, opts.StateDir); err != nil {
+		return fmt.Errorf("serve: --state-dir: %w", err)
+	}
+	return nil
 }
 
 func validateExternalState(root, stateDir string) error {
@@ -41,6 +49,9 @@ func validateExternalState(root, stateDir string) error {
 	}
 	// Require an existing directory, so checking it never creates vault entries.
 	state, err := filepath.EvalSymlinks(stateDir)
+	if errors.Is(err, fs.ErrNotExist) {
+		return fmt.Errorf("%s does not exist; create the directory first", stateDir)
+	}
 	if err != nil {
 		return err
 	}
@@ -52,12 +63,15 @@ func validateExternalState(root, stateDir string) error {
 	if err != nil {
 		return err
 	}
+	if !info.IsDir() {
+		return fmt.Errorf("%s is not a directory", stateDir)
+	}
 	inside, err := pathWithinRoot(realRoot, state)
 	if err != nil {
 		return err
 	}
-	if inside || !info.IsDir() {
-		return errors.New("web: state directory must be outside the vault")
+	if inside {
+		return fmt.Errorf("%s must be outside the vault", stateDir)
 	}
 	return nil
 }

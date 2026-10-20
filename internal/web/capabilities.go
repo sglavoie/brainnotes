@@ -130,7 +130,7 @@ func capabilitiesFor(mode Mode) capabilities {
 func modeFor(opts Options) (Mode, error) {
 	switch {
 	case opts.ReadOnly && opts.Hosted:
-		return "", errors.New("web: --read-only and --hosted are different serving profiles; choose one")
+		return "", errors.New("serve: --read-only and --hosted are different serving profiles; choose one")
 	case opts.ReadOnly:
 		return ModeReadOnly, nil
 	case opts.Hosted:

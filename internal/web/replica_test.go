@@ -50,6 +50,39 @@ func TestReplicaRequiresExternalState(t *testing.T) {
 	}
 }
 
+// TestReplicaStateDirRefusalsNameTheFlag pins each --state-dir refusal under
+// bn serve's name: a missing directory is not a bare lstat, and a regular file
+// is "not a directory", not "inside the vault".
+func TestReplicaStateDirRefusalsNameTheFlag(t *testing.T) {
+	root, outside := t.TempDir(), t.TempDir()
+	missing := filepath.Join(outside, "nope")
+	file := filepath.Join(outside, "file")
+	if err := os.WriteFile(file, nil, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	inside := filepath.Join(root, "state")
+	if err := os.Mkdir(inside, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		opts Options
+		want string
+	}{
+		{Options{ReadOnly: true}, "serve: --read-only requires an external --state-dir"},
+		{Options{StateDir: missing}, "serve: --state-dir: " + missing + " does not exist; create the directory first"},
+		{Options{StateDir: file}, "serve: --state-dir: " + file + " is not a directory"},
+		{Options{StateDir: inside}, "serve: --state-dir: " + inside + " must be outside the vault"},
+	} {
+		err := validateReplicaOptions(root, tc.opts)
+		if err == nil || err.Error() != tc.want {
+			t.Errorf("validateReplicaOptions(%+v) = %v, want %q", tc.opts, err, tc.want)
+		}
+	}
+	if err := validateReplicaOptions(root, Options{StateDir: outside}); err != nil {
+		t.Fatalf("external directory refused: %v", err)
+	}
+}
+
 func TestReplicaBrowsingAndWriteBarrier(t *testing.T) {
 	root, state := t.TempDir(), t.TempDir()
 	for name, content := range map[string]string{"A.md": "---\ntitle: Alpha\npinned: true\n---\n[[B]]\n", "B.md": "# Beta\n", "file.txt": "attachment", "brainnotes.toml": "", "brainnotes.local.toml": "", ".secret": "hidden"} {
