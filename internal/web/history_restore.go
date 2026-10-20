@@ -99,7 +99,7 @@ func (s *Server) handleHistoryPreview(w http.ResponseWriter, r *http.Request) {
 	}
 
 	response := s.historyPreviewResponse(receipt, plan, conflicts)
-	s.addHistoryComparisons(&response, pins)
+	s.addHistoryComparisons(w, &response, pins)
 	writeManagementJSON(w, http.StatusOK, response)
 }
 

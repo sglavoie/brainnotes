@@ -1,6 +1,7 @@
 package web
 
 import (
+	"net/http/httptest"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -36,7 +37,7 @@ func TestHistoryComparisonOmitsPrivateAndDriftedContent(t *testing.T) {
 		{Path: "Source.md", Class: "configuration"},
 		{Path: "Source.md", Class: "note"},
 	}}
-	server.addHistoryComparisons(&response, []propertyPreviewFileState{{RelPath: "Source.md", Digest: "stale-digest"}})
+	server.addHistoryComparisons(httptest.NewRecorder(), &response, []propertyPreviewFileState{{RelPath: "Source.md", Digest: "stale-digest"}})
 	for _, change := range response.Changes {
 		if change.Comparison != nil || change.ComparisonUnavailable == "" {
 			t.Fatalf("unexpected disclosure: %+v", change)
@@ -55,7 +56,7 @@ func TestHistoryComparisonBoundsTheNumberOfFiles(t *testing.T) {
 	for range historyComparisonCountLimit + 1 {
 		response.Changes = append(response.Changes, historyPreviewChange{Path: "Source.md", Class: "note"})
 	}
-	server.addHistoryComparisons(&response, []propertyPreviewFileState{{RelPath: "Source.md", Digest: digest}})
+	server.addHistoryComparisons(httptest.NewRecorder(), &response, []propertyPreviewFileState{{RelPath: "Source.md", Digest: digest}})
 	if response.Changes[historyComparisonCountLimit-1].Comparison == nil {
 		t.Fatal("last allowed comparison omitted")
 	}
