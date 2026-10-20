@@ -180,11 +180,16 @@ func RewriteTitle(text, oldTitle, newTitle string) string {
 	})
 }
 
-// RewriteMove updates folder-prefixed wikilinks whose Target matches oldPath
-// (case-insensitive) to point at newPath. Bare-title links without a folder
-// prefix are left untouched — moving a file across folders only invalidates
-// links that explicitly named the old folder. A trailing `.md` extension on
-// the link's target is matched and preserved on the rewritten target.
+// RewriteMove updates folder-prefixed wikilinks that the link graph resolves
+// to oldPath by path, pointing them at newPath. A link matches when its
+// ResolveTargetPathKey equals oldPath's TargetPathKey, so `[[/A/Foo]]`,
+// `[[A//Foo]]` and `[[a/foo.md]]` all match `A/Foo.md`, while a target with a
+// `.` or `..` segment (`[[./A/Foo]]`) is broken in the graph and is left alone
+// here too: exactly the spellings the graph resolves, no more. Bare-title
+// links without a folder prefix are left untouched — moving a file across
+// folders only invalidates links that explicitly named the old folder. A
+// matched link is rewritten to newPath's spelling, keeping its heading, alias
+// and any trailing `.md` extension.
 func RewriteMove(text, oldPath, newPath string) string {
 	oldPath = trimASCIISpace(oldPath)
 	newPath = trimASCIISpace(newPath)
@@ -201,14 +206,20 @@ func RewriteMove(text, oldPath, newPath string) string {
 	if oldBase == newBase {
 		return text
 	}
+	// A resolved key is never empty, so an oldPath that cleans to nothing
+	// matches no link.
+	oldKey := TargetPathKey(oldPath)
 	return Rewrite(text, func(l Link) (string, bool) {
+		// A bare title resolves by title, and a move keeps the title, so it
+		// still resolves afterwards. `[[/Foo]]` names a root path explicitly
+		// and is matched like any other path.
 		if !strings.Contains(l.Target, "/") {
 			return "", false
 		}
-		targetBase, ext := splitMDExt(l.Target)
-		if !strings.EqualFold(textnorm.NFC(targetBase), textnorm.NFC(oldBase)) {
+		if key, ok := ResolveTargetPathKey(l.Target); !ok || key != oldKey {
 			return "", false
 		}
+		_, ext := splitMDExt(l.Target)
 		return l.WithTarget(newBase + ext), true
 	})
 }
