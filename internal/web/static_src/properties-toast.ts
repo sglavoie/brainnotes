@@ -17,18 +17,24 @@ export type UndoToastDeps = {
 
 // createUndoToast builds the one post-write affordance. It is announced
 // politely rather than assertively so a screen reader finishes the status
-// message before hearing that an undo is available.
+// message before hearing that an undo is available. The live region wraps the
+// toast and is never hidden: a region that appears in the same tick as its
+// text is not announced.
 export const createUndoToast = (
   doc: Document,
   host: HTMLElement,
   deps: UndoToastDeps
 ): UndoToast => {
+  const region = doc.createElement("div");
+  region.className = "bn-live-region";
+  region.setAttribute("role", "status");
+  region.setAttribute("aria-live", "polite");
+
   const element = doc.createElement("div");
   element.className = "properties-toast";
   element.setAttribute("data-property-toast", "");
-  element.setAttribute("role", "status");
-  element.setAttribute("aria-live", "polite");
   element.hidden = true;
+  region.appendChild(element);
 
   const message = doc.createElement("p");
   message.className = "properties-toast-message";
@@ -59,7 +65,7 @@ export const createUndoToast = (
   actions.appendChild(dismiss);
 
   element.appendChild(actions);
-  host.appendChild(element);
+  host.appendChild(region);
 
   let entryID = "";
 
