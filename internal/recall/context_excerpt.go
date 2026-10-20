@@ -78,11 +78,7 @@ func rankedContextExcerpts(
 
 	reasons := make([]ContextReason, len(result.Reasons))
 	for index, reason := range result.Reasons {
-		reasons[index] = ContextReason{
-			Kind:         reason.Kind,
-			Contribution: reason.Contribution,
-			Detail:       reason.Detail,
-		}
+		reasons[index] = ContextReason(reason)
 	}
 	excerpts := make([]ContextExcerpt, 0, min(MaxExcerptsPerRelatedNote, len(scored)))
 	for _, selected := range scored[:min(MaxExcerptsPerRelatedNote, len(scored))] {

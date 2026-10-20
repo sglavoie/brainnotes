@@ -246,7 +246,7 @@ func (s *Server) handleSettingsApply(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	plan, status, pin, err := s.replanForSettingsReceipt(record)
+	plan, pin, err := s.replanForSettingsReceipt(record)
 	if err != nil {
 		writeManagementError(w, err)
 		return
@@ -279,16 +279,16 @@ func (s *Server) handleSettingsApply(w http.ResponseWriter, r *http.Request) {
 // re-read.
 func (s *Server) replanForSettingsReceipt(
 	record propertyPreviewRecord,
-) (*settingsPlan, ConfigStatus, configPin, error) {
+) (*settingsPlan, configPin, error) {
 	plan, status, pin, err := s.planSettingsRequest(record.Setting)
 	if err != nil {
-		return nil, status, pin, settingsWriteError(err)
+		return nil, pin, settingsWriteError(err)
 	}
 	if status.Generation != record.Generation || plan.Config == nil ||
 		!reflect.DeepEqual(plan.fileStates(), record.Files) {
-		return nil, status, pin, settingsStaleConfigError()
+		return nil, pin, settingsStaleConfigError()
 	}
-	return plan, status, pin, nil
+	return plan, pin, nil
 }
 
 // planSettingsRequest pins the configuration the plan was built from, so the

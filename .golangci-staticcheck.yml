@@ -1,0 +1,57 @@
+# Correctness and simplification gate: staticcheck and unused over the whole
+# tree.
+#
+# Deliberately a separate file from .golangci.yml. That one is the complexity
+# ratchet: scripts/lintratchet treats every issue it reports as a complexity
+# violation to map onto a function, `just lint-full` reports its count against
+# docs/internals/refactor-baseline.md, and `just lint-phase-gate` fails on any
+# issue under internal/cli. Enabling staticcheck there would move the recorded
+# floor and make those gates mean something other than what they say.
+#
+# This gate has no baseline: the tree is clean, so any finding fails `just ci`.
+# It runs through the same pinned golangci-lint (`just install-lint`) rather
+# than a second tool installation.
+version: "2"
+
+# Same build tags as the ratchet, for the same reason: code behind a tag must
+# not become invisible to the gate.
+run:
+  build-tags:
+    - synctransport
+    - syncrecovery
+
+linters:
+  default: none
+  enable:
+    # golangci-lint v2's staticcheck covers the SA, S, ST and QF families;
+    # staticcheck's U1000 is the separate `unused` linter, enabled beside it.
+    - staticcheck
+    - unused
+
+  settings:
+    staticcheck:
+      # staticcheck's own defaults, so this gate and a bare `staticcheck ./...`
+      # agree on what is a finding. golangci-lint's defaults additionally turn
+      # on the quickfix (QF) suggestions, which are refactoring hints, not
+      # findings.
+      checks:
+        - all
+        - -ST1000
+        - -ST1003
+        - -ST1016
+        - -ST1020
+        - -ST1021
+        - -ST1022
+        - -ST1023
+        - -QF*
+
+  exclusions:
+    generated: lax
+    paths:
+      - internal/web/static/
+      # npm dependencies that ship Go source; see the comment in .golangci.yml.
+      - node_modules/
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

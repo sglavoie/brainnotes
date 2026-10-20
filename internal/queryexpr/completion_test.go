@@ -192,7 +192,7 @@ func TestFieldsUsed(t *testing.T) {
 		})
 	}
 
-	if got := FieldsUsed(nil); got != nil && len(got) != 0 {
+	if got := FieldsUsed(nil); len(got) != 0 {
 		t.Errorf("FieldsUsed(nil) = %#v, want empty", got)
 	}
 }

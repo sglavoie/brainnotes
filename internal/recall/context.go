@@ -223,7 +223,7 @@ func contextMetadata(metadata []MetadataValue) []ContextMetadataValue {
 	values := make([]ContextMetadataValue, 0, len(metadata))
 	seen := make(map[ContextMetadataValue]struct{}, len(metadata))
 	for _, value := range metadata {
-		converted := ContextMetadataValue{Property: value.Property, Value: value.Value}
+		converted := ContextMetadataValue(value)
 		if _, exists := seen[converted]; exists {
 			continue
 		}
@@ -273,11 +273,7 @@ func contextRelatedResult(rank int, result Result, document Document) (ContextRe
 		if err := validateContextString("reason kind", string(reason.Kind)); err != nil {
 			return ContextRelatedResult{}, err
 		}
-		reasons[index] = ContextReason{
-			Kind:         reason.Kind,
-			Contribution: reason.Contribution,
-			Detail:       reason.Detail,
-		}
+		reasons[index] = ContextReason(reason)
 	}
 
 	identity := ContextNoteIdentity{Path: result.Path, Title: result.Title}

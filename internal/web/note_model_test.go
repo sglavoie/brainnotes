@@ -1,9 +1,15 @@
 package web
 
 import (
+	"bytes"
 	"reflect"
 	"strings"
 	"testing"
+
+	"github.com/yuin/goldmark"
+	"github.com/yuin/goldmark/ast"
+	"github.com/yuin/goldmark/parser"
+	"github.com/yuin/goldmark/text"
 )
 
 func TestTableOfContentsForMarkdownExtractsHeadings(t *testing.T) {
@@ -107,4 +113,43 @@ func assertOccurrence(t *testing.T, occurrences []backlinkOccurrence, location s
 		}
 	}
 	t.Fatalf("missing occurrence location=%q line=%d snippet=%q in %#v", location, line, snippet, occurrences)
+}
+
+// The table of contents used goldmark's deprecated Node.Text for heading labels.
+// Its replacement must produce the same bytes, or every published label and the
+// anchor derived from it would move.
+func TestHeadingPlainTextMatchesDeprecatedNodeText(t *testing.T) {
+	body := strings.Join([]string{
+		"# Plain",
+		"## Beta **Bold** and _em_ and `code`",
+		"## A [link](https://example.com) and ![img](x.png \"t\")",
+		"## Auto <https://example.com/x> and <b>raw</b> html",
+		"## Escaped \\* and &amp; entity &copy; and trailing \\",
+		"## Nested **bold _em `code`_** [**strong link**](u)",
+		"Setext with",
+		"soft break",
+		"---",
+		"#",
+	}, "\n")
+	source := []byte(body)
+	md := goldmark.New(goldmark.WithParserOptions(parser.WithAutoHeadingID()))
+	doc := md.Parser().Parse(text.NewReader(source))
+
+	headings := 0
+	_ = ast.Walk(doc, func(node ast.Node, entering bool) (ast.WalkStatus, error) {
+		heading, ok := node.(*ast.Heading)
+		if !entering || !ok {
+			return ast.WalkContinue, nil
+		}
+		headings++
+		//lint:ignore SA1019 the deprecated reference this test compares against
+		want := heading.Text(source) //nolint:staticcheck // as above, for golangci-lint
+		if got := headingPlainText(heading, source); !bytes.Equal(got, want) {
+			t.Errorf("headingPlainText = %q, want %q", got, want)
+		}
+		return ast.WalkContinue, nil
+	})
+	if headings != 8 {
+		t.Fatalf("parsed %d headings, want 8", headings)
+	}
 }

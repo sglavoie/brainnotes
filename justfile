@@ -210,9 +210,7 @@ web-build:
     go run ./internal/web/cssbuild/gen
 
 # Type-check, lint, and build the browser assets
-web-check: _web-static
-    npm run build:web
-    go run ./internal/web/cssbuild/gen
+web-check: _web-static web-build
 
 # Run go vet across all packages
 vet:
@@ -349,6 +347,17 @@ lint-phase-gate: _require-golangci
 lint-phase-gate-selftest: _require-golangci
     @python3 -B scripts/lint_phase_gate_selftest.py
 
+# staticcheck and unused over the whole tree, every build tag included. Unlike
+# the ratchet above it has no baseline: the tree is clean, so any finding fails.
+# It reads its own config, .golangci-staticcheck.yml, rather than .golangci.yml,
+# because the ratchet, `lint-full` and `lint-phase-gate` all count every issue
+# that config produces as a complexity violation. It runs the same pinned
+# golangci-lint, so there is no second tool version to keep in step.
+
+# Fail on any staticcheck or unused finding across every build tag
+lint-static: _require-golangci
+    golangci-lint run -c .golangci-staticcheck.yml ./...
+
 # Format Go code with gofmt (skipping node_modules, as `gofmt_check` does)
 fmt:
     #!/usr/bin/env bash
@@ -384,12 +393,12 @@ _web-static:
     npm run lint:web
     npm run test:web
 
-# Check formatting, run vet, and gate new code on complexity
-lint: _go-static lint-new web-check
+# Check formatting, run vet and staticcheck, and gate new code on complexity
+lint: _go-static lint-new lint-static web-check
     @echo "Lint clean"
 
-# Run the full CI validation envelope (fmt, vet, complexity ratchet, tests, web, bundle drift)
-ci: _go-static lint-new
+# Run the full CI validation envelope (fmt, vet, complexity ratchet, staticcheck, tests, web, bundle drift)
+ci: _go-static lint-new lint-static
     #!/usr/bin/env bash
     set -euo pipefail
     go test {{ go_packages }}

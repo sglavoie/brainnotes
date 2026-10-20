@@ -13,6 +13,7 @@ and `internal/web/static/` excluded by path as well as by header.
 | `just lint-new`   | Fails on any violation in a **function** changed since the ratchet base | **yes**, and in `just lint` |
 | `just lint-ratchet-selftest` | Proves the gate still catches a body-only complexity increase | no — a CI workflow step of its own |
 | `just lint-full`  | Reports the whole-tree count, exit 0        | no — a report |
+| `just lint-static` | staticcheck and `unused` over the whole tree, from `.golangci-staticcheck.yml`; no baseline | **yes**, and in `just lint` |
 | `just install-lint` | Installs the pinned golangci-lint         | no — CI calls it |
 
 ### The ratchet floor (initial S02 measurement)

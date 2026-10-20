@@ -1,6 +1,7 @@
 package web
 
 import (
+	"bytes"
 	"fmt"
 	"net/url"
 	"os"
@@ -75,7 +76,7 @@ func tableOfContentsForMarkdown(source, notePath string) []tableOfContentsItem {
 		if !ok {
 			return ast.WalkContinue, nil
 		}
-		label := normalizeSnippet(string(heading.Text(sourceBytes)))
+		label := normalizeSnippet(string(headingPlainText(heading, sourceBytes)))
 		if label == "" {
 			return ast.WalkContinue, nil
 		}
@@ -93,6 +94,38 @@ func tableOfContentsForMarkdown(source, notePath string) []tableOfContentsItem {
 		return ast.WalkContinue, nil
 	})
 	return items
+}
+
+// headingPlainText is the text a reader sees in a heading: the concatenated
+// values of its inline descendants, with a newline after each soft line break.
+//
+// It reproduces goldmark's deprecated Node.Text byte for byte, which is what
+// the table of contents was built from and what the labels and anchors already
+// published depend on. TestHeadingPlainTextMatchesDeprecatedNodeText pins that.
+func headingPlainText(heading *ast.Heading, source []byte) []byte {
+	var buf bytes.Buffer
+	writeInlineText(&buf, heading, source)
+	return buf.Bytes()
+}
+
+func writeInlineText(buf *bytes.Buffer, parent ast.Node, source []byte) {
+	for child := parent.FirstChild(); child != nil; child = child.NextSibling() {
+		switch node := child.(type) {
+		case *ast.Text:
+			buf.Write(node.Value(source))
+			if node.SoftLineBreak() {
+				buf.WriteByte('\n')
+			}
+		case *ast.String:
+			buf.Write(node.Value)
+		case *ast.AutoLink:
+			buf.Write(node.Label(source))
+		case *ast.RawHTML:
+			buf.Write(node.Segments.Value(source))
+		default:
+			writeInlineText(buf, child, source)
+		}
+	}
 }
 
 func copyPayloadsForNote(root string, note *vault.Note, notePath string) noteCopyPayloads {
