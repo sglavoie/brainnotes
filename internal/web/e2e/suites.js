@@ -18,7 +18,8 @@ export const browserSuites = {
     "note-navigation.spec.js",
     "sync.spec.js",
     "polish-refinement.spec.js",
-    "workflow-completion.spec.js"
+    "workflow-completion.spec.js",
+    "keyboard-dialog-polish.spec.js"
   ],
   "weekly": [
     "browser-tweaks.spec.js",

@@ -136,6 +136,8 @@ export const createWorkbenchMutations = (
   };
 
   const runPreview = async (request: PropertyMutationRequest): Promise<void> => {
+    // setBusy disables the opener, so remember it for when the dialog closes.
+    const returnFocus = options.doc.activeElement;
     options.setBusy(true);
     options.setStatus("Previewing change…", "is-loading");
     try {
@@ -150,6 +152,7 @@ export const createWorkbenchMutations = (
         summary: previewSummaryLabel(result),
         confirmLabel: actionConfirmLabel(request.action),
         result,
+        returnFocus,
         onConfirm: () => {
           void runApply(result.preview_id);
         },
@@ -180,6 +183,7 @@ export const createWorkbenchMutations = (
     op: PropertySchemaOp,
     definition?: PropertySchemaDefinitionInput
   ): Promise<void> => {
+    const returnFocus = options.doc.activeElement;
     options.setBusy(true);
     options.setStatus("Previewing the definition…", "is-loading");
     try {
@@ -200,6 +204,7 @@ export const createWorkbenchMutations = (
         summary: previewSummaryLabel(result),
         confirmLabel: op === "upsert" ? "Save definition" : "Remove definition",
         result,
+        returnFocus,
         onConfirm: () => {
           void runSchemaApply(result.preview_id);
         },

@@ -10,11 +10,10 @@ import {
 } from "./related-render";
 import { setStatusText, type StatusKind } from "./status";
 import type { RelatedConfig, RelatedFetch, RelatedMode, RelatedResponse } from "./related-types";
+import { requestErrorMessage } from "./request-outcome";
 
 export const relatedErrorMessage = (error: unknown): string =>
-  error instanceof Error && error.message !== ""
-    ? error.message
-    : "Related notes could not be loaded.";
+  requestErrorMessage(error, "Related notes could not be loaded.");
 
 const statusForMode = (model: RelatedModel, mode: RelatedMode): [string, StatusKind] => {
   const state = model.modes[mode];

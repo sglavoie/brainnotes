@@ -93,7 +93,7 @@ undeclared property is edited as text. Every control validates before it will
 submit, so a malformed date or a value outside `allowed` is refused in the
 browser rather than at the server.
 
-The note list is keyboard operable end to end: `/` focuses the search box, the
+The note list is keyboard operable end to end: `/` focuses the note search box (not the header search), the
 arrow keys move the focused row, space toggles that row's selection, enter opens
 the inline editor or confirms the focused action, and escape cancels the editor
 or closes the preview dialog. Focus returns to the row you started from after a

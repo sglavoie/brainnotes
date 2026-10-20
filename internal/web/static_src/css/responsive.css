@@ -395,8 +395,10 @@
     flex-direction: column;
   }
 
+  /* Dynamic viewport units keep Confirm above a mobile browser's toolbar; the
+     same bound as .history-confirm, which also carries this class. */
   .properties-dialog {
-    max-height: 100vh;
+    max-height: calc(100dvh - 2rem);
     padding: 0.75rem;
   }
 
@@ -424,6 +426,12 @@
     margin: 0;
     padding: 0.75rem;
   }
+
+  .focused-workspace-header > h1 { font-size: 1.4rem; }
+  .focused-workspace-header { flex-direction: row; }
+
+  .history-filters-panel .history-actions { gap: 0.35rem; }
+  .history-filters-panel .panel-header { flex-wrap: wrap; gap: 0.4rem; }
 }
 
 @media (max-width: 960px) {

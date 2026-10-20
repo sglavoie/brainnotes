@@ -34,7 +34,7 @@
 
 .facet-options {
   position: absolute;
-  z-index: 35;
+  z-index: var(--bn-z-dropdown);
   top: calc(100% + 0.35rem);
   right: 0;
   left: 0;

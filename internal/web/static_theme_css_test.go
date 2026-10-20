@@ -238,8 +238,8 @@ func TestPropertiesWorkbenchCSSContract(t *testing.T) {
 		".properties-editor-actions",
 		".properties-button-primary",
 		// Preview dialog.
-		".properties-dialog-backdrop",
-		".properties-dialog-backdrop[hidden]",
+		".properties-preview-dialog::backdrop",
+		".properties-preview-dialog:not([open])",
 		".properties-dialog-blockers",
 		".properties-dialog-warnings",
 		".properties-dialog-file-path",

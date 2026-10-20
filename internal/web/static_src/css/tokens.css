@@ -9,6 +9,17 @@
   /* The one monospace stack: code, paths, editors and expression input. */
   --bn-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
 
+  /* The stacking scale, lowest first. Modal dialogs use the top layer and
+     need none. Compose new layers from these rather than adding numbers. */
+  --bn-z-raised: 1;       /* above its siblings, such as a resize handle */
+  --bn-z-inline-menu: 4;  /* a menu inside a card */
+  --bn-z-sticky: 5;       /* sticky in-page navigation */
+  --bn-z-toolbar: 10;     /* the sticky editor toolbar */
+  --bn-z-menu: 20;        /* menus opened from a toolbar or header */
+  --bn-z-popover: 30;     /* search results, the Workspace popover, toasts */
+  --bn-z-dropdown: 35;    /* suggestion lists that open over a popover */
+  --bn-z-skip-link: 100;  /* skip links, above everything while focused */
+
   --bn-bg: #f7f9fc;
   --bn-surface: #ffffff;
   --bn-raised: #f3f6fb;

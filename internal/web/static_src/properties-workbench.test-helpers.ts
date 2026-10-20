@@ -1,7 +1,13 @@
 import { vi } from "vitest";
 
 import type { PropertyMutationResult, PropertySummary } from "./api";
-import { jsonResponse, waitForExpect as sharedWaitForExpect } from "./shared.test-helpers";
+import {
+  installDialogPolyfill,
+  jsonResponse,
+  waitForExpect as sharedWaitForExpect,
+} from "./shared.test-helpers";
+
+installDialogPolyfill();
 
 export const waitForExpect = (assertion: () => void): Promise<void> =>
   sharedWaitForExpect(assertion, { attempts: 30 });

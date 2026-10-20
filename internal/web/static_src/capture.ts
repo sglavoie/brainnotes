@@ -11,6 +11,7 @@ import { CaptureWikilinks } from "./capture-wikilink";
 import { jsonPostRequest, readResponsePayload } from "./daily-brief-http";
 import { queryElement } from "./dom";
 import { setStatusText } from "./status";
+import { isSubmitChord } from "./submit-chord";
 
 type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 type CaptureStatusKind = "" | "is-success" | "is-error" | "is-loading";
@@ -59,7 +60,7 @@ class Capture {
     input.addEventListener("input", () => this.updateCount());
     submit.addEventListener("click", () => { void this.run(); });
     input.addEventListener("keydown", (event) => {
-      if (event.key !== "Enter" || (!event.ctrlKey && !event.metaKey) || event.isComposing) {
+      if (!isSubmitChord(event)) {
         return;
       }
       event.preventDefault();

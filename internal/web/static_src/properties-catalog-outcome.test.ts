@@ -34,7 +34,7 @@ const confirmProposal = async (root: HTMLElement): Promise<void> => {
   });
   root.querySelector<HTMLButtonElement>("[data-properties-proposal-add]")?.click();
   await waitForExpect(() => {
-    expect(root.querySelector<HTMLElement>("[data-property-dialog]")?.hidden).toBe(false);
+    expect(root.querySelector<HTMLDialogElement>("[data-property-dialog]")?.open).toBe(true);
     expect(root.querySelector<HTMLButtonElement>("[data-property-preview-confirm]")?.disabled).toBe(false);
   });
   root.querySelector<HTMLButtonElement>("[data-property-preview-confirm]")?.click();

@@ -12,6 +12,17 @@
   /* The one monospace stack: code, paths, editors and expression input. */
   --bn-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
 
+  /* The stacking scale, lowest first. Modal dialogs use the top layer and
+     need none. Compose new layers from these rather than adding numbers. */
+  --bn-z-raised: 1;       /* above its siblings, such as a resize handle */
+  --bn-z-inline-menu: 4;  /* a menu inside a card */
+  --bn-z-sticky: 5;       /* sticky in-page navigation */
+  --bn-z-toolbar: 10;     /* the sticky editor toolbar */
+  --bn-z-menu: 20;        /* menus opened from a toolbar or header */
+  --bn-z-popover: 30;     /* search results, the Workspace popover, toasts */
+  --bn-z-dropdown: 35;    /* suggestion lists that open over a popover */
+  --bn-z-skip-link: 100;  /* skip links, above everything while focused */
+
   --bn-bg: #f7f9fc;
   --bn-surface: #ffffff;
   --bn-raised: #f3f6fb;
@@ -327,6 +338,11 @@ a:hover {
 
 /* Accessible section names without repeating visible labels. */
 .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+
+/* A live region around a message that is shown and hidden. The region itself is
+   never hidden, so it is in the accessibility tree before the message appears
+   and the message is announced; it draws no box, so layout is unchanged. */
+.bn-live-region { display: contents; }
 /* internal/web/static_src/css/chrome.css */
 .site-nav {
   display: flex;
@@ -469,7 +485,7 @@ a:hover {
   position: absolute;
   top: calc(100% + 0.35rem);
   right: 0;
-  z-index: 20;
+  z-index: var(--bn-z-menu);
   display: grid;
   gap: 0.35rem;
   width: min(24rem, 90vw);
@@ -706,7 +722,7 @@ a:hover {
 
 .search-results {
   position: absolute;
-  z-index: 30;
+  z-index: var(--bn-z-popover);
   top: calc(100% + 0.35rem);
   right: 0;
   left: 0;
@@ -723,7 +739,7 @@ a:hover {
 
 .search-feedback {
   position: absolute;
-  z-index: 30;
+  z-index: var(--bn-z-popover);
   top: calc(100% + 0.35rem);
   right: 0;
   left: 0;
@@ -845,7 +861,7 @@ a:hover {
 
 .query-bar-completions {
   position: absolute;
-  z-index: 35;
+  z-index: var(--bn-z-dropdown);
   top: calc(100% + 0.35rem);
   right: 0;
   left: 0;
@@ -1108,7 +1124,7 @@ a:focus-visible,
 
 .facet-options {
   position: absolute;
-  z-index: 35;
+  z-index: var(--bn-z-dropdown);
   top: calc(100% + 0.35rem);
   right: 0;
   left: 0;
@@ -1876,7 +1892,7 @@ code {
 
 .related-later-options {
   position: absolute;
-  z-index: 4;
+  z-index: var(--bn-z-inline-menu);
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0.45rem;
@@ -2648,10 +2664,7 @@ code {
 .history-advanced-fields { display: grid; gap: 0.9rem; grid-template-columns: repeat(auto-fit, minmax(min(14rem, 100%), 1fr)); margin-top: 0.4rem; }
 .history-active-filters { margin: 0; color: var(--bn-muted); font-size: 0.85rem; overflow-wrap: anywhere; }
 .history-filters-panel .panel-header { align-items: baseline; }
-@media (max-width: 600px) {
-  .history-filters-panel .history-actions { gap: 0.35rem; }
-  .history-filters-panel .panel-header { flex-wrap: wrap; gap: 0.4rem; }
-}
+/* Its narrow-width rules live in responsive.css's 640px block. */
 /* internal/web/static_src/css/text-comparison.css */
 .text-comparison { margin-block: 0.75rem; border: 1px solid var(--bn-border); border-radius: var(--bn-control-radius); overflow: hidden; }
 .comparison-legend { margin: 0; padding: 0.65rem; color: var(--bn-text-subtle); font-size: 0.85rem; border-bottom: 1px solid var(--bn-border); }
@@ -3859,7 +3872,7 @@ code {
     top: 0;
     right: 0;
     bottom: 0;
-    z-index: 1;
+    z-index: var(--bn-z-raised);
     width: 0.9rem;
     cursor: col-resize;
     touch-action: none;
@@ -4067,7 +4080,7 @@ code {
   position: fixed;
   top: 0.75rem;
   left: 0.75rem;
-  z-index: 1000;
+  z-index: var(--bn-z-skip-link);
   padding: 0.65rem 1rem;
   border: 1px solid var(--bn-border);
   border-radius: 0.5rem;
@@ -6559,19 +6572,18 @@ code {
 }
 
 /* internal/web/static_src/css/properties-dialog.css */
-.properties-dialog-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 40;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1rem;
-  background: var(--bn-backdrop);
+/* The preview is a native modal <dialog>: the top layer stacks it, so it needs
+   no z-index. Older engines do not let ::backdrop inherit custom properties. */
+.properties-preview-dialog {
+  color: var(--bn-text);
 }
 
-.properties-dialog-backdrop[hidden] {
+.properties-preview-dialog:not([open]) {
   display: none;
+}
+
+.properties-preview-dialog::backdrop {
+  background: var(--bn-backdrop, rgba(0, 0, 0, 0.45));
 }
 
 .properties-dialog {
@@ -6682,7 +6694,7 @@ code {
   position: fixed;
   right: 1rem;
   bottom: 1rem;
-  z-index: 30;
+  z-index: var(--bn-z-popover);
   display: grid;
   gap: 0.45rem;
   width: min(24rem, calc(100vw - 2rem));
@@ -6879,7 +6891,7 @@ code {
 
 
 .synthesize-anchor-summary { margin: 0; color: var(--bn-muted); font-size: 0.9rem; }
-.synthesize-navigation { display: flex; flex-wrap: wrap; gap: 0.5rem; position: sticky; top: 0; z-index: 5; background: var(--bn-surface); padding-block: 0.4rem; }
+.synthesize-navigation { display: flex; flex-wrap: wrap; gap: 0.5rem; position: sticky; top: 0; z-index: var(--bn-z-sticky); background: var(--bn-surface); padding-block: 0.4rem; }
 .synthesize-navigation a { border: 1px solid var(--bn-border); background: var(--bn-raised); }
 .synthesize-disclosure { min-width: 0; }
 .synthesize-disclosure > summary { font-weight: 600; }
@@ -7240,7 +7252,7 @@ code {
   gap: 0.35rem;
   position: sticky;
   top: 0;
-  z-index: 10;
+  z-index: var(--bn-z-toolbar);
   background: var(--bn-surface);
   padding: 0;
 }
@@ -7651,7 +7663,7 @@ code {
 .source-editor-workspace-content {
   position: absolute;
   right: 0;
-  z-index: 30;
+  z-index: var(--bn-z-popover);
   width: min(36rem, calc(100vw - 3rem));
   max-height: calc(100dvh - 6rem);
   overflow-y: auto;
@@ -7687,7 +7699,7 @@ code {
   position: absolute;
   left: 0;
   top: calc(100% + 0.35rem);
-  z-index: 20;
+  z-index: var(--bn-z-menu);
   width: min(24rem, calc(100vw - 4rem));
   padding: 0.6rem;
   box-sizing: border-box;
@@ -9201,7 +9213,7 @@ summary { cursor: pointer; min-height: var(--bn-control-height); box-sizing: bor
   position: absolute;
   top: 0.5rem;
   left: 0.5rem;
-  z-index: 100;
+  z-index: var(--bn-z-skip-link);
   padding: 0.65rem 1rem;
   border: 2px solid var(--bn-focus);
   border-radius: 0.4rem;
@@ -9224,10 +9236,7 @@ summary { cursor: pointer; min-height: var(--bn-control-height); box-sizing: bor
 
 .focused-workspace-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.75rem; margin-bottom: 0.5rem; }
 .focused-workspace-header > h1 { margin: 0; }
-@media (max-width: 600px) {
-  .focused-workspace-header > h1 { font-size: 1.4rem; }
-  .focused-workspace-header { flex-direction: row; }
-}
+/* Its narrow-width rules live in responsive.css's 640px block. */
 
 .focused-workspace-tools { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
 .desktop-workspace-nav { display: none; }
@@ -9289,7 +9298,8 @@ summary { cursor: pointer; min-height: var(--bn-control-height); box-sizing: bor
   .library-search[data-searching="true"] [data-library-expression-indicator] { display: none; }
   .library-search[data-searching="true"] :is(.library-search-menu, .library-filters, .library-expression)[open] { grid-column: 1 / -1; grid-row: auto; }
   .library-search[data-searching="true"] + .overview-results { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 0.3rem 0.5rem; margin-top: 0.4rem; padding-top: 0.35rem; }
-  .library-search[data-searching="true"] + .overview-results > * { grid-column: 1 / -1; }
+  .library-search[data-searching="true"] + .overview-results > *,
+  .library-search[data-searching="true"] + .overview-results > .bn-live-region > * { grid-column: 1 / -1; }
   .library-search[data-searching="true"] + .overview-results .panel-header { grid-column: 2; grid-row: 1; }
   .library-search[data-searching="true"] + .overview-results :is(.panel-header h2, .library-sort > span) { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
   .library-search[data-searching="true"] + .overview-results .library-sort select { max-width: 10.5rem; }
@@ -9705,8 +9715,10 @@ summary { cursor: pointer; min-height: var(--bn-control-height); box-sizing: bor
     flex-direction: column;
   }
 
+  /* Dynamic viewport units keep Confirm above a mobile browser's toolbar; the
+     same bound as .history-confirm, which also carries this class. */
   .properties-dialog {
-    max-height: 100vh;
+    max-height: calc(100dvh - 2rem);
     padding: 0.75rem;
   }
 
@@ -9734,6 +9746,12 @@ summary { cursor: pointer; min-height: var(--bn-control-height); box-sizing: bor
     margin: 0;
     padding: 0.75rem;
   }
+
+  .focused-workspace-header > h1 { font-size: 1.4rem; }
+  .focused-workspace-header { flex-direction: row; }
+
+  .history-filters-panel .history-actions { gap: 0.35rem; }
+  .history-filters-panel .panel-header { flex-wrap: wrap; gap: 0.4rem; }
 }
 
 @media (max-width: 960px) {

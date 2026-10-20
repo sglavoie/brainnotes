@@ -9,6 +9,8 @@
 // is applied only when its sequence is the highest one yet applied, and the
 // "rendering" state only clears when the response is the newest one issued.
 
+import { requestErrorMessage } from "./request-outcome";
+
 export type PreviewRenderer = (content: string) => Promise<string>;
 
 export type PreviewSink = {
@@ -123,12 +125,5 @@ export const createPreviewScheduler = (
   };
 };
 
-const previewErrorMessage = (error: unknown): string => {
-  if (typeof error === "string" && error.trim() !== "") {
-    return error.trim();
-  }
-  if (error instanceof Error && error.message.trim() !== "") {
-    return error.message.trim();
-  }
-  return "The preview could not be rendered.";
-};
+const previewErrorMessage = (error: unknown): string =>
+  requestErrorMessage(error, "The preview could not be rendered.");

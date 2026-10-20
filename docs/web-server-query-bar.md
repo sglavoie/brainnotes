@@ -18,7 +18,9 @@ finds notes, independently of those checkboxes.
 text search, facets, and expressions combine. Press `Ctrl` + `Space` in the
 expression field to request field and value suggestions.
 
-Press `/` outside an editable field to focus the header search. The shortcut
+Press `/` outside an editable field to focus the header search. On a property's
+page `/` focuses that page's note search instead, and the header search shows no
+shortcut hint there. The shortcut
 leaves editors and open dialogs alone. Escape closes the suggestions and returns
 focus to the control you came from without scrolling, provided it is still
 available. Leaving search normally clears that return target.

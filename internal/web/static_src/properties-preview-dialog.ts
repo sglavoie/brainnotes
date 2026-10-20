@@ -6,16 +6,6 @@ import {
   type PropertyMutationResult,
 } from "./api";
 import { previewChangeLine } from "./daily-fixes-preview";
-import { queryAllElements } from "./dom";
-
-const FOCUSABLE_SELECTOR = [
-  "a[href]",
-  "button:not([disabled])",
-  "input:not([disabled])",
-  "select:not([disabled])",
-  "textarea:not([disabled])",
-  "[tabindex]:not([tabindex='-1'])",
-].join(",");
 
 export type PreviewDialogOptions = {
   title: string;
@@ -24,6 +14,8 @@ export type PreviewDialogOptions = {
   result: PropertyMutationResult;
   onConfirm: () => void;
   onCancel?: () => void;
+  // Where focus returns on close; defaults to the element focused at open.
+  returnFocus?: Element | null;
 };
 
 export type PreviewDialog = {
@@ -140,64 +132,131 @@ const renderFiles = (
   parent.appendChild(list);
 };
 
-// createPreviewDialog builds one modal that every previewed action reuses. It
-// owns its own focus trap and restores focus to whatever opened it, so a
-// keyboard user is never stranded behind the dialog.
+const isOutside = (dialog: HTMLElement, event: MouseEvent): boolean => {
+  const box = dialog.getBoundingClientRect();
+  return event.clientX < box.left || event.clientX > box.right ||
+    event.clientY < box.top || event.clientY > box.bottom;
+};
+
+type PreviewElements = {
+  dialog: HTMLDialogElement;
+  title: HTMLElement;
+  summary: HTMLElement;
+  body: HTMLElement;
+  expiry: HTMLElement;
+  confirm: HTMLButtonElement;
+  cancel: HTMLButtonElement;
+};
+
+const appendElement = (
+  doc: Document,
+  parent: HTMLElement,
+  tag: string,
+  className: string,
+  attributes: Record<string, string> = {}
+): HTMLElement => {
+  const element = doc.createElement(tag);
+  element.className = className;
+  for (const [name, value] of Object.entries(attributes)) {
+    element.setAttribute(name, value);
+  }
+  parent.appendChild(element);
+  return element;
+};
+
+const actionButton = (doc: Document, className: string, attribute: string): HTMLButtonElement => {
+  const button = doc.createElement("button");
+  button.type = "button";
+  button.className = className;
+  button.setAttribute(attribute, "");
+  return button;
+};
+
+const buildPreviewElements = (doc: Document): PreviewElements => {
+  const dialog = doc.createElement("dialog");
+  dialog.className = "properties-dialog properties-preview-dialog";
+  dialog.setAttribute("data-property-dialog", "");
+  dialog.setAttribute("aria-labelledby", "property-dialog-title");
+  dialog.setAttribute("aria-describedby", "property-dialog-summary");
+  const title = appendElement(doc, dialog, "h2", "properties-dialog-title", { id: "property-dialog-title" });
+  const summary = appendElement(doc, dialog, "p", "properties-dialog-summary", {
+    id: "property-dialog-summary",
+    "data-property-preview-summary": "",
+  });
+  const body = appendElement(doc, dialog, "div", "properties-dialog-body");
+  const expiry = appendElement(doc, dialog, "p", "properties-dialog-expiry", {
+    "data-property-preview-expiry": "",
+  });
+  const actions = appendElement(doc, dialog, "div", "properties-dialog-actions");
+  const confirm = actionButton(doc, "properties-button properties-button-primary", "data-property-preview-confirm");
+  const cancel = actionButton(doc, "properties-button", "data-property-preview-cancel");
+  cancel.textContent = "Cancel";
+  actions.append(confirm, cancel);
+  return { dialog, title, summary, body, expiry, confirm, cancel };
+};
+
+const renderPreview = (
+  doc: Document,
+  els: PreviewElements,
+  options: PreviewDialogOptions,
+  now: Date
+): void => {
+  const { result } = options;
+  const blocked = propertyPlanIsBlocked(result.blockers);
+  els.title.textContent = options.title;
+  els.summary.textContent = options.summary;
+  els.body.textContent = "";
+  renderBlockers(doc, els.body, result.blockers, true);
+  renderBlockers(doc, els.body, result.blockers, false);
+  renderConfigDiff(doc, els.body, result);
+  renderFiles(doc, els.body, result);
+  appendElement(doc, els.body, "p", "properties-dialog-projection", {
+    "data-property-preview-projection": "",
+  }).textContent = propertyViolationDelta(result.projected_violations);
+  const expiryLabel = blocked
+    ? "This plan cannot be applied until every blocker is resolved."
+    : readReceiptExpiryLabel(result.expires_at, now);
+  els.expiry.textContent = expiryLabel;
+  els.expiry.hidden = expiryLabel === "";
+  els.confirm.textContent = options.confirmLabel;
+  els.confirm.disabled = blocked || result.preview_id === "";
+};
+
+// Escape, the browser's own close request, a press on the backdrop and Cancel
+// all cancel; only Confirm confirms.
+const bindDismissal = (dialog: HTMLDialogElement, cancel: HTMLButtonElement, dismiss: () => void, isOpen: () => boolean): void => {
+  dialog.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !event.isComposing) {
+      event.preventDefault();
+      event.stopPropagation();
+      dismiss();
+    }
+  });
+  dialog.addEventListener("cancel", (event) => {
+    event.preventDefault();
+    dismiss();
+  });
+  dialog.addEventListener("close", () => {
+    if (isOpen() && !dialog.open) dismiss();
+  });
+  dialog.addEventListener("mousedown", (event) => {
+    if (event.target === dialog && isOutside(dialog, event)) dismiss();
+  });
+  cancel.addEventListener("click", dismiss);
+};
+
+// createPreviewDialog builds one native modal <dialog> that every previewed
+// action reuses. showModal() makes the rest of the page inert and keeps focus
+// inside, as confirmAction does; this module restores focus to the opener.
 export const createPreviewDialog = (
   doc: Document,
   host: HTMLElement,
   deps: PreviewDialogDeps = {}
 ): PreviewDialog => {
   const now = deps.now || (() => new Date());
-
-  const backdrop = doc.createElement("div");
-  backdrop.className = "properties-dialog-backdrop";
-  backdrop.setAttribute("data-property-dialog", "");
-  backdrop.hidden = true;
-
-  const dialog = doc.createElement("div");
-  dialog.className = "properties-dialog";
-  dialog.setAttribute("role", "dialog");
-  dialog.setAttribute("aria-modal", "true");
-  dialog.setAttribute("aria-labelledby", "property-dialog-title");
-  dialog.setAttribute("aria-describedby", "property-dialog-summary");
-  backdrop.appendChild(dialog);
-
-  const title = doc.createElement("h2");
-  title.className = "properties-dialog-title";
-  title.id = "property-dialog-title";
-  dialog.appendChild(title);
-
-  const summary = doc.createElement("p");
-  summary.className = "properties-dialog-summary";
-  summary.id = "property-dialog-summary";
-  summary.setAttribute("data-property-preview-summary", "");
-  dialog.appendChild(summary);
-
-  const body = doc.createElement("div");
-  body.className = "properties-dialog-body";
-  dialog.appendChild(body);
-
-  const expiry = doc.createElement("p");
-  expiry.className = "properties-dialog-expiry";
-  expiry.setAttribute("data-property-preview-expiry", "");
-  dialog.appendChild(expiry);
-
-  const actions = doc.createElement("div");
-  actions.className = "properties-dialog-actions";
-  const confirm = doc.createElement("button");
-  confirm.type = "button";
-  confirm.className = "properties-button properties-button-primary";
-  confirm.setAttribute("data-property-preview-confirm", "");
-  const cancel = doc.createElement("button");
-  cancel.type = "button";
-  cancel.className = "properties-button";
-  cancel.setAttribute("data-property-preview-cancel", "");
-  cancel.textContent = "Cancel";
-  actions.append(confirm, cancel);
-  dialog.appendChild(actions);
-
-  host.appendChild(backdrop);
+  const els = buildPreviewElements(doc);
+  const { dialog } = els;
+  host.appendChild(dialog);
 
   let opened = false;
   let restoreFocus: HTMLElement | null = null;
@@ -209,8 +268,12 @@ export const createPreviewDialog = (
     }
     opened = false;
     handlers = null;
-    backdrop.hidden = true;
-    restoreFocus?.focus();
+    if (dialog.open) {
+      dialog.close();
+    }
+    if (restoreFocus?.isConnected) {
+      restoreFocus.focus();
+    }
     restoreFocus = null;
   };
 
@@ -220,47 +283,8 @@ export const createPreviewDialog = (
     onCancel?.();
   };
 
-  const trapFocus = (event: KeyboardEvent): void => {
-    const focusable = queryAllElements(dialog, FOCUSABLE_SELECTOR, HTMLElement).filter(
-      (element) => !element.hasAttribute("hidden")
-    );
-    if (focusable.length === 0) {
-      return;
-    }
-    const first = focusable[0];
-    const last = focusable[focusable.length - 1];
-    const active = doc.activeElement;
-    if (event.shiftKey && (active === first || !dialog.contains(active))) {
-      event.preventDefault();
-      last?.focus();
-      return;
-    }
-    if (!event.shiftKey && active === last) {
-      event.preventDefault();
-      first?.focus();
-    }
-  };
-
-  dialog.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") {
-      event.preventDefault();
-      event.stopPropagation();
-      cancelDialog();
-      return;
-    }
-    if (event.key === "Tab") {
-      trapFocus(event);
-    }
-  });
-  backdrop.addEventListener("mousedown", (event) => {
-    if (event.target === backdrop) {
-      cancelDialog();
-    }
-  });
-  cancel.addEventListener("click", () => {
-    cancelDialog();
-  });
-  confirm.addEventListener("click", () => {
+  bindDismissal(dialog, els.cancel, cancelDialog, () => opened);
+  els.confirm.addEventListener("click", () => {
     const onConfirm = handlers?.onConfirm;
     close();
     onConfirm?.();
@@ -268,46 +292,20 @@ export const createPreviewDialog = (
 
   const open = (options: PreviewDialogOptions): void => {
     handlers = options;
-    const { result } = options;
-    const blocked = propertyPlanIsBlocked(result.blockers);
-
-    title.textContent = options.title;
-    summary.textContent = options.summary;
-    body.textContent = "";
-
-    renderBlockers(doc, body, result.blockers, true);
-    renderBlockers(doc, body, result.blockers, false);
-    renderConfigDiff(doc, body, result);
-    renderFiles(doc, body, result);
-
-    const projection = doc.createElement("p");
-    projection.className = "properties-dialog-projection";
-    projection.setAttribute("data-property-preview-projection", "");
-    projection.textContent = propertyViolationDelta(result.projected_violations);
-    body.appendChild(projection);
-
-    const expiryLabel = blocked
-      ? "This plan cannot be applied until every blocker is resolved."
-      : readReceiptExpiryLabel(result.expires_at, now());
-    expiry.textContent = expiryLabel;
-    expiry.hidden = expiryLabel === "";
-
-    confirm.textContent = options.confirmLabel;
-    confirm.disabled = blocked || result.preview_id === "";
-
-    const active = doc.activeElement;
-    restoreFocus = active instanceof HTMLElement ? active : null;
-    backdrop.hidden = false;
+    renderPreview(doc, els, options, now());
+    // A caller that disabled its controls while previewing names the opener.
+    const active = options.returnFocus ?? doc.activeElement;
+    restoreFocus = active instanceof HTMLElement && active !== doc.body ? active : null;
     opened = true;
-    if (confirm.disabled) {
-      cancel.focus();
-    } else {
-      confirm.focus();
+    if (!dialog.open) {
+      dialog.showModal();
     }
+    // Cancel first, like confirmAction: Enter alone never applies a change.
+    els.cancel.focus();
   };
 
   return {
-    element: backdrop,
+    element: dialog,
     open,
     close,
     isOpen: () => opened,

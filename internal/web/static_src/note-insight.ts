@@ -7,6 +7,8 @@ import {
 import { queryElement } from "./dom";
 import { copyWithFallback } from "./clipboard";
 import { setStatusText } from "./status";
+import { isUnreachableError, serverUnreachableMessage } from "./request-outcome";
+import { isSubmitChord } from "./submit-chord";
 
 type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 type ConfirmLike = ConfirmAction;
@@ -45,6 +47,9 @@ const readResponsePayload = async (response: Response): Promise<unknown> => {
 };
 
 const describeClientError = (error: unknown): string => {
+  if (isUnreachableError(error)) {
+    return `Ask AI failed. ${serverUnreachableMessage}`;
+  }
   if (error instanceof Error && error.message.trim() !== "") {
     return `Ask AI failed: ${error.message}`;
   }
@@ -96,7 +101,7 @@ class NoteInsight {
       ? (text) => navigator.clipboard.writeText(text) : undefined);
     els.submit.addEventListener("click", () => { void this.run(); });
     els.prompt.addEventListener("keydown", (event) => {
-      if (event.key !== "Enter" || (!event.ctrlKey && !event.metaKey) || els.submit.disabled) return;
+      if (!isSubmitChord(event) || els.submit.disabled) return;
       event.preventDefault();
       void this.run();
     });
