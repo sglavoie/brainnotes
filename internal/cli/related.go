@@ -227,7 +227,7 @@ func buildRelatedQuery(
 	mode recall.Mode,
 	rankOptions recall.RankOptions,
 ) (relatedQuery, error) {
-	source, err := resolveNoteTarget("related", v, sourceArg)
+	source, err := resolveNoteTarget(command, v, sourceArg)
 	if err != nil {
 		return relatedQuery{}, err
 	}

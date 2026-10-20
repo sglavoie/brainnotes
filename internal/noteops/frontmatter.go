@@ -314,7 +314,8 @@ func CoerceFrontmatterValue(s, typeFlag string) (any, error) {
 		return s, nil
 	case "", "auto":
 	default:
-		return nil, Errorf(CodeInvalidRequest, "set: unknown --type %q (want date|datetime|int|bool|float|raw)", typeFlag)
+		// The wording matches the CLI's enumValueError: <cmd>: --<flag> must be a, b, or c (got "x").
+		return nil, Errorf(CodeInvalidRequest, "set: --value-type must be date, datetime, int, bool, float, or raw (got %q)", typeFlag)
 	}
 
 	switch strings.ToLower(s) {
