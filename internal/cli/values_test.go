@@ -392,7 +392,15 @@ func TestValues_MapElementWarnsWithVerbose(t *testing.T) {
 	if stdout != "1  real\n" {
 		t.Fatalf("counts should be unchanged by -v:\n got=%q\nwant=%q", stdout, "1  real\n")
 	}
-	if strings.Count(stderr, "skipping map-typed value") != 1 || !strings.Contains(stderr, "Mixed.md") {
-		t.Fatalf("expected exactly one warning naming Mixed.md; got %q", stderr)
+	if want := "tags: warning: skipped map-typed value in Mixed.md\n"; stderr != want {
+		t.Fatalf("expected exactly one warning under the running command, vault-relative:\n got=%q\nwant=%q", stderr, want)
+	}
+
+	_, stderr, err = runValuesCmd(t, root, "values", "tags", "-v")
+	if err != nil {
+		t.Fatalf("execute values -v: %v", err)
+	}
+	if want := "values: warning: skipped map-typed value in Mixed.md\n"; stderr != want {
+		t.Fatalf("values -v warning:\n got=%q\nwant=%q", stderr, want)
 	}
 }

@@ -133,7 +133,8 @@ func runValues(cmd *cobra.Command, property string, opts valuesOptions) error {
 		return err
 	}
 
-	counts, files := collectValueCounts(v, notes, property, opts.showFiles || opts.asJSON, opts.verbose, cmd.ErrOrStderr())
+	warn := &mapValueWarner{command: cmd.Name(), root: v.Root, verbose: opts.verbose, out: cmd.ErrOrStderr(), warned: map[string]struct{}{}}
+	counts, files := collectValueCounts(v, notes, property, opts.showFiles || opts.asJSON, warn)
 	entries := sortValueEntries(counts, opts.sortMode)
 	if opts.asJSON {
 		return writeValuesJSON(cmd.OutOrStdout(), property, entries, files)
@@ -165,13 +166,12 @@ func writeValuesJSON(out io.Writer, property string, entries []valEntry, files m
 // A note which does not carry the property is skipped. A note whose frontmatter
 // will not parse never reaches here: loadReadableNotes already left it out and
 // warned about it on stderr. files is nil unless wantFiles.
-func collectValueCounts(v *vault.Vault, notes []*vault.Note, property string, wantFiles, verbose bool, errOut io.Writer) (map[string]int, map[string]map[string]struct{}) {
+func collectValueCounts(v *vault.Vault, notes []*vault.Note, property string, wantFiles bool, warn *mapValueWarner) (map[string]int, map[string]map[string]struct{}) {
 	counts := map[string]int{}
 	var files map[string]map[string]struct{}
 	if wantFiles {
 		files = make(map[string]map[string]struct{})
 	}
-	warnedNotes := map[string]struct{}{}
 	for _, n := range notes {
 		if n == nil {
 			continue
@@ -188,7 +188,7 @@ func collectValueCounts(v *vault.Vault, notes []*vault.Note, property string, wa
 		if wantFiles {
 			relPath, _ = filepath.Rel(v.Root, n.Path)
 		}
-		countValue(raw, n.Path, relPath, counts, files, warnedNotes, verbose, errOut)
+		countValue(raw, n.Path, relPath, counts, files, warn)
 	}
 	return counts, files
 }
@@ -248,17 +248,17 @@ func valueCountWidth(entries []valEntry) int {
 }
 
 // countValue increments counts for v's contributions, recursing into lists.
-// Maps are skipped; with verbose=true, one warning is emitted per affected note.
-func countValue(v any, notePath string, relPath string, counts map[string]int, files map[string]map[string]struct{}, warnedNotes map[string]struct{}, verbose bool, errOut io.Writer) {
+// Maps are skipped; under --verbose, one warning is emitted per affected note.
+func countValue(v any, notePath string, relPath string, counts map[string]int, files map[string]map[string]struct{}, warn *mapValueWarner) {
 	switch vv := v.(type) {
 	case nil:
 		return
 	case []any:
 		for _, item := range vv {
-			countValue(item, notePath, relPath, counts, files, warnedNotes, verbose, errOut)
+			countValue(item, notePath, relPath, counts, files, warn)
 		}
 	case map[string]any:
-		warnSkippedMapValue(notePath, warnedNotes, verbose, errOut)
+		warn.skipped(notePath)
 	default:
 		record(formatValueScalar(vv), counts, files, relPath)
 	}
@@ -284,17 +284,27 @@ func formatValueScalar(v any) string {
 	}
 }
 
-// warnSkippedMapValue emits at most one map-skipped warning per note, and only
-// under --verbose.
-func warnSkippedMapValue(notePath string, warnedNotes map[string]struct{}, verbose bool, errOut io.Writer) {
-	if !verbose {
+// mapValueWarner emits at most one map-skipped warning per note, and only
+// under --verbose; a nil warner is silent. The line has the shape of every
+// other skipped-input warning (warnSkippedNotes): the command that was running,
+// then the vault-relative path, so `bn tags -v` says tags rather than values.
+type mapValueWarner struct {
+	command string
+	root    string
+	verbose bool
+	out     io.Writer
+	warned  map[string]struct{}
+}
+
+func (w *mapValueWarner) skipped(notePath string) {
+	if w == nil || !w.verbose {
 		return
 	}
-	if _, seen := warnedNotes[notePath]; seen {
+	if _, seen := w.warned[notePath]; seen {
 		return
 	}
-	warnedNotes[notePath] = struct{}{}
-	fmt.Fprintf(errOut, "values: skipping map-typed value in %s\n", notePath)
+	w.warned[notePath] = struct{}{}
+	_, _ = fmt.Fprintf(w.out, "%s: warning: skipped map-typed value in %s\n", w.command, displayPath(notePath, w.root))
 }
 
 func record(key string, counts map[string]int, files map[string]map[string]struct{}, relPath string) {
