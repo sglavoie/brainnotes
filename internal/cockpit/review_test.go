@@ -181,6 +181,13 @@ func TestEmptyHubHeadings(t *testing.T) {
 		t.Errorf("headings inside a fence must be ignored: got %v", got)
 	}
 
+	// Only a closer of the same character and at least the opener's length ends
+	// a fence: the "~~~" and short "```" here are content of the outer block.
+	mismatched := "## Synthesis\n````\n~~~\n```\n## Not A Heading\n````\n"
+	if got := emptyHubHeadings(mismatched, []string{"Not A Heading"}); len(got) != 0 {
+		t.Errorf("a non-matching fence line must not close the block: got %v", got)
+	}
+
 	if got := emptyHubHeadings("", []string{"Synthesis"}); got != nil {
 		t.Errorf("empty body should yield nil, got %v", got)
 	}

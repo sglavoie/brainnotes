@@ -6,6 +6,7 @@ import (
 	"unicode"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/textnorm"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/wikilink"
 )
 
 // captureATXHeading matches an ATX markdown heading line and captures the hash
@@ -16,9 +17,6 @@ import (
 // why four-space indented code needs no separate handling: such a line can never
 // be read as a heading.
 var captureATXHeading = regexp.MustCompile(`^\s{0,3}(#{1,6})\s+(.*?)\s*#*\s*$`)
-
-// captureCodeFence matches an opening or closing fenced-code delimiter.
-var captureCodeFence = regexp.MustCompile("^\\s{0,3}(```+|~~~+)")
 
 // captureTopLevelBullet matches a top-level list item. Up to three leading
 // spaces still count as top level, matching the heading rule, so a two-space
@@ -43,14 +41,10 @@ func CountSectionBullets(body, heading string) int {
 	}
 
 	count := 0
-	inFence := false
+	var fence wikilink.FenceScanner
 	end := captureSectionEnd(b.lines, anchor, level)
 	for _, line := range b.lines[anchor+1 : end] {
-		if captureCodeFence.MatchString(line) {
-			inFence = !inFence
-			continue
-		}
-		if inFence {
+		if fence.Line(line) {
 			continue
 		}
 		if captureTopLevelBullet.MatchString(line) {
@@ -155,13 +149,9 @@ func captureLineIsBlank(line string) bool { return strings.TrimSpace(line) == ""
 // level and title match, or -1. First match wins, so duplicate headings resolve
 // deterministically.
 func findCaptureAnchor(lines []string, level int, titleKey string) int {
-	inFence := false
+	var fence wikilink.FenceScanner
 	for i, line := range lines {
-		if captureCodeFence.MatchString(line) {
-			inFence = !inFence
-			continue
-		}
-		if inFence {
+		if fence.Line(line) {
 			continue
 		}
 		match := captureATXHeading.FindStringSubmatch(line)
@@ -191,14 +181,10 @@ func containsATXHeading(body string, level int, title string) bool {
 // anchored at index anchor: the first later non-fenced heading of the same or a
 // lower level, else len(lines). Deeper subheadings stay inside the section.
 func captureSectionEnd(lines []string, anchor, level int) int {
-	inFence := false
+	var fence wikilink.FenceScanner
 	for i := anchor + 1; i < len(lines); i++ {
 		line := lines[i]
-		if captureCodeFence.MatchString(line) {
-			inFence = !inFence
-			continue
-		}
-		if inFence {
+		if fence.Line(line) {
 			continue
 		}
 		if match := captureATXHeading.FindStringSubmatch(line); match != nil && len(match[1]) <= level {

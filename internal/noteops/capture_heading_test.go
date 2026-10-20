@@ -180,6 +180,20 @@ func TestPlanCaptureInsert(t *testing.T) {
 	}
 }
 
+// Inside a backtick fence, a tilde run and a shorter backtick run are content,
+// not closers, so the heading after them is still fenced and the capture lands
+// in the real section below.
+func TestPlanCaptureInsertOnlyAMatchingFenceClosesTheBlock(t *testing.T) {
+	body := "# Note\n\n````markdown\n~~~\n```\n## Captures\n- example\n````\n\n## Captures\n- first\n"
+	got, line, added, err := planCaptureInsert(body, captureTestHeading, captureTestLine)
+	if err != nil {
+		t.Fatalf("planCaptureInsert() error = %v", err)
+	}
+	if want := body + captureTestLine + "\n"; got != want || line != 12 || added {
+		t.Fatalf("planCaptureInsert() = %q, line %d, added %v; want %q, line 12, not added", got, line, added, want)
+	}
+}
+
 func TestPlanCaptureInsertPreservesSurroundingBytes(t *testing.T) {
 	body := "# Note\n\nprose\n\n## Captures\n- a\n\n## Tail\n\ntail prose\n"
 	got, _, _, err := planCaptureInsert(body, captureTestHeading, captureTestLine)
@@ -295,6 +309,11 @@ func TestCaptureCountSectionBullets(t *testing.T) {
 			name: "nested_and_fenced_bullets_excluded",
 			body: "## Captures\n- one\n    - nested\n- two\n\n```\n- fenced\n```\n\n* three\n+ four\n\n## Next\n- five\n",
 			want: 4,
+		},
+		{
+			name: "mismatched_fence_delimiter_does_not_close",
+			body: "## Captures\n- one\n~~~\n```\n- fenced\n~~~\n- two\n",
+			want: 2,
 		},
 		{
 			name: "heading_absent",
