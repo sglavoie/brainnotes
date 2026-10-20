@@ -1,5 +1,22 @@
 # Development
 
+## Prerequisites
+
+| Tool | Version | Used for |
+| --- | --- | --- |
+| [Go](https://go.dev/dl/) | the `go` line in `go.mod` (1.26.2) or newer | every build, test and Go gate |
+| [just](https://just.systems/man/en/) | any recent release | every recipe below |
+| [Node.js](https://nodejs.org/) | `.nvmrc` (22); `package.json` `engines` accepts `^22.22.2`, `^24.15.0` or `>=26` | `npm ci`, frontend checks, bundle builds |
+| Python 3 | the `python3` on `PATH` | `just ci` (`scripts/test_*.py`), `just vault-sandbox`, `just metrics`, the self-tests |
+| golangci-lint | pinned in the `justfile` (`golangci_version`) | `just lint-new` inside `just lint` and `just ci`; install with `just install-lint` |
+| Playwright browsers | pinned by `package-lock.json` | `npm run test:e2e`; install once with `npm run test:e2e:install` |
+
+`just install-lint` runs `go install`, so the Go install directory
+(`$(go env GOBIN)` if set, otherwise `$(go env GOPATH)/bin`) must be on `PATH`. The complexity ratchet fails rather than skips when
+golangci-lint is missing.
+
+## Getting started
+
 ```sh
 npm ci
 just web-check
