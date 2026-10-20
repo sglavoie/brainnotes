@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/frontmatter"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/textnorm"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/wikilink"
 )
@@ -65,7 +66,7 @@ func Or(ps ...Predicate) Predicate {
 // auto-coerces the literal to an int and would otherwise produce a tag that
 // nothing in the CLI could find again.
 func Tag(v string) Predicate {
-	want := strings.ToLower(v)
+	want := comparisonKey(v)
 	return func(n *vault.Note) bool {
 		fm, err := n.Front()
 		if err != nil {
@@ -92,7 +93,7 @@ func tagValueMatches(value any, want string) bool {
 			return title == want
 		}
 	}
-	return strings.ToLower(stringifyTag(value)) == want
+	return valueKey(value) == want
 }
 
 // stringifyTag renders a non-string frontmatter list element as the text a user
@@ -143,13 +144,22 @@ func stringifyTag(v any) string {
 // user types.
 func StringifyValue(v any) string { return stringifyTag(v) }
 
+// comparisonKey is the form both sides of a Tag, Category, Status or Type
+// comparison are reduced to: NFC-normalized, then lowercased. Normalizing only
+// the query would leave a decomposed `café` written by a macOS tool unequal to
+// the composed `café` a user types, and the lexer already composes the query.
+func comparisonKey(s string) string { return strings.ToLower(textnorm.NFC(s)) }
+
+// valueKey is comparisonKey for a frontmatter value, stringified first.
+func valueKey(v any) string { return comparisonKey(stringifyTag(v)) }
+
 // Category matches notes whose `categories` frontmatter contains v
 // (case-insensitive) as a wikilink target title. Folder prefixes, `.md`
 // suffixes, headings, and aliases are ignored, so `[[Library/Books.md#Now|To
 // Read]]` matches v == "books". Plain scalar/list string values still match by
 // their literal text.
 func Category(v string) Predicate {
-	want := strings.ToLower(v)
+	want := comparisonKey(v)
 	return func(n *vault.Note) bool {
 		fm, err := n.Front()
 		if err != nil {
@@ -182,7 +192,7 @@ func categoryStringMatches(s, want string) bool {
 	if title, ok := exactWikilinkTitle(s); ok {
 		return title == want
 	}
-	return strings.ToLower(s) == want
+	return valueKey(s) == want
 }
 
 func exactWikilinkTitle(s string) (string, bool) {
@@ -220,7 +230,7 @@ func LocalDate(t time.Time, loc *time.Location) time.Time {
 // Non-string values (e.g. an int stored by `bn set status=5`'s auto-coercion)
 // are stringified before comparison so the same value remains query-able.
 func Status(v string) Predicate {
-	want := strings.ToLower(v)
+	want := comparisonKey(v)
 	return func(n *vault.Note) bool {
 		fm, err := n.Front()
 		if err != nil {
@@ -230,7 +240,7 @@ func Status(v string) Predicate {
 		if !ok {
 			return false
 		}
-		return strings.ToLower(stringifyTag(raw)) == want
+		return valueKey(raw) == want
 	}
 }
 
@@ -240,16 +250,16 @@ func Status(v string) Predicate {
 // queries don't need to know the difference. Non-string values are stringified
 // before comparison (see Status for the rationale).
 func Type(v string) Predicate {
-	want := strings.ToLower(v)
+	want := comparisonKey(v)
 	return func(n *vault.Note) bool {
 		fm, err := n.Front()
 		if err != nil {
 			return false
 		}
-		if raw, ok := fm.Get("type"); ok && strings.ToLower(stringifyTag(raw)) == want {
+		if raw, ok := fm.Get("type"); ok && valueKey(raw) == want {
 			return true
 		}
-		if raw, ok := fm.Get("kind"); ok && strings.ToLower(stringifyTag(raw)) == want {
+		if raw, ok := fm.Get("kind"); ok && valueKey(raw) == want {
 			return true
 		}
 		return false
