@@ -3,6 +3,7 @@ package vaultgit
 import (
 	"context"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 )
@@ -50,7 +51,7 @@ func TestWatcherKeepsCommittingLocallyWhileTheRemoteIsUnreachable(t *testing.T) 
 
 	requireKind(t, rec, WatchEventCommitted)
 	requireKind(t, rec, WatchEventPushFailed)
-	if !contains(h.tracked(), "note.md") {
+	if !slices.Contains(h.tracked(), "note.md") {
 		t.Fatal("the local snapshot did not survive the failed push")
 	}
 	if _, blocked := h.blockRecord(); blocked {

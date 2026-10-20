@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"sync"
 	"testing"
@@ -106,7 +107,7 @@ func TestWatcherCommitsExternalChangeOnlyAfterTheQuietPeriod(t *testing.T) {
 	if event.Commit == "" {
 		t.Fatal("the committed event carries no commit object name")
 	}
-	if !contains(h.tracked(), "note.md") {
+	if !slices.Contains(h.tracked(), "note.md") {
 		t.Fatalf("note.md is not in the history: %v", h.tracked())
 	}
 }
@@ -222,7 +223,7 @@ func TestWatcherRecordsExternalDeletionAfterRestart(t *testing.T) {
 	h.advance(DebounceMaxLatency + time.Minute)
 	w.tick(ctx)
 	requireKind(t, rec, WatchEventCommitted)
-	if contains(h.tracked(), "vanishes.md") {
+	if slices.Contains(h.tracked(), "vanishes.md") {
 		t.Fatal("deleted note is still at HEAD")
 	}
 	if got := rawGit(t, h.root, "show", baseline+":vanishes.md"); got != "about to disappear" {
@@ -294,7 +295,7 @@ func TestWatcherEventsCarryPathsButNeverNoteBodies(t *testing.T) {
 		if strings.Contains(rendered, secret) {
 			t.Fatalf("a %q event leaked a note body: %+v", event.Kind, event)
 		}
-		if contains(event.Paths, "private.md") || contains(event.Paths, "doomed.md") {
+		if slices.Contains(event.Paths, "private.md") || slices.Contains(event.Paths, "doomed.md") {
 			sawPath = true
 		}
 	}

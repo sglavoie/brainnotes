@@ -3,6 +3,7 @@ package vaultgit
 import (
 	"context"
 	"os"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -95,7 +96,7 @@ fi`)
 	if record.ObservedAt.IsZero() || len(record.Recovery) == 0 {
 		t.Fatalf("intent record is missing its observation time or recovery steps: %+v", record)
 	}
-	if record.PathCount != 1 || !contains(record.Paths, "Inbox/note.md") {
+	if record.PathCount != 1 || !slices.Contains(record.Paths, "Inbox/note.md") {
 		t.Fatalf("intent record paths = %v (count %d)", record.Paths, record.PathCount)
 	}
 	if body := string(h.intentBytes()); strings.Contains(body, strings.TrimSpace(secretBody)) {

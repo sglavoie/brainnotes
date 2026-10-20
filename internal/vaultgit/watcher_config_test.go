@@ -2,6 +2,7 @@ package vaultgit
 
 import (
 	"context"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -121,7 +122,7 @@ func TestWatcherSnapshotsAManuallyBrokenConfigUnderTheLastValidPolicy(t *testing
 	h.advance(DebounceQuiet + time.Second)
 	w.tick(ctx)
 	requireKind(t, rec, WatchEventCommitted)
-	if !contains(h.tracked(), policyFile) {
+	if !slices.Contains(h.tracked(), policyFile) {
 		t.Fatalf("the configuration file is not in the history: %v", h.tracked())
 	}
 
@@ -139,7 +140,7 @@ func TestWatcherSnapshotsAManuallyBrokenConfigUnderTheLastValidPolicy(t *testing
 	h.advance(DebounceQuiet + time.Second)
 	w.tick(ctx)
 	event := requireKind(t, rec, WatchEventCommitted)
-	if !contains(event.Paths, policyFile) {
+	if !slices.Contains(event.Paths, policyFile) {
 		t.Fatalf("the snapshot does not name the broken configuration: %+v", event)
 	}
 	if got := rawGit(t, h.root, "show", "HEAD:"+policyFile); !strings.Contains(got, "5 minutes please") {

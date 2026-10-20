@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -32,13 +33,13 @@ func TestServer_SearchAPI_ResultShapeAndRanking(t *testing.T) {
 	if results[0].Title != "NeedleGuide" {
 		t.Fatalf("expected title match to rank first, got %#v", results[0])
 	}
-	if !sameStrings(results[0].MatchedFields, []string{"title"}) {
+	if !slices.Equal(results[0].MatchedFields, []string{"title"}) {
 		t.Fatalf("title result matched fields: got %#v, want [title]", results[0].MatchedFields)
 	}
 	if results[1].Title != "BodyOne" || results[2].Title != "BodyTwo" || results[3].Title != "Escape" {
 		t.Fatalf("unexpected body-match ordering: %#v", results)
 	}
-	if !sameStrings(results[1].MatchedFields, []string{"body"}) {
+	if !slices.Equal(results[1].MatchedFields, []string{"body"}) {
 		t.Fatalf("body result matched fields: got %#v, want [body]", results[1].MatchedFields)
 	}
 
@@ -88,7 +89,7 @@ func TestServer_SearchAPI_FilterOnlyAndCombinedFilters(t *testing.T) {
 	if len(combined) != 1 || combined[0].Title != "Needle" {
 		t.Fatalf("combined result mismatch: %#v", combined)
 	}
-	if !sameStrings(combined[0].MatchedFields, []string{"title", "body"}) {
+	if !slices.Equal(combined[0].MatchedFields, []string{"title", "body"}) {
 		t.Fatalf("combined matched fields: got %#v, want [title body]", combined[0].MatchedFields)
 	}
 }
@@ -106,10 +107,10 @@ func TestServer_SearchAPI_IssueMetadata(t *testing.T) {
 	if len(results) != 1 {
 		t.Fatalf("result count: got %d, want 1; results=%#v", len(results), results)
 	}
-	if !sameStrings(results[0].MatchedFields, []string{"body"}) {
+	if !slices.Equal(results[0].MatchedFields, []string{"body"}) {
 		t.Fatalf("matched fields: got %#v, want [body]", results[0].MatchedFields)
 	}
-	if !sameStrings(results[0].Issues, []string{"broken"}) {
+	if !slices.Equal(results[0].Issues, []string{"broken"}) {
 		t.Fatalf("issue metadata: got %#v, want [broken] because dead-end is exempt", results[0].Issues)
 	}
 }
@@ -259,7 +260,7 @@ func TestServer_SearchAPI_InvalidExprReturnsStructuredError(t *testing.T) {
 	if payload.Error.Position.End <= payload.Error.Position.Start {
 		t.Fatalf("error span is empty: %#v", payload.Error.Position)
 	}
-	if !sameStrings(payload.Error.Suggestions, []string{"status"}) {
+	if !slices.Equal(payload.Error.Suggestions, []string{"status"}) {
 		t.Fatalf("error suggestions: got %#v, want [status]", payload.Error.Suggestions)
 	}
 }

@@ -3,6 +3,7 @@ package web
 import (
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"testing"
 
@@ -49,10 +50,10 @@ func TestServer_SearchAPI_MatchesAccentedTitlesAcrossUnicodeForms(t *testing.T) 
 				snippets[title] = result.Snippet
 			}
 
-			if !sameStrings(fields[searchCafeNFC], []string{"title"}) {
+			if !slices.Equal(fields[searchCafeNFC], []string{"title"}) {
 				t.Fatalf("composed title should match on title: %#v", results)
 			}
-			if !sameStrings(fields["Morning"], []string{"body"}) {
+			if !slices.Equal(fields["Morning"], []string{"body"}) {
 				t.Fatalf("decomposed body should match on body: %#v", results)
 			}
 			// The snippet is cut from the NFC-normalized body, so the byte

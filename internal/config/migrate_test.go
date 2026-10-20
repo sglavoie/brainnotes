@@ -2,6 +2,7 @@ package config
 
 import (
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -63,7 +64,7 @@ func TestPlanMigration_LegacyVaultRoutesLocalKeys(t *testing.T) {
 		t.Fatal("expected the legacy config to need migrating")
 	}
 	want := []string{"open.editor", "serve.addr", "serve.open_browser"}
-	if got := plan.MovedKeys(); !equalSlices(got, want) {
+	if got := plan.MovedKeys(); !slices.Equal(got, want) {
 		t.Fatalf("moved %v, want %v", got, want)
 	}
 	for _, move := range plan.Moves {
@@ -245,7 +246,7 @@ heading = "## Captures"
 	if !strings.Contains(local, "--height") || !strings.Contains(local, "# keep it small") {
 		t.Fatalf("the multi-line value did not arrive whole:\n%s", local)
 	}
-	if cfg := applied(t, root, plan); !equalSlices(cfg.Fzf.Args, []string{"--height", "40%"}) {
+	if cfg := applied(t, root, plan); !slices.Equal(cfg.Fzf.Args, []string{"--height", "40%"}) {
 		t.Fatalf("fzf.args = %v", cfg.Fzf.Args)
 	}
 }

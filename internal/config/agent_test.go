@@ -1,6 +1,7 @@
 package config
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -16,7 +17,7 @@ timeout_seconds = 17
 		t.Fatalf("Load: %v", err)
 	}
 	want := []string{"my-agent", "--prompt", "literal argument with spaces", ""}
-	if !equalSlices(cfg.Agent.Command, want) {
+	if !slices.Equal(cfg.Agent.Command, want) {
 		t.Fatalf("Agent.Command = %#v, want %#v", cfg.Agent.Command, want)
 	}
 	if cfg.Agent.TimeoutSeconds != 17 {

@@ -2,6 +2,7 @@ package queryexpr
 
 import (
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -193,7 +194,7 @@ func TestTyped_MissingPropertyNeverMatchesAComparison(t *testing.T) {
 			}
 		}
 	}
-	if got := matchPaths(t, "rating!=4", root, notes, env); !contains(got, "C.md") {
+	if got := matchPaths(t, "rating!=4", root, notes, env); !slices.Contains(got, "C.md") {
 		t.Errorf("rating!=4 matched %v, want it to include C.md", got)
 	}
 }

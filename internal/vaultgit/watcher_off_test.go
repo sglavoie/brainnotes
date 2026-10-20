@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 )
@@ -36,10 +37,10 @@ func TestWatcherTurningOffSnapshotsTheDirtyTreeFirst(t *testing.T) {
 	w.tick(ctx)
 
 	event := requireKind(t, rec, WatchEventCommitted)
-	if !contains(event.Paths, "unsaved.md") {
+	if !slices.Contains(event.Paths, "unsaved.md") {
 		t.Fatalf("the final snapshot does not name the pending file: %+v", event)
 	}
-	if !contains(h.tracked(), "unsaved.md") {
+	if !slices.Contains(h.tracked(), "unsaved.md") {
 		t.Fatalf("the final snapshot did not reach the history: %v", h.tracked())
 	}
 	changed := requireKind(t, rec, WatchEventConfigChanged)
@@ -130,7 +131,7 @@ func TestWatcherRetriesTheOffTransitionAfterContention(t *testing.T) {
 	requireKind(t, rec, WatchEventCommitted)
 	requireKind(t, rec, WatchEventConfigChanged)
 	requirePolicy(t, h, "off")
-	if !contains(h.tracked(), "note.md") {
+	if !slices.Contains(h.tracked(), "note.md") {
 		t.Fatalf("the retried final snapshot did not record the note: %v", h.tracked())
 	}
 }
@@ -168,7 +169,7 @@ func TestWatcherKeepsAutosaveOnWhenTheFinalSnapshotIsRefused(t *testing.T) {
 	if h.head() != baseline {
 		t.Fatal("the transition committed on top of an ambiguous type change")
 	}
-	if !contains(h.tracked(), "vanishes.md") {
+	if !slices.Contains(h.tracked(), "vanishes.md") {
 		t.Fatal("the deleted note is no longer in the history")
 	}
 

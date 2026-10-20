@@ -3,6 +3,7 @@ package cli
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -19,7 +20,7 @@ func TestEndToEndScenario(t *testing.T) {
 	}
 	got := splitAndSort(out)
 	want := []string{filepath.Join(root, "References", "Dune.md")}
-	if !equalStrings(got, want) {
+	if !slices.Equal(got, want) {
 		t.Fatalf("find --tag sci-fi:\n got=%v\nwant=%v", got, want)
 	}
 

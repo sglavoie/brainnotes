@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -74,7 +75,7 @@ func TestFindQuery_Boolean(t *testing.T) {
 	root := buildQueryFixtureVault(t)
 	got := runFind(t, root, "find", "-q", "status:wip and not rating>4")
 	want := readGolden(t, "find-query-boolean.golden")
-	if !equalStrings(got, want) {
+	if !slices.Equal(got, want) {
 		t.Fatalf("find -q 'status:wip and not rating>4':\n got=%v\nwant=%v", got, want)
 	}
 }
@@ -83,7 +84,7 @@ func TestFindQuery_TypedProperty(t *testing.T) {
 	root := buildQueryFixtureVault(t)
 	got := runFind(t, root, "find", "-q", "rating>=4")
 	want := readGolden(t, "find-query-typed-property.golden")
-	if !equalStrings(got, want) {
+	if !slices.Equal(got, want) {
 		t.Fatalf("find -q 'rating>=4':\n got=%v\nwant=%v", got, want)
 	}
 }
@@ -92,7 +93,7 @@ func TestFindQuery_Near(t *testing.T) {
 	root := buildQueryFixtureVault(t)
 	got := runFind(t, root, "find", "-q", "near:[[Leaf]]<=1")
 	want := readGolden(t, "find-query-near.golden")
-	if !equalStrings(got, want) {
+	if !slices.Equal(got, want) {
 		t.Fatalf("find -q 'near:[[Leaf]]<=1':\n got=%v\nwant=%v", got, want)
 	}
 }
@@ -115,7 +116,7 @@ func TestFindQuery_AndsWithFlags(t *testing.T) {
 	root := buildQueryFixtureVault(t)
 	got := runFind(t, root, "find", "-q", "rating>=4", "--status", "wip")
 	want := []string{"Notes/Hub.md", "Notes/Leaf.md"}
-	if !equalStrings(got, want) {
+	if !slices.Equal(got, want) {
 		t.Fatalf("find -q 'rating>=4' --status wip:\n got=%v\nwant=%v", got, want)
 	}
 
@@ -152,13 +153,13 @@ func TestFindQuery_View(t *testing.T) {
 
 	got := runFind(t, root, "find", "--view", "Active")
 	want := runFind(t, root, "find", "-q", "status:wip")
-	if !equalStrings(got, want) {
+	if !slices.Equal(got, want) {
 		t.Fatalf("find --view Active:\n got=%v\nwant=%v", got, want)
 	}
 
 	// Names are matched case-insensitively, matching Config.View and the
 	// uniqueness rule the config layer enforces.
-	if got := runFind(t, root, "find", "--view", "aCTIVE"); !equalStrings(got, want) {
+	if got := runFind(t, root, "find", "--view", "aCTIVE"); !slices.Equal(got, want) {
 		t.Fatalf("find --view aCTIVE:\n got=%v\nwant=%v", got, want)
 	}
 }
@@ -170,7 +171,7 @@ func TestFindQuery_ViewAndsWithEverythingElse(t *testing.T) {
 
 	got := runFind(t, root, "find", "--view", "Active", "-q", "rating>=4")
 	want := []string{"Notes/Hub.md", "Notes/Leaf.md"}
-	if !equalStrings(got, want) {
+	if !slices.Equal(got, want) {
 		t.Fatalf("find --view Active -q 'rating>=4':\n got=%v\nwant=%v", got, want)
 	}
 

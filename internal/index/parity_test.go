@@ -2,6 +2,7 @@ package index
 
 import (
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -91,14 +92,14 @@ func TestIndexLoadMatchesDirectLoadForEveryQuery(t *testing.T) {
 		if pass == 2 && result.Changed {
 			t.Error("pass 2: an untouched vault reported Changed, so the second pass did not exercise the all-clean path")
 		}
-		if got, want := orderedKeys(t, v.Root, result.Notes), orderedKeys(t, v.Root, direct); !equalStrings(got, want) {
+		if got, want := orderedKeys(t, v.Root, result.Notes), orderedKeys(t, v.Root, direct); !slices.Equal(got, want) {
 			t.Fatalf("pass %d: index note set = %v, want %v", pass, got, want)
 		}
 
 		for _, src := range parityQueries {
 			want := evalKeys(t, v, direct, src)
 			got := evalKeys(t, v, result.Notes, src)
-			if !equalStrings(got, want) {
+			if !slices.Equal(got, want) {
 				t.Errorf("pass %d: %q\n index  = %v\n direct = %v", pass, src, got, want)
 			}
 		}

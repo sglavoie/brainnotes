@@ -1,6 +1,7 @@
 package config
 
 import (
+	"slices"
 	"strings"
 	"testing"
 )
@@ -184,7 +185,7 @@ func TestConfigViewLookup(t *testing.T) {
 	if _, ok := cfg.View(""); ok {
 		t.Fatal("View should miss on an empty name")
 	}
-	if names := cfg.ViewNames(); !equalSlices(names, []string{"Active work", "Reading"}) {
+	if names := cfg.ViewNames(); !slices.Equal(names, []string{"Active work", "Reading"}) {
 		t.Fatalf("ViewNames: got %v", names)
 	}
 

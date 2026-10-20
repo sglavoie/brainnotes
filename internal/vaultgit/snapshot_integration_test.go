@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 )
@@ -154,7 +155,7 @@ func TestCommitJournalEntryDeletion(t *testing.T) {
 	if err != nil {
 		t.Fatalf("CommitJournalEntry: %v", err)
 	}
-	if !contains(result.Deleted, "Inbox/gone.md") {
+	if !slices.Contains(result.Deleted, "Inbox/gone.md") {
 		t.Fatalf("deleted = %v", result.Deleted)
 	}
 	if h.trackedSet()["Inbox/gone.md"] {
@@ -308,7 +309,7 @@ fi`)
 		t.Fatal("the test did not actually provoke a conflict")
 	}
 	subjects := h.subjects()
-	if !contains(subjects, "interloper") {
+	if !slices.Contains(subjects, "interloper") {
 		t.Fatalf("the other writer's commit was discarded: %v", subjects)
 	}
 	if h.head() == first {

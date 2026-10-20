@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 )
@@ -120,7 +121,7 @@ func TestPushNeverForces(t *testing.T) {
 	if got := rawGit(t, bare, "rev-parse", "refs/heads/main"); got != remoteHead {
 		t.Fatalf("the remote was overwritten: %s -> %s", remoteHead, got)
 	}
-	if !contains(h.subjects(), "brainnotes: autosave 2026-08-28T09:01:00Z") {
+	if !slices.Contains(h.subjects(), "brainnotes: autosave 2026-08-28T09:01:00Z") {
 		t.Fatal("the local snapshot did not survive the rejected push")
 	}
 	if _, blocked := h.blockRecord(); blocked {

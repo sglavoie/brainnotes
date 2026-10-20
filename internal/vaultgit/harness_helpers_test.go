@@ -256,15 +256,6 @@ func (h *testHarness) blockRecord() (BlockRecord, bool) {
 	return h.mgr.Blocked()
 }
 
-func contains(list []string, want string) bool {
-	for _, item := range list {
-		if item == want {
-			return true
-		}
-	}
-	return false
-}
-
 // gitShim writes an executable shell script that stands in for git. It is how
 // the tests reach failure modes that cannot be provoked from outside: a branch
 // that moves in the instant between planning and landing a commit, and an

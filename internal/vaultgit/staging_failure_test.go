@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -185,7 +186,7 @@ func TestCommitPathsFailsClosedOnAnUnreadableRequiredPath(t *testing.T) {
 	if KindOf(err) != KindCommitFailed {
 		t.Fatalf("CommitPaths = %v, want a commit failure", err)
 	}
-	if !contains(result.Unrecorded(), ".bnotes/recall.json") && !strings.Contains(err.Error(), ".bnotes/recall.json") {
+	if !slices.Contains(result.Unrecorded(), ".bnotes/recall.json") && !strings.Contains(err.Error(), ".bnotes/recall.json") {
 		t.Fatalf("the failure must name the path it could not record: %v", err)
 	}
 	if h.head() != safe {
@@ -338,7 +339,7 @@ func TestExactSnapshotSuccessfulNoOpRemovalStagingFailsClosed(t *testing.T) {
 	if !blocked || record.Kind != KindCommitFailed {
 		t.Fatalf("a silently unstaged removal must latch an explained block: %+v", record)
 	}
-	if !contains(record.Paths, "Inbox/dropped.md") {
+	if !slices.Contains(record.Paths, "Inbox/dropped.md") {
 		t.Fatalf("the block record must name the path: %+v", record.Paths)
 	}
 	restarted := h.open(Options{})

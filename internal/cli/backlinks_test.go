@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -18,7 +19,7 @@ func TestBacklinks_TitleInput(t *testing.T) {
 	}
 	got := relSlashLines(t, root, stdout)
 	want := []string{"Referrer1.md", "Referrer2.md", "Referrer3.md"}
-	if !equalStrings(got, want) {
+	if !slices.Equal(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
 	}
 }
@@ -33,7 +34,7 @@ func TestBacklinks_PathInput(t *testing.T) {
 	}
 	got := relSlashLines(t, root, stdout)
 	want := []string{"Referrer1.md", "Referrer2.md", "Referrer3.md"}
-	if !equalStrings(got, want) {
+	if !slices.Equal(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
 	}
 }
@@ -134,7 +135,7 @@ func TestBacklinks_SelfReferenceExcluded(t *testing.T) {
 	}
 	got := relSlashLines(t, root, stdout)
 	want := []string{"Other.md"}
-	if !equalStrings(got, want) {
+	if !slices.Equal(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
 	}
 }

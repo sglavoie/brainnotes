@@ -2,6 +2,7 @@ package config
 
 import (
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -24,7 +25,7 @@ func TestLoad_EmptyConfigFileUsesDefaults(t *testing.T) {
 		t.Errorf("Templates.Dir: got %q, want %q", cfg.Templates.Dir, "Templates")
 	}
 	for _, want := range DefaultIgnore {
-		if !contains(cfg.Ignore, want) {
+		if !slices.Contains(cfg.Ignore, want) {
 			t.Errorf("default ignore %q missing: %v", want, cfg.Ignore)
 		}
 	}
@@ -50,7 +51,7 @@ func TestLoad_DefaultsApplied(t *testing.T) {
 	if len(cfg.Frontmatter.Properties) != 0 {
 		t.Errorf("Properties should have no implicit runtime defaults, got %+v", cfg.Frontmatter.Properties)
 	}
-	if !equalSlices(cfg.Related.MetadataProperties, DefaultRelatedMetadataProperties) {
+	if !slices.Equal(cfg.Related.MetadataProperties, DefaultRelatedMetadataProperties) {
 		t.Errorf(
 			"Related.MetadataProperties: got %v, want %v",
 			cfg.Related.MetadataProperties,
@@ -77,7 +78,7 @@ func TestLoad_DefaultsApplied(t *testing.T) {
 	}
 	// Defaults merged into Ignore.
 	for _, want := range DefaultIgnore {
-		if !contains(cfg.Ignore, want) {
+		if !slices.Contains(cfg.Ignore, want) {
 			t.Errorf("Ignore missing default %q (got %v)", want, cfg.Ignore)
 		}
 	}
@@ -329,7 +330,7 @@ metadata_properties = [" tags ", "topics", "tags", ""]
 		t.Fatalf("Load: %v", err)
 	}
 	want := []string{"tags", "topics"}
-	if !equalSlices(cfg.Related.MetadataProperties, want) {
+	if !slices.Equal(cfg.Related.MetadataProperties, want) {
 		t.Fatalf("MetadataProperties = %v, want %v", cfg.Related.MetadataProperties, want)
 	}
 }

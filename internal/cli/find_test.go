@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -94,7 +95,7 @@ func TestFindByTag(t *testing.T) {
 	root := buildFixtureVault(t)
 	got := runFind(t, root, "find", "--tag", "foo")
 	want := readGolden(t, "find-tag-foo.golden")
-	if !equalStrings(got, want) {
+	if !slices.Equal(got, want) {
 		t.Fatalf("find --tag foo:\n got=%v\nwant=%v", got, want)
 	}
 }
@@ -103,7 +104,7 @@ func TestFindByTagAndAge(t *testing.T) {
 	root := buildFixtureVault(t)
 	got := runFind(t, root, "find", "--tag", "foo", "--created", ">30d")
 	want := readGolden(t, "find-tag-foo-age-gt30d.golden")
-	if !equalStrings(got, want) {
+	if !slices.Equal(got, want) {
 		t.Fatalf("find --tag foo --created >30d:\n got=%v\nwant=%v", got, want)
 	}
 }
@@ -114,7 +115,7 @@ func TestFindOrphan(t *testing.T) {
 	// Only Banana has an inbound link (from Apple's body); everything else is orphan.
 	expected := []string{"Orphan.md", "People/Bob.md", "References/Apple.md"}
 	sort.Strings(expected)
-	if !equalStrings(got, expected) {
+	if !slices.Equal(got, expected) {
 		t.Fatalf("find --orphan:\n got=%v\nwant=%v", got, expected)
 	}
 }
@@ -192,7 +193,7 @@ func TestFind_BrokenLinks(t *testing.T) {
 	root := buildBrokenLinkFixture(t)
 	got := runFind(t, root, "find", "--broken-links")
 	want := readGolden(t, "find-broken-links.golden")
-	if !equalStrings(got, want) {
+	if !slices.Equal(got, want) {
 		t.Fatalf("find --broken-links:\n got=%v\nwant=%v", got, want)
 	}
 }
@@ -298,7 +299,7 @@ func TestFind_MinBacklinks(t *testing.T) {
 	root := buildLinkCountFixture(t)
 	got := runFind(t, root, "find", "--min-backlinks", "3")
 	want := []string{"Hub.md"}
-	if !equalStrings(got, want) {
+	if !slices.Equal(got, want) {
 		t.Fatalf("find --min-backlinks 3:\n got=%v\nwant=%v", got, want)
 	}
 }
@@ -308,7 +309,7 @@ func TestFind_DeadEnd(t *testing.T) {
 	got := runFind(t, root, "find", "--dead-end")
 	want := []string{"Island.md"}
 	sort.Strings(want)
-	if !equalStrings(got, want) {
+	if !slices.Equal(got, want) {
 		t.Fatalf("find --dead-end:\n got=%v\nwant=%v", got, want)
 	}
 }
@@ -318,7 +319,7 @@ func TestFind_MaxLinksZeroIncludesDeadEndExemption(t *testing.T) {
 	got := runFind(t, root, "find", "--max-links", "0")
 	want := []string{"Exempt.md", "Island.md"}
 	sort.Strings(want)
-	if !equalStrings(got, want) {
+	if !slices.Equal(got, want) {
 		t.Fatalf("find --max-links 0:\n got=%v\nwant=%v", got, want)
 	}
 }
@@ -335,7 +336,7 @@ func TestFind_MinBacklinksWithTag(t *testing.T) {
 	root := buildLinkCountFixture(t)
 	got := runFind(t, root, "find", "--min-backlinks", "2", "--tag", "important")
 	want := []string{"Hub.md"}
-	if !equalStrings(got, want) {
+	if !slices.Equal(got, want) {
 		t.Fatalf("find --min-backlinks 2 --tag important:\n got=%v\nwant=%v", got, want)
 	}
 }
@@ -391,16 +392,4 @@ func TestFindSetNullPipeline(t *testing.T) {
 			t.Fatalf("%s after the pipeline:\n got=%q\nwant=%q", rel, got, wantBytes)
 		}
 	}
-}
-
-func equalStrings(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
 }

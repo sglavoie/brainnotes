@@ -3,6 +3,7 @@ package cli
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -41,7 +42,7 @@ func TestEndToEndScenario_NewCommands(t *testing.T) {
 	}
 	gotPaths := splitAndSort(findOut)
 	wantPaths := []string{typoPath}
-	if !equalStrings(gotPaths, wantPaths) {
+	if !slices.Equal(gotPaths, wantPaths) {
 		t.Fatalf("find --tag sciific:\n got=%v\nwant=%v", gotPaths, wantPaths)
 	}
 

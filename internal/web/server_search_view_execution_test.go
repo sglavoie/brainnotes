@@ -3,6 +3,7 @@ package web
 import (
 	"net/http"
 	"net/url"
+	"slices"
 	"testing"
 )
 
@@ -91,7 +92,7 @@ func TestSearchAppliesSavedViewSortAndLimit(t *testing.T) {
 			if status != http.StatusOK {
 				t.Fatalf("status: got %d, want %d", status, http.StatusOK)
 			}
-			if !sameStrings(searchTitles(results), tc.want) {
+			if !slices.Equal(searchTitles(results), tc.want) {
 				t.Fatalf("ordering: got %v, want %v", searchTitles(results), tc.want)
 			}
 		})
@@ -128,7 +129,7 @@ func TestSearchAppliesSavedViewRelevanceSortAndLimit(t *testing.T) {
 	if status != http.StatusOK {
 		t.Fatalf("capped status: got %d, want %d", status, http.StatusOK)
 	}
-	if !sameStrings(searchTitles(capped), []string{"Alpha", "Delta"}) {
+	if !slices.Equal(searchTitles(capped), []string{"Alpha", "Delta"}) {
 		t.Fatalf("capped relevance ordering: got %v, want [Alpha Delta]", searchTitles(capped))
 	}
 }
@@ -183,7 +184,7 @@ func TestSearchAppliesSavedViewDescendingRelevanceAndLimit(t *testing.T) {
 		t.Fatalf("status: got %d, want %d", status, http.StatusOK)
 	}
 	want := []string{"Notes/Alpha.md", "Notes/Delta.md", "Notes/Mike.md", "Notes/November.md"}
-	if !sameStrings(searchVaultPaths(results), want) {
+	if !slices.Equal(searchVaultPaths(results), want) {
 		t.Fatalf("relevance ordering: got %v, want %v", searchVaultPaths(results), want)
 	}
 
@@ -195,7 +196,7 @@ func TestSearchAppliesSavedViewDescendingRelevanceAndLimit(t *testing.T) {
 		t.Fatalf("descending status: got %d, want %d", status, http.StatusOK)
 	}
 	want = []string{"Notes/Mike.md", "Notes/November.md", "Notes/Delta.md", "Notes/Alpha.md"}
-	if !sameStrings(searchVaultPaths(results), want) {
+	if !slices.Equal(searchVaultPaths(results), want) {
 		t.Fatalf("-relevance ordering: got %v, want %v", searchVaultPaths(results), want)
 	}
 
@@ -207,7 +208,7 @@ func TestSearchAppliesSavedViewDescendingRelevanceAndLimit(t *testing.T) {
 		t.Fatalf("capped status: got %d, want %d", status, http.StatusOK)
 	}
 	want = []string{"Notes/Mike.md", "Notes/November.md"}
-	if !sameStrings(searchVaultPaths(capped), want) {
+	if !slices.Equal(searchVaultPaths(capped), want) {
 		t.Fatalf("capped -relevance ordering: got %v, want %v", searchVaultPaths(capped), want)
 	}
 }

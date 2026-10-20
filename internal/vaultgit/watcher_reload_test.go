@@ -2,6 +2,7 @@ package vaultgit
 
 import (
 	"context"
+	"slices"
 	"testing"
 	"time"
 )
@@ -100,7 +101,7 @@ func TestWatcherShorterFloorMakesAReadyBurstDueOnThatPoll(t *testing.T) {
 		t.Fatalf("the change event reports policy %q, want %q", event.Policy, "1m")
 	}
 	requireKind(t, rec, WatchEventCommitted)
-	if !contains(h.tracked(), "second.md") {
+	if !slices.Contains(h.tracked(), "second.md") {
 		t.Fatalf("the shortened floor did not release the ready burst: %v", h.tracked())
 	}
 	if h.clock.Sub(anchor) >= 10*time.Minute {
@@ -152,14 +153,14 @@ func TestWatcherLongerFloorPostponesAReadyBurst(t *testing.T) {
 	h.clock = anchor.Add(2 * time.Minute)
 	w.tick(ctx)
 	requireNoKind(t, rec, WatchEventCommitted)
-	if contains(h.tracked(), "second.md") {
+	if slices.Contains(h.tracked(), "second.md") {
 		t.Fatal("the burst committed on the floor the user replaced")
 	}
 
 	h.clock = *state.NextCommitDueAt
 	w.tick(ctx)
 	requireKind(t, rec, WatchEventCommitted)
-	if !contains(h.tracked(), "second.md") {
+	if !slices.Contains(h.tracked(), "second.md") {
 		t.Fatalf("the postponed burst never committed: %v", h.tracked())
 	}
 }

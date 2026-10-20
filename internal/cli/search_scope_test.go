@@ -2,6 +2,7 @@ package cli
 
 import (
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -16,7 +17,7 @@ func TestSearch_TagScope(t *testing.T) {
 	}
 	got := searchRels(t, root, stdout)
 	want := []string{"Notes/Physics.md"}
-	if !equalStrings(got, want) {
+	if !slices.Equal(got, want) {
 		t.Fatalf("tag-scoped search:\n got=%v\nwant=%v", got, want)
 	}
 }
@@ -31,7 +32,7 @@ func TestSearch_FolderScope(t *testing.T) {
 	}
 	got := searchRels(t, root, stdout)
 	want := []string{"References/Paper1.md"}
-	if !equalStrings(got, want) {
+	if !slices.Equal(got, want) {
 		t.Fatalf("folder-scoped search:\n got=%v\nwant=%v", got, want)
 	}
 }
@@ -47,7 +48,7 @@ func TestSearch_PositionalArgs(t *testing.T) {
 	}
 	got := searchRels(t, root, stdout)
 	want := []string{"Notes/Alpha.md"}
-	if !equalStrings(got, want) {
+	if !slices.Equal(got, want) {
 		t.Fatalf("positional-arg search:\n got=%v\nwant=%v", got, want)
 	}
 }
@@ -66,7 +67,7 @@ func TestSearch_StdinPipe(t *testing.T) {
 	}
 	got := searchRels(t, root, stdout)
 	want := []string{"Notes/Alpha.md"}
-	if !equalStrings(got, want) {
+	if !slices.Equal(got, want) {
 		t.Fatalf("stdin-pipe search:\n got=%v\nwant=%v", got, want)
 	}
 }
@@ -95,7 +96,7 @@ func TestSearch_OrphanScope(t *testing.T) {
 	}
 	got := searchRels(t, root, stdout)
 	want := []string{"Notes/Orphan.md"}
-	if !equalStrings(got, want) {
+	if !slices.Equal(got, want) {
 		t.Fatalf("orphan-scoped search:\n got=%v\nwant=%v", got, want)
 	}
 }

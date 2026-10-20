@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -75,10 +76,10 @@ func TestUnsetSplitArgs(t *testing.T) {
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
 			notes, props := splitUnsetArgs(c.args, c.dashAt)
-			if !equalStrings(notes, c.wantNotes) {
+			if !slices.Equal(notes, c.wantNotes) {
 				t.Errorf("notes: got %v, want %v", notes, c.wantNotes)
 			}
-			if !equalStrings(props, c.wantProps) {
+			if !slices.Equal(props, c.wantProps) {
 				t.Errorf("props: got %v, want %v", props, c.wantProps)
 			}
 		})
