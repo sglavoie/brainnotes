@@ -362,7 +362,7 @@ func (m *Manager) SetAutosavePolicy(policy config.AutosavePolicy) error {
 	m.autosave = resolved
 	m.autosaveMu.Unlock()
 	return m.checkpointMutation("publish autosave policy", func() error {
-		_, err := m.state.RefreshWatchState(resolved)
+		_, err := m.state.RefreshWatchState(resolved, m.now())
 		return err
 	})
 }
@@ -434,7 +434,7 @@ func (m *Manager) ExternalCommitDue() bool {
 		return m.state.LoadWatchState().DueAt(policy, m.now())
 	}
 	defer release()
-	state, _ := m.state.RefreshWatchState(policy)
+	state, _ := m.state.RefreshWatchState(policy, m.now())
 	return state.DueAt(policy, m.now())
 }
 

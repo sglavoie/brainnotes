@@ -63,6 +63,12 @@ func pushBackoff(attempts int) time.Duration {
 }
 
 // DueAt reports whether a retry is worth making at now.
+//
+// A recorded retry further ahead than pushBackoffMax is due as well: no failure
+// schedules one that far out, so it means the wall clock stepped backwards after
+// it was written, and honouring it would stop publishing for as long as the
+// clock had jumped.
 func (p PushState) DueAt(now time.Time) bool {
-	return !now.UTC().Before(p.NextAttemptAfter)
+	now = now.UTC()
+	return !now.Before(p.NextAttemptAfter) || p.NextAttemptAfter.Sub(now) > pushBackoffMax
 }
