@@ -1,14 +1,17 @@
 package web
 
 import (
+	"errors"
 	"fmt"
 	"math"
+	"net/http"
 	"net/url"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/query"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/queryexpr"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/recall"
@@ -188,6 +191,31 @@ func relevancePath(root string, note *vault.Note) string {
 	return textnorm.NFC(noteVaultPath(root, note))
 }
 
+// searchClientError marks a search request the client must change: an anchor
+// that names no note is the request's fault, and a 400 says so. Every other
+// failure on the way to a ranking (a configuration that will not reload, a
+// corpus that will not build) is the server's, and is reported as one.
+type searchClientError struct{ err error }
+
+func (e *searchClientError) Error() string { return e.err.Error() }
+func (e *searchClientError) Unwrap() error { return e.err }
+
+func searchClientErrorf(format string, args ...any) error {
+	return &searchClientError{err: fmt.Errorf(format, args...)}
+}
+
+// writeSearchOrderError sends a client mistake as the 400 filter error the
+// query bar reads, and anything else as a 500 management error. Both pass
+// through the reader redaction.
+func writeSearchOrderError(w http.ResponseWriter, err error) {
+	var clientErr *searchClientError
+	if errors.As(err, &clientErr) {
+		writeFilterError(w, err)
+		return
+	}
+	writeManagementError(w, noteops.WrapError(noteops.CodeInternal, err.Error(), err))
+}
+
 // searchRelevanceRanker resolves the anchor a relevance ordering names and
 // returns a scorer bound to it.
 //
@@ -203,11 +231,11 @@ func relevancePath(root string, note *vault.Note) string {
 func (s *Server) searchRelevanceRanker(snapshot vaultSnapshot, anchor string) (searchRelevanceFunc, error) {
 	anchorNote, _, ok := noteForRoute(snapshot, anchor)
 	if !ok {
-		return nil, fmt.Errorf("relative_to: no note matches %q", anchor)
+		return nil, searchClientErrorf("relative_to: no note matches %q", anchor)
 	}
 	anchorPath := relevancePath(s.vault.Root, anchorNote)
 	if anchorPath == "" {
-		return nil, fmt.Errorf("relative_to: note %q is outside the vault", anchor)
+		return nil, searchClientErrorf("relative_to: note %q is outside the vault", anchor)
 	}
 
 	if err := s.reloadConfig(); err != nil {

@@ -1,9 +1,15 @@
 package web
 
 import (
+	"encoding/json"
+	"fmt"
 	"net/http"
+	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
+
+	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
 )
 
 // A saved view's nav link carries `expr`, `sort`, `relative_to`, and `limit`.
@@ -263,4 +269,39 @@ func TestSearchOrderingDoesNotSelect(t *testing.T) {
 			t.Fatalf("%v must not select anything: got %v", params, searchTitles(results))
 		}
 	}
+}
+
+// A relevance ordering the server cannot build (a configuration that will not
+// reload, a corpus that will not build) is the server's failure, not the
+// request's, so it is a 500 in the management error shape. An anchor that names
+// no note stays a 400 filter error. Both messages are the reader's copy, with
+// the vault root taken out for a remote one.
+func TestSearchOrderErrorSeparatesClientMistakesFromServerFailures(t *testing.T) {
+	const root = "/srv/vault"
+	redacting := func() (*httptest.ResponseRecorder, http.ResponseWriter) {
+		rec := httptest.NewRecorder()
+		return rec, &redactingResponseWriter{ResponseWriter: rec, redactor: vaultRootRedactor{roots: []string{root}}}
+	}
+
+	rec, w := redacting()
+	writeSearchOrderError(w, fmt.Errorf("relative_to: build relevance corpus: open %s/a.md: denied", root))
+	if rec.Code != http.StatusInternalServerError {
+		t.Fatalf("server failure status = %d, want 500", rec.Code)
+	}
+	internal := decodeManagementError(t, rec.Body.String())
+	if internal.Code != string(noteops.CodeInternal) || !strings.Contains(internal.Message, "build relevance corpus") {
+		t.Fatalf("server failure payload = %#v", internal)
+	}
+	assertVaultRootRedaction(t, "server failure", internal.Message, root, true)
+
+	rec, w = redacting()
+	writeSearchOrderError(w, searchClientErrorf("relative_to: no note matches %q", root+"/nope"))
+	if rec.Code != http.StatusBadRequest {
+		t.Fatalf("client mistake status = %d, want 400", rec.Code)
+	}
+	var client filterErrorResponse
+	if err := json.Unmarshal(rec.Body.Bytes(), &client); err != nil {
+		t.Fatalf("decode filter error: %v", err)
+	}
+	assertVaultRootRedaction(t, "client mistake", client.Error.Message, root, true)
 }

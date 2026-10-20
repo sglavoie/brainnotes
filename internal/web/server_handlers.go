@@ -177,7 +177,7 @@ func (s *Server) handleSearch(w http.ResponseWriter, r *http.Request) {
 	var rank searchRelevanceFunc
 	if shape.Sort.Key == queryexpr.SortRelevance {
 		if rank, err = s.searchRelevanceRanker(snapshot, shape.Sort.RelativeTo); err != nil {
-			writeFilterError(w, err)
+			writeSearchOrderError(w, err)
 			return
 		}
 	}
