@@ -264,7 +264,7 @@ func walkProductionFiles(root string, visit func(path, rel string) error) error 
 			return walkErr
 		}
 		if entry.IsDir() {
-			if skipDir(entry.Name()) {
+			if path != root && (skipDir(entry.Name()) || isNestedModuleRoot(path)) {
 				return filepath.SkipDir
 			}
 			return nil
@@ -280,10 +280,29 @@ func walkProductionFiles(root string, visit func(path, rel string) error) error 
 	})
 }
 
+// skipDir follows the go tool's own convention — a directory whose name starts
+// with "." or "_" is not part of the module, which covers .git, .codegraph and
+// the .claude/worktrees checkouts — plus the directories that are not ours by
+// name.
 func skipDir(name string) bool {
-	switch name {
-	case ".git", ".codegraph", "node_modules", "testdata", "backups":
+	if strings.HasPrefix(name, ".") || strings.HasPrefix(name, "_") {
 		return true
+	}
+	switch name {
+	case "node_modules", "testdata", "backups":
+		return true
+	}
+	return false
+}
+
+// isNestedModuleRoot reports whether dir is the root of another module or
+// checkout: its own go.mod, or a .git entry (a git worktree has a .git file).
+// Source below it belongs to that module, not to this one.
+func isNestedModuleRoot(dir string) bool {
+	for _, marker := range []string{"go.mod", ".git"} {
+		if _, err := os.Lstat(filepath.Join(dir, marker)); err == nil {
+			return true
+		}
 	}
 	return false
 }
