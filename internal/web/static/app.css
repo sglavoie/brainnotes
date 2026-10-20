@@ -9704,8 +9704,10 @@ summary { cursor: pointer; min-height: var(--bn-control-height); box-sizing: bor
     flex-direction: column;
   }
 
+  /* Dynamic viewport units keep Confirm above a mobile browser's toolbar; the
+     same bound as .history-confirm, which also carries this class. */
   .properties-dialog {
-    max-height: 100vh;
+    max-height: calc(100dvh - 2rem);
     padding: 0.75rem;
   }
 
