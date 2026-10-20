@@ -122,6 +122,8 @@ func TestFromFlags_MatchesQueryFromFlags(t *testing.T) {
 		{name: "type", flags: tagged(func(f *query.Flags) { f.Type = "note" })},
 		{name: "has", flags: tagged(func(f *query.Flags) { f.Has = "rating" })},
 		{name: "missing", flags: tagged(func(f *query.Flags) { f.Missing = "rating" })},
+		{name: "has repeated", flags: tagged(func(f *query.Flags) { f.HasAll = []string{"rating", "status"} })},
+		{name: "missing repeated", flags: tagged(func(f *query.Flags) { f.MissingAll = []string{"rating", " "} })},
 		{name: "pinned", flags: tagged(func(f *query.Flags) { f.Pinned = true })},
 
 		// --- values that only survive the text round trip when quoted ---------
@@ -256,6 +258,8 @@ func TestFromFlags_RendersCanonicalSource(t *testing.T) {
 		{"type", func() query.Flags { f := baseFlags(); f.Type = "note"; return f }(), "type:note"},
 		{"has", func() query.Flags { f := baseFlags(); f.Has = "rating"; return f }(), "has:rating"},
 		{"missing", func() query.Flags { f := baseFlags(); f.Missing = "rating"; return f }(), "missing:rating"},
+		{"has AND", func() query.Flags { f := baseFlags(); f.HasAll = []string{"a", "b"}; return f }(), "has:a and has:b"},
+		{"missing AND", func() query.Flags { f := baseFlags(); f.MissingAll = []string{"a", "b"}; return f }(), "missing:a and missing:b"},
 		// --age uses age's own default property, so it renders without an
 		// argument; --created names the property explicitly.
 		{"age", func() query.Flags { f := baseFlags(); f.Age = ">90d"; return f }(), "age>90d"},

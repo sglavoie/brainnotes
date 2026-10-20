@@ -62,6 +62,8 @@ func FromFlags(f query.Flags) (Expr, error) {
 	}{
 		{field: "tag", values: f.Tags},
 		{field: "category", values: f.Categories},
+		{field: "has", values: f.HasAll},
+		{field: "missing", values: f.MissingAll},
 	} {
 		for _, value := range spec.values {
 			value = strings.TrimSpace(value)

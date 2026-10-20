@@ -99,6 +99,8 @@ func registerCompletions(root *cobra.Command) {
 		registerFlagValues(cmd, "tag", vaultCompleter(tagNames))
 		registerFlagValues(cmd, "property", vaultCompleter(definedPropertyNames))
 		registerFlagValues(cmd, "folder", vaultCompleter(folderNames))
+		registerFlagValues(cmd, "has", vaultCompleter(frontmatterKeys))
+		registerFlagValues(cmd, "missing", vaultCompleter(frontmatterKeys))
 		if cmd.ValidArgsFunction != nil {
 			return
 		}

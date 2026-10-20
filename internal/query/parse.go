@@ -24,6 +24,12 @@ type Flags struct {
 	Type         string
 	Has          string
 	Missing      string
+	// HasAll and MissingAll are further properties that must be present or
+	// absent, ANDed with Has and Missing. They are what a repeated --has or
+	// --missing lowers to; Has and Missing stay single strings for callers
+	// that only ever read one value.
+	HasAll     []string
+	MissingAll []string
 	Age          string
 	Created      string
 	Folder       string
@@ -81,6 +87,8 @@ func FromFlags(f Flags) (Predicate, error) {
 	}{
 		{values: f.Tags, build: Tag},
 		{values: f.Categories, build: Category},
+		{values: f.HasAll, build: Has},
+		{values: f.MissingAll, build: Missing},
 	} {
 		for _, value := range spec.values {
 			value = strings.TrimSpace(value)
