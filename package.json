@@ -7,7 +7,7 @@
   "scripts": {
     "build:web": "node scripts/build_web.mjs",
     "typecheck:web": "tsc --project tsconfig.web.json --noEmit",
-    "test:web": "vitest run internal/web/static_src",
+    "test:web": "vitest run --dir internal/web/static_src",
     "test:e2e": "npm run lint:e2e && node internal/web/e2e/run.mjs",
     "test:e2e:install": "playwright install chromium firefox webkit",
     "lint:e2e": "node scripts/check_browser_suites.mjs && node --test scripts/check_browser_suites.test.mjs scripts/e2e_performance_selection.test.mjs && eslint --no-error-on-unmatched-pattern internal/web/e2e playwright.config.js",
