@@ -108,11 +108,15 @@ func (s *safetyState) path(name string) string { return filepath.Join(s.dir, nam
 // this is the package's own "create something before you lock" case: the guard
 // exists so that a refused vault has no artifact left behind, and the state
 // directory is an artifact like any other.
+//
+// Creation is durable, not just visible: a record's own fsync and the sync of
+// this directory do not make the directory's entry in `.git` survive power
+// loss, and a first blocked.json or intent.json would vanish with it.
 func (s *safetyState) ensureDir() error {
 	if err := vault.GuardMutation("", s.dir); err != nil {
 		return err
 	}
-	return os.MkdirAll(s.dir, 0o755)
+	return vault.EnsureDirDurable(s.dir, 0o755)
 }
 
 // writeAtomic stages bytes in a sibling temp file, fsyncs them, and renames.
