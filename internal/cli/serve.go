@@ -145,7 +145,7 @@ func NewServeCmd() *cobra.Command {
 	cmd.Flags().StringVar(&stateDir, "state-dir", "", "external directory for Daily Brief activity (required with --read-only)")
 	cmd.Flags().StringVar(&replicaStatusFile, "replica-status-file", "", "replica synchronization status JSON")
 	cmd.Flags().StringVar(&addr, "addr", "", "listen address host:port (overrides [serve].addr)")
-	cmd.Flags().IntVar(&port, "port", 0, "listen port (overrides the port from [serve].addr)")
+	cmd.Flags().IntVar(&port, "port", 0, "listen port (rewrites the port of --addr or [serve].addr)")
 	cmd.Flags().BoolVar(&noOpen, "no-open", false, "do not open a browser on startup")
 
 	return cmd
@@ -227,6 +227,9 @@ func fileExists(path string) bool {
 }
 
 func resolveServeConfig(base config.ServeConfig, addrFlag string, addrChanged bool, port int, portChanged bool, noOpen bool) (config.ServeConfig, error) {
+	if portChanged && (port < 0 || port > 65535) {
+		return config.ServeConfig{}, rangeValueError("serve", "port", "between 0 and 65535", port)
+	}
 	out := base
 	out.Addr = strings.TrimSpace(out.Addr)
 	if out.Addr == "" {
@@ -238,7 +241,13 @@ func resolveServeConfig(base config.ServeConfig, addrFlag string, addrChanged bo
 		if out.Addr == "" {
 			return config.ServeConfig{}, errors.New("serve: --addr cannot be empty")
 		}
-	} else if portChanged {
+		if _, _, err := net.SplitHostPort(out.Addr); err != nil {
+			return config.ServeConfig{}, fmt.Errorf("serve: invalid --addr %q: %w", out.Addr, err)
+		}
+	}
+	// --port composes with --addr: it rewrites only the port of whichever
+	// address won, so `--addr 0.0.0.0:8080 --port 9000` serves on 0.0.0.0:9000.
+	if portChanged {
 		addr, err := replaceAddressPort(out.Addr, port)
 		if err != nil {
 			return config.ServeConfig{}, err

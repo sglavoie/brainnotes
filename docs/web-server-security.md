@@ -145,8 +145,11 @@ display parameter, `g_hops` included.
 
 ## Options, assets, and security
 
-`--addr` overrides `[serve].addr`. `--port` rewrites only the port on the
-resolved address host. `--no-open` forces browser launch off even when
+`--addr` overrides `[serve].addr`. `--port` rewrites only the port of the
+resolved address — `--addr` when given, else `[serve].addr` — so
+`--addr 0.0.0.0:8080 --port 9000` listens on `0.0.0.0:9000`. A `--port`
+outside 0–65535, or an `--addr` that is not `host:port`, is refused before
+anything starts. `--no-open` forces browser launch off even when
 `[serve].open_browser = true`.
 
 Local binaries built with `just build` or `just install` remember this checkout

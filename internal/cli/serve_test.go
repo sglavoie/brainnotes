@@ -74,13 +74,13 @@ func TestServe_FlagPrecedence(t *testing.T) {
 		}
 	})
 
-	t.Run("addr overrides port", func(t *testing.T) {
+	t.Run("port rewrites the addr flag's port", func(t *testing.T) {
 		writeCfg(t, "[serve]\naddr = \"127.0.0.1:8800\"")
 		if _, _, err := runServeCmd(t, "--vault", vaultRoot, "serve", "--port", "9911", "--addr", "0.0.0.0:7000"); err != nil {
 			t.Fatalf("execute: %v", err)
 		}
-		if got.Addr != "0.0.0.0:7000" {
-			t.Fatalf("addr: got %q, want %q", got.Addr, "0.0.0.0:7000")
+		if got.Addr != "0.0.0.0:9911" {
+			t.Fatalf("addr: got %q, want %q", got.Addr, "0.0.0.0:9911")
 		}
 	})
 
