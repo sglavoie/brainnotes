@@ -71,7 +71,7 @@
   position: absolute;
   top: 0.5rem;
   left: 0.5rem;
-  z-index: 100;
+  z-index: var(--bn-z-skip-link);
   padding: 0.65rem 1rem;
   border: 2px solid var(--bn-focus);
   border-radius: 0.4rem;
@@ -94,10 +94,7 @@
 
 .focused-workspace-header { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.75rem; margin-bottom: 0.5rem; }
 .focused-workspace-header > h1 { margin: 0; }
-@media (max-width: 600px) {
-  .focused-workspace-header > h1 { font-size: 1.4rem; }
-  .focused-workspace-header { flex-direction: row; }
-}
+/* Its narrow-width rules live in responsive.css's 640px block. */
 
 .focused-workspace-tools { display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; }
 .desktop-workspace-nav { display: none; }

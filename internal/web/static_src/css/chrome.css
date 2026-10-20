@@ -139,7 +139,7 @@
   position: absolute;
   top: calc(100% + 0.35rem);
   right: 0;
-  z-index: 20;
+  z-index: var(--bn-z-menu);
   display: grid;
   gap: 0.35rem;
   width: min(24rem, 90vw);

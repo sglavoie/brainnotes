@@ -160,7 +160,7 @@
 
 
 .synthesize-anchor-summary { margin: 0; color: var(--bn-muted); font-size: 0.9rem; }
-.synthesize-navigation { display: flex; flex-wrap: wrap; gap: 0.5rem; position: sticky; top: 0; z-index: 5; background: var(--bn-surface); padding-block: 0.4rem; }
+.synthesize-navigation { display: flex; flex-wrap: wrap; gap: 0.5rem; position: sticky; top: 0; z-index: var(--bn-z-sticky); background: var(--bn-surface); padding-block: 0.4rem; }
 .synthesize-navigation a { border: 1px solid var(--bn-border); background: var(--bn-raised); }
 .synthesize-disclosure { min-width: 0; }
 .synthesize-disclosure > summary { font-weight: 600; }

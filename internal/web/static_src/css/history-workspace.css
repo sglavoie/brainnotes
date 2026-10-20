@@ -273,7 +273,4 @@
 .history-advanced-fields { display: grid; gap: 0.9rem; grid-template-columns: repeat(auto-fit, minmax(min(14rem, 100%), 1fr)); margin-top: 0.4rem; }
 .history-active-filters { margin: 0; color: var(--bn-muted); font-size: 0.85rem; overflow-wrap: anywhere; }
 .history-filters-panel .panel-header { align-items: baseline; }
-@media (max-width: 600px) {
-  .history-filters-panel .history-actions { gap: 0.35rem; }
-  .history-filters-panel .panel-header { flex-wrap: wrap; gap: 0.4rem; }
-}
+/* Its narrow-width rules live in responsive.css's 640px block. */
