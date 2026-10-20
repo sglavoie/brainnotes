@@ -97,6 +97,11 @@ type Manager struct {
 	// backoff the remote never earned.
 	pushMu    sync.Mutex
 	pushStale bool
+
+	// pushTimeout bounds one remote push. It is [PushTimeout] in production and
+	// shortened only by tests in this package, which cannot wait two minutes for
+	// a remote that never answers.
+	pushTimeout time.Duration
 }
 
 // Open prepares the safety engine for a vault.
@@ -133,8 +138,9 @@ func Open(ctx context.Context, vaultRoot string, opts Options) (*Manager, error)
 			name:  strings.TrimSpace(opts.AuthorName),
 			email: strings.TrimSpace(opts.AuthorEmail),
 		},
-		now:      opts.Now,
-		autosave: resolveAutosavePolicy(opts.Autosave),
+		now:         opts.Now,
+		autosave:    resolveAutosavePolicy(opts.Autosave),
+		pushTimeout: PushTimeout,
 	}
 	if m.remote == "" {
 		m.remote = defaultRemote

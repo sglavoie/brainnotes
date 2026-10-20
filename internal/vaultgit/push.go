@@ -4,9 +4,18 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/agent"
 )
+
+// PushTimeout bounds one remote push. The watcher runs its push in the same
+// poll loop that takes snapshots, so a remote that accepts the connection and
+// then never answers would otherwise stop external autosave for as long as the
+// guard runs. Two minutes is generous for any real remote and still short next
+// to the five-minute push interval; a push that runs out of it is recorded as
+// an ordinary push failure and retried on the backoff schedule.
+const PushTimeout = 2 * time.Minute
 
 // PushResult describes one remote attempt.
 type PushResult struct {
@@ -33,8 +42,10 @@ type PushResult struct {
 // content history is already durable on disk the moment the commit lands — so
 // making a note save wait for a remote would buy no safety and cost every
 // second the remote is slow. The two are separated by their own lock as well as
-// by call site, so a push that hangs for its full timeout cannot delay a
-// snapshot happening at the same moment.
+// by call site, so a push that hangs for its full [PushTimeout] cannot delay a
+// snapshot another process takes at the same moment. The guard's own watcher
+// pushes between polls, so for it the timeout is also what bounds how long one
+// unresponsive remote can postpone the next external snapshot.
 //
 // A push failure is operational, never a safety failure: it records retry state
 // and returns a KindPushFailed error, and it never writes the block marker. The
@@ -70,7 +81,9 @@ func (m *Manager) Push(ctx context.Context) (PushResult, error) {
 	}
 
 	result.Attempted = true
-	if err := m.git.pushBranch(ctx, m.remote, ref); err != nil {
+	pushCtx, cancel := context.WithTimeout(ctx, m.pushTimeout)
+	defer cancel()
+	if err := m.git.pushBranch(pushCtx, m.remote, ref); err != nil {
 		detail := agent.SanitizedDiagnostic(err)
 		state, saveErr := m.recordPushFailure(m.now(), detail)
 		result.Retry = state
