@@ -322,7 +322,7 @@ func BuildMovePlan(v *vault.Vault, targetPath, newPath, oldRel, newRel string, c
 		return nil
 	})
 	if err != nil {
-		return nil, fmt.Errorf("move: scan vault: %w", err)
+		return nil, WrapScanError("move", v.Root, err)
 	}
 	return plan, nil
 }

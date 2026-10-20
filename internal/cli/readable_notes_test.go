@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 )
 
 // buildUnparsableFixture is a vault where one note's frontmatter is not valid
@@ -105,5 +107,33 @@ func TestMutationStaysStrictOnUnparsableNote(t *testing.T) {
 	_, _, err := runCLISplit(t, "replace", "tags", "go", "rust", "--dry-run")
 	if err == nil || !strings.Contains(err.Error(), "bad.md") {
 		t.Fatalf("replace error = %v, want a parse failure naming bad.md", err)
+	}
+}
+
+// TestMutationScanErrorsNameCommandAndRelativePath pins how a vault-wide
+// mutation reports the note that stopped its walk: under the command's name,
+// with the vault-relative path, never `vault: walk:` and an absolute path.
+func TestMutationScanErrorsNameCommandAndRelativePath(t *testing.T) {
+	root := buildUnparsableFixture(t)
+	for _, args := range [][]string{
+		{"replace", "tags", "go", "rust", "--dry-run"},
+		{"rename-key", "tags", "labels", "--dry-run"},
+		{"relink", "--dry-run"},
+		{"repair", "--dry-run"},
+		{"pin", "Alpha.md", "--dry-run"},
+		{"rename", "Alpha.md", "Gamma", "--dry-run"},
+	} {
+		_, _, err := runCLISplit(t, args...)
+		want := args[0] + `: scan vault: note: parse "bad.md": frontmatter:`
+		if err == nil || !strings.HasPrefix(err.Error(), want) {
+			t.Fatalf("bn %v: err = %v, want prefix %q", args, err, want)
+		}
+		if strings.Contains(err.Error(), root) || strings.Contains(err.Error(), "vault: walk") {
+			t.Fatalf("bn %v: err = %v, want no absolute path or walk prefix", args, err)
+		}
+		var parseErr *vault.ParseError
+		if !errors.As(err, &parseErr) {
+			t.Fatalf("bn %v: err = %v, want it to unwrap to *vault.ParseError", args, err)
+		}
 	}
 }

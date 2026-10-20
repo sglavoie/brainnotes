@@ -126,7 +126,7 @@ func reportAlreadyPinned(out io.Writer, rel string, dryRun bool) error {
 func planPinWrites(v *vault.Vault, fm *config.FrontmatterConfig, rel string) ([]noteops.NoteFrontmatterWrite, error) {
 	notes, err := v.Notes()
 	if err != nil {
-		return nil, err
+		return nil, noteops.WrapScanError("pin", v.Root, err)
 	}
 	plan, err := pins.PlanAppend(pins.List(v.Root, notes), rel)
 	if err != nil {

@@ -54,7 +54,7 @@ func runRelinkCommand(cmd *cobra.Command, args []string, opts relinkOptions) err
 	// that exists, not to the selected subset.
 	allNotes, err := v.Notes()
 	if err != nil {
-		return err
+		return noteops.WrapScanError("relink", v.Root, err)
 	}
 
 	r, err := newRelinkRun(cmd, args, v, cfg, allNotes, opts)
