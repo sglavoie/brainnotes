@@ -9,6 +9,7 @@ import (
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/frontmatter"
+	"github.com/sglavoie/sglavoie_brainnotes/internal/textnorm"
 )
 
 type RepairAction struct {
@@ -170,19 +171,25 @@ func appendUniqueString(values []string, value string) []string {
 	return append(values, value)
 }
 
+// dedupList drops repeated list items, keeping the first occurrence. Two
+// strings are one item when their NFC forms are equal, so a decomposed and a
+// composed `café` collapse to whichever spelling came first; every other value
+// compares with reflect.DeepEqual.
 func dedupList(list []any) []any {
 	seen := make([]any, 0, len(list))
 	for _, item := range list {
-		dup := false
-		for _, s := range seen {
-			if reflect.DeepEqual(item, s) {
-				dup = true
-				break
-			}
-		}
-		if !dup {
+		if !slices.ContainsFunc(seen, func(s any) bool { return sameListItem(item, s) }) {
 			seen = append(seen, item)
 		}
 	}
 	return seen
+}
+
+func sameListItem(a, b any) bool {
+	as, aok := a.(string)
+	bs, bok := b.(string)
+	if aok && bok {
+		return as == bs || textnorm.NFC(as) == textnorm.NFC(bs)
+	}
+	return reflect.DeepEqual(a, b)
 }
