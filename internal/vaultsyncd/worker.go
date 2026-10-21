@@ -92,8 +92,11 @@ type RetireOutcome struct {
 // returns one on purpose: a drain that refused part-way has already applied
 // packages, published their receipts, and told the peer so. Discarding the
 // report would make a partial drain indistinguishable from one that did nothing.
-func runImport(root string, opts Options) (*ImportOutcome, error) {
-	drained, err := vaultimport.Drain(root, vaultimport.Options{
+//
+// ctx is the pass's: a companion that is stopping ends the drain between
+// packages, never inside one (see vaultimport.DrainContext).
+func runImport(ctx context.Context, root string, opts Options) (*ImportOutcome, error) {
+	drained, err := vaultimport.DrainContext(ctx, root, vaultimport.Options{
 		Command: opts.command(),
 		Now:     opts.Now,
 	})

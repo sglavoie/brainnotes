@@ -273,7 +273,7 @@ func (c *companion) persist(record *Record) {
 func (c *companion) invoke(ctx context.Context, name WorkerName, unit *UnitResult) error {
 	switch name {
 	case WorkerImport:
-		outcome, err := runImport(c.root, c.opts)
+		outcome, err := runImport(ctx, c.root, c.opts)
 		unit.Import = outcome
 		return err
 	case WorkerExport:
