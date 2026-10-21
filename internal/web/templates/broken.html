@@ -28,7 +28,7 @@
         <form class="filter-form" method="get" action="/broken">
           <label for="q">Filter target</label>
           <input id="q" name="q" value="{{.Query}}" />
-          <button type="submit">Filter</button>
+          <button class="bn-button" type="submit">Filter</button>
           {{if .HasQuery}}<a href="/broken">Clear filter</a>{{end}}
         </form>
       </section>

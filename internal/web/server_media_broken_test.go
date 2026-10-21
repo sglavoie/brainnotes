@@ -97,6 +97,10 @@ func TestServer_BrokenPageEscapesQuery(t *testing.T) {
 		strings.Contains(body, "No broken links found.") {
 		t.Fatalf("filtered empty state should explain the filter and offer to clear it: %q", body)
 	}
+	// The Filter button shares the workspace's button styling.
+	if !strings.Contains(body, `<button class="bn-button" type="submit">Filter</button>`) {
+		t.Fatalf("Filter button lacks the bn-button class: %q", body)
+	}
 }
 
 func TestServer_BrokenPageIncludesCreateControls(t *testing.T) {
