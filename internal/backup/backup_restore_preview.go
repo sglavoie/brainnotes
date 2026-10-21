@@ -1,8 +1,11 @@
 package backup
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
@@ -41,16 +44,29 @@ func PreviewRestore(vaultRoot, archivePath string, opts RestoreOptions) (*Restor
 	if err != nil {
 		return nil, err
 	}
-	stageDir, entries, err := extractArchive(resolved)
+	// The preview hashes each archived file as it streams past instead of
+	// staging it: comparing digests needs no bytes on disk, so a preview writes
+	// nothing anywhere, in the vault or out of it.
+	digests := map[string]string{}
+	entries, err := scanArchive(resolved, func(entry archiveEntry, reader io.Reader) error {
+		if entry.Kind != entryFile {
+			return nil
+		}
+		hasher := sha256.New()
+		if _, err := io.Copy(hasher, reader); err != nil {
+			return fmt.Errorf("backup restore: read %s from archive: %w", entry.Path, err)
+		}
+		digests[entry.Path] = hex.EncodeToString(hasher.Sum(nil))
+		return nil
+	})
 	if err != nil {
 		return nil, err
 	}
-	defer os.RemoveAll(stageDir)
 	if err := preflightRestore(root, entries, opts.Wipe); err != nil {
 		return nil, err
 	}
 	preview := &RestorePreview{ArchivePath: resolved, Mode: restoreMode(opts.Wipe)}
-	if err := preview.classifyFiles(root, stageDir, entries); err != nil {
+	if err := preview.classifyFiles(root, digests, entries); err != nil {
 		return nil, err
 	}
 	if opts.Wipe {
@@ -61,7 +77,7 @@ func PreviewRestore(vaultRoot, archivePath string, opts RestoreOptions) (*Restor
 	return preview, nil
 }
 
-func (p *RestorePreview) classifyFiles(root, stageDir string, entries []archiveEntry) error {
+func (p *RestorePreview) classifyFiles(root string, digests map[string]string, entries []archiveEntry) error {
 	for _, entry := range entries {
 		if entry.Kind != entryFile {
 			continue
@@ -78,11 +94,11 @@ func (p *RestorePreview) classifyFiles(root, stageDir string, entries []archiveE
 			p.Overwrite = append(p.Overwrite, entry.Path)
 			continue
 		}
-		same, err := sameFileContent(filepath.Join(stageDir, filepath.FromSlash(entry.Path)), dest)
+		current, _, err := vault.HashFile(dest)
 		if err != nil {
-			return err
+			return fmt.Errorf("backup restore: hash %s: %w", dest, err)
 		}
-		if same {
+		if current == digests[entry.Path] {
 			p.Unchanged++
 		} else {
 			p.Overwrite = append(p.Overwrite, entry.Path)
@@ -91,18 +107,6 @@ func (p *RestorePreview) classifyFiles(root, stageDir string, entries []archiveE
 	sort.Strings(p.Create)
 	sort.Strings(p.Overwrite)
 	return nil
-}
-
-func sameFileContent(a, b string) (bool, error) {
-	da, _, err := vault.HashFile(a)
-	if err != nil {
-		return false, fmt.Errorf("backup restore: hash staged file %s: %w", a, err)
-	}
-	db, _, err := vault.HashFile(b)
-	if err != nil {
-		return false, fmt.Errorf("backup restore: hash %s: %w", b, err)
-	}
-	return da == db, nil
 }
 
 // previewWipe lists the leaves and directories a wipe would remove, following
