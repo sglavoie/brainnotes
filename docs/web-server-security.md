@@ -184,7 +184,9 @@ attachment; local serving's 32 MiB already covers all three. See
 
 Read-only is an allowlist: a route it does not name is unavailable, so its only
 writes are the Daily Brief visit and Open/Another activity records in the
-external `--state-dir`. Hosted is **not** read-only with writes re-enabled — the
+external `--state-dir`. That directory must already exist, must be a directory,
+and must resolve outside the vault; `bn serve` refuses anything else before it
+listens (`bn: serve: --state-dir: DIR is not a directory`). Hosted is **not** read-only with writes re-enabled — the
 two dimensions are independent. A hosted server keeps every document action and
 refuses the routes that would start a *configured* command on the serving machine
 (`/api/config/open`, `/api/note/insight`, `/api/brief/insight`,

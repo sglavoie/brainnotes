@@ -107,7 +107,7 @@ func TestSet_DeprecatedTypeFlagStillWorks(t *testing.T) {
 	if !strings.Contains(readNote(t, notePath), "version: 1\n") {
 		t.Fatalf("--type int was not applied:\n%s", readNote(t, notePath))
 	}
-	if !strings.Contains(out, "--type has been deprecated, use --value-type") {
+	if !strings.Contains(out, "set: warning: --type is deprecated; use --value-type\n") || strings.Contains(out, "has been deprecated") {
 		t.Fatalf("expected a deprecation note, got:\n%s", out)
 	}
 	help, err := runCLI(t, "", "set", "--help")

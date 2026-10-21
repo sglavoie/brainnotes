@@ -397,7 +397,10 @@ bn undo [id] [--dry-run] [--force]
 ```
 
 Restores every path recorded in one journal entry to its pre-command state.
-When `id` is omitted, `bn undo` restores the most recent entry.
+When `id` is omitted, `bn undo` restores the most recent entry. With an empty
+journal there is nothing to restore: it prints `undo: no journal entries found`
+and exits 1, the negative-answer status, while `bn history` exits 0 with an
+empty list.
 
 By default, undo is fail-fast: if any current file state no longer matches the
 journaled post-command state, the restore aborts with no writes. Use `--force`

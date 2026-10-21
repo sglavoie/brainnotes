@@ -1,6 +1,7 @@
 package query
 
 import (
+	"strings"
 	"testing"
 	"time"
 )
@@ -211,6 +212,30 @@ func TestParseAgeRoundTripsAllUnits(t *testing.T) {
 		}
 		if dur != c.want {
 			t.Errorf("ParseAge(%q) dur=%v, want %v", c.in, dur, c.want)
+		}
+	}
+}
+
+// TestParseAgeErrorsNameTheProblem pins the wording of the malformed-count and
+// missing-unit errors: a missing unit must not read as unit "0", and a
+// fractional count must not leak strconv's text.
+func TestParseAgeErrorsNameTheProblem(t *testing.T) {
+	cases := []struct {
+		in   string
+		want string
+	}{
+		{">30", `invalid age expression ">30": missing unit; end it with one of s (seconds), m (minutes), h (hours), d (days), like >30d`},
+		{">1.5d", `invalid age value in ">1.5d": "1.5" is not a whole number`},
+		{">3x", `invalid age unit "x" in ">3x": must be one of s (seconds), m (minutes), h (hours), d (days)`},
+		{">-3d", `invalid age value in ">-3d": negative`},
+	}
+	for _, c := range cases {
+		_, _, err := ParseAge(c.in)
+		if err == nil || err.Error() != c.want {
+			t.Errorf("ParseAge(%q) err = %v, want %q", c.in, err, c.want)
+		}
+		if err != nil && strings.Contains(err.Error(), "strconv") {
+			t.Errorf("ParseAge(%q) leaks strconv: %v", c.in, err)
 		}
 	}
 }

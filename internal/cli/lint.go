@@ -15,7 +15,7 @@ type LintError struct {
 }
 
 func (e *LintError) Error() string {
-	return fmt.Sprintf("%d violation(s) found", e.Count)
+	return fmt.Sprintf("lint: %d violation(s) found", e.Count)
 }
 
 func NewLintCmd() *cobra.Command {

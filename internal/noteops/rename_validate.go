@@ -190,7 +190,7 @@ func BuildRenamePlan(v *vault.Vault, targetPath, newPath, oldTitle, newTitle str
 		return nil
 	})
 	if err != nil {
-		return nil, fmt.Errorf("rename: scan vault: %w", err)
+		return nil, WrapScanError("rename", v.Root, err)
 	}
 	return plan, nil
 }

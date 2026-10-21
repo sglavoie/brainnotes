@@ -411,6 +411,24 @@ func TestUndoUnknownEntryNamesHistory(t *testing.T) {
 	}
 }
 
+// An empty journal is a negative answer, not an error: `bn undo` ran, found
+// nothing to undo, and exits 1 (IsNegativeOutcome) with the same message.
+func TestUndoEmptyJournalIsNegativeOutcome(t *testing.T) {
+	buildSetFixture(t)
+	for _, args := range [][]string{{"undo"}, {"undo", "--dry-run"}} {
+		out, err := runCLI(t, "", args...)
+		if err == nil {
+			t.Fatalf("bn %v: want an error\n%s", args, out)
+		}
+		if got, want := err.Error(), "undo: no journal entries found"; got != want {
+			t.Fatalf("bn %v: err = %q, want %q", args, got, want)
+		}
+		if !IsNegativeOutcome(err) {
+			t.Fatalf("bn %v: err = %v, want a negative outcome (exit 1)", args, err)
+		}
+	}
+}
+
 func TestUndoUnreadableManifestOmitsRollbackAdvice(t *testing.T) {
 	root := buildSetFixture(t)
 	dir := filepath.Join(journalRootForVault(root), "entry-bad")

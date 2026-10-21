@@ -186,12 +186,36 @@ func FromFlags(f Flags) (Predicate, error) {
 	return And(ps...), nil
 }
 
-// ParseAge parses an age expression like ">30d", "<7d", or "=0d". Supported
-// units are s (seconds), m (minutes), h (hours), and d (days).
+// AgeUnits names the units an age expression or relative offset accepts, in
+// the wording every error that lists them uses. `m` is minutes, not months:
+// there is no week, month or year unit, so spell those 7d, 30d or 365d.
+const AgeUnits = "s (seconds), m (minutes), h (hours), d (days)"
+
+// AgeUnit returns the duration one unit of an age expression stands for:
+// s (seconds), m (minutes), h (hours), or d (days). It is the one table both
+// ParseAge and queryexpr's relative offsets (`modified>"-7d"`) read, so the
+// two agree on what each unit means.
+func AgeUnit(unit byte) (time.Duration, bool) {
+	switch unit {
+	case 's':
+		return time.Second, true
+	case 'm':
+		return time.Minute, true
+	case 'h':
+		return time.Hour, true
+	case 'd':
+		return 24 * time.Hour, true
+	default:
+		return 0, false
+	}
+}
+
+// ParseAge parses an age expression like ">30d", "<7d", or "=0d": an operator,
+// a whole non-negative count, and one of the units AgeUnit accepts.
 func ParseAge(s string) (op string, dur time.Duration, err error) {
 	s = strings.TrimSpace(s)
 	if len(s) < 3 {
-		return "", 0, fmt.Errorf("invalid age expression %q: expect <op><n><unit>", s)
+		return "", 0, fmt.Errorf("invalid age expression %q: expect <op><n><unit>, like >30d", s)
 	}
 	op = string(s[0])
 	switch op {
@@ -199,30 +223,44 @@ func ParseAge(s string) (op string, dur time.Duration, err error) {
 	default:
 		return "", 0, fmt.Errorf("invalid age expression %q: must start with >, <, or =", s)
 	}
-	rest := s[1:]
-	unit := rest[len(rest)-1]
-	n, parseErr := strconv.Atoi(rest[:len(rest)-1])
-	if parseErr != nil {
-		return "", 0, fmt.Errorf("invalid age value in %q: %w", s, parseErr)
+	mult, err := ageExprUnit(s)
+	if err != nil {
+		return "", 0, err
 	}
-	if n < 0 {
-		return "", 0, fmt.Errorf("invalid age value in %q: negative", s)
-	}
-	var mult time.Duration
-	switch unit {
-	case 's':
-		mult = time.Second
-	case 'm':
-		mult = time.Minute
-	case 'h':
-		mult = time.Hour
-	case 'd':
-		mult = 24 * time.Hour
-	default:
-		return "", 0, fmt.Errorf("invalid age unit %q in %q: must be one of s, m, h, d", string(unit), s)
+	n, err := ageExprCount(s)
+	if err != nil {
+		return "", 0, err
 	}
 	if int64(n) > int64(1<<63-1)/int64(mult) {
 		return "", 0, fmt.Errorf("invalid age value in %q: overflows duration", s)
 	}
 	return op, time.Duration(n) * mult, nil
+}
+
+// ageExprUnit reads the unit that ends age expression s. A trailing digit is
+// a missing unit (`>30`), said as such rather than as an unknown unit "0".
+func ageExprUnit(s string) (time.Duration, error) {
+	unit := s[len(s)-1]
+	if unit >= '0' && unit <= '9' {
+		return 0, fmt.Errorf("invalid age expression %q: missing unit; end it with one of %s, like %s", s, AgeUnits, s+"d")
+	}
+	mult, ok := AgeUnit(unit)
+	if !ok {
+		return 0, fmt.Errorf("invalid age unit %q in %q: must be one of %s", string(unit), s, AgeUnits)
+	}
+	return mult, nil
+}
+
+// ageExprCount reads the count between the operator and the unit of age
+// expression s, which must be a whole non-negative number.
+func ageExprCount(s string) (int, error) {
+	digits := s[1 : len(s)-1]
+	n, err := strconv.Atoi(digits)
+	if err != nil {
+		return 0, fmt.Errorf("invalid age value in %q: %q is not a whole number", s, digits)
+	}
+	if n < 0 {
+		return 0, fmt.Errorf("invalid age value in %q: negative", s)
+	}
+	return n, nil
 }

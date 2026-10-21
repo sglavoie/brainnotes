@@ -137,7 +137,7 @@ func collectReplaceCandidates(cmd *cobra.Command, v *vault.Vault, cfg *config.Co
 
 	notes, err := v.Notes()
 	if err != nil {
-		return nil, err
+		return nil, noteops.WrapScanError(cmd.Name(), v.Root, err)
 	}
 	sel, err := ff.selectNotes(cmd.Context(), cfg, v.Root, notes, nil)
 	if err != nil {
