@@ -2,11 +2,11 @@ import { test, expect } from "./fixture.js";
 import { SURFACE } from "./editor-helpers.js";
 
 // CPU throttling multiplies the host's own speed, so one rate is not one device.
-// The budgets below were calibrated at 4x on a recent Mac. A GitHub-hosted
-// 2-vCPU runner is about twice as slow (typing samples ~600 ms at 4x, against
-// ~285 ms locally), so CI throttles by 2x to emulate the same device rather than
-// loosening the budgets.
-const CPU_THROTTLING_RATE = process.env.CI ? 2 : 4;
+// The budgets below were calibrated at 4x on a recent Mac, where steady typing
+// samples are ~285 ms. A GitHub-hosted 2-vCPU runner measured ~600 ms at 4x and
+// ~400 ms at 2x (throttling does not scale linearly), so the same device is
+// about 1.5x there. CI emulates that device rather than loosening the budgets.
+const CPU_THROTTLING_RATE = process.env.CI ? 1.5 : 4;
 
 async function throttle(page, context) {
   const session = await context.newCDPSession(page);
