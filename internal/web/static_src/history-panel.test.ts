@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   buildUndoForm,
+  managementMutationEventName,
   normalizeHistoryEntries,
   type HistoryEntry,
 } from "./api";
@@ -258,5 +259,84 @@ describe("history panel lost undo reply", () => {
     expect(operationID).toMatch(/^[0-9a-f]{32}$/);
     document.querySelector<HTMLButtonElement>(".write-outcome-check")!.click();
     await waitForExpect(() => expect(document.querySelector("[data-history-status]")?.textContent).toBe("Undo confirmed."));
+  });
+});
+
+describe("history panel reloads", () => {
+  type Pending = { resolve: (response: Response) => void };
+  const deferred = (): { promise: Promise<Response> } & Pending => {
+    let resolve: (response: Response) => void = () => {};
+    const promise = new Promise<Response>((done) => { resolve = done; });
+    return { promise, resolve };
+  };
+  const status = (): string => document.querySelector("[data-history-status]")?.textContent || "";
+  const undoLatest = (): HTMLButtonElement => document.querySelector<HTMLButtonElement>("[data-history-undo-latest]")!;
+
+  const setup = async (route: (target: string) => Promise<Response> | null) => {
+    renderPanel();
+    const historyLoads: string[] = [];
+    const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+      const target = String(input);
+      const routed = route(target);
+      if (routed) return routed;
+      if (target === "/api/history/preview") return jsonResponse(previewBody({ requires_force: false, conflicts: [] }));
+      if (target === "/api/undo") return jsonResponse({ ok: true, message: "Undo restored 1 path." });
+      historyLoads.push(target);
+      return jsonResponse({ ok: true, entries: [historyEntry()] });
+    });
+    initHistoryPanel({ fetch: fetcher, confirm: () => true });
+    await waitForExpect(() => expect(undoLatest().disabled).toBe(false));
+    return { historyLoads };
+  };
+
+  it("announces a confirmed undo to other panels and reloads itself once", async () => {
+    const { historyLoads } = await setup(() => null);
+    const announced = vi.fn();
+    window.addEventListener(managementMutationEventName, announced);
+    undoLatest().click();
+    await waitForExpect(() => expect(status()).toBe("Undo restored 1 path."));
+    window.removeEventListener(managementMutationEventName, announced);
+    expect(announced).toHaveBeenCalledTimes(1);
+    expect(historyLoads).toHaveLength(2);
+  });
+
+  it("returns focus to the rerendered row after undoing from it", async () => {
+    await setup(() => null);
+    const row = document.querySelector<HTMLButtonElement>('[data-history-undo-entry="entry-new"]')!;
+    row.focus();
+    row.click();
+    await waitForExpect(() => expect(status()).toBe("Undo restored 1 path."));
+    expect(row.isConnected).toBe(false);
+    expect(document.activeElement?.getAttribute("data-history-undo-entry")).toBe("entry-new");
+  });
+
+  it("holds a mutation reload until an in-flight undo finishes", async () => {
+    const undo = deferred();
+    const { historyLoads } = await setup((target) => (target === "/api/undo" ? undo.promise : null));
+    undoLatest().click();
+    await waitForExpect(() => expect(status()).toBe("Undoing change…"));
+    window.dispatchEvent(new CustomEvent(managementMutationEventName));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(historyLoads).toHaveLength(1);
+    expect(undoLatest().disabled).toBe(true);
+    undo.resolve(jsonResponse({ ok: true, message: "Undo restored 1 path." }));
+    await waitForExpect(() => expect(status()).toBe("Undo restored 1 path."));
+    expect(historyLoads).toHaveLength(2);
+  });
+
+  it("keeps the newest list when an older reload answers last", async () => {
+    const first = deferred();
+    const second = deferred();
+    const queue: Array<{ promise: Promise<Response> }> = [];
+    await setup((target) => (target.startsWith("/api/history?") || target === "/api/history" ? queue.shift()?.promise ?? null : null));
+    queue.push(first, second);
+    window.dispatchEvent(new CustomEvent(managementMutationEventName));
+    window.dispatchEvent(new CustomEvent(managementMutationEventName));
+    second.resolve(jsonResponse({ ok: true, entries: [historyEntry({ id: "entry-newest", summary: "Newest" })] }));
+    await waitForExpect(() => expect(status()).toBe("History refreshed."));
+    first.resolve(jsonResponse({ ok: true, entries: [historyEntry({ id: "entry-stale", summary: "Stale" })] }));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(document.querySelector("[data-history-list]")?.textContent).toContain("Newest");
+    expect(document.querySelector("[data-history-list]")?.textContent).not.toContain("Stale");
   });
 });

@@ -23,6 +23,19 @@ export const queryAllElements = <T extends Element>(
     return narrowed ? [narrowed] : [];
   });
 
+// focusIsLost reports whether focus has fallen to <body>, which happens when a
+// rerender or a hide removes the control that had it.
+export const focusIsLost = (doc: Document): boolean =>
+  !doc.activeElement || doc.activeElement === doc.body;
+
+// focusFallback gives focus to a non-interactive landmark, such as the status
+// line that reports what just happened, making it focusable from script only.
+export const focusFallback = (target: HTMLElement | null): void => {
+  if (!target) return;
+  if (target.tabIndex < 0 && !target.hasAttribute("tabindex")) target.tabIndex = -1;
+  target.focus();
+};
+
 export const getElementByID = <T extends Element>(
   id: string,
   constructor: ElementConstructor<T>
