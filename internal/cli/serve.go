@@ -63,6 +63,27 @@ func localEsbuildBinary(root string) (string, bool) {
 // developer binary can rebuild web assets even when bn is launched elsewhere.
 var sourceCheckoutRoot string
 
+// serveLong is the serve --help description. It lives outside NewServeCmd,
+// whose inline RunE already brings it close to the funlen threshold.
+const serveLong = `Serve starts the browser workspace for this vault: reading, search, editing,
+properties, health fixes, history and undo. It listens on [serve].addr
+(default 127.0.0.1:8729), prints the URL on stderr, and opens a browser unless
+--no-open is given. --addr and --port override the configured address.
+
+The default profile is local: every write and editor launch is available, for
+the person at this machine. Two profiles publish the vault instead, and never
+open a browser:
+
+  --read-only   a read-only replica; its only writes are Daily Brief activity
+                records under --state-dir, which it requires.
+  --hosted      document writes stay available, but nothing starts a configured
+                process (editor, [agent].command) on the serving machine.
+
+The two are different deployments and cannot be combined. No profile has an
+authentication layer: a server reachable from another machine belongs behind
+an authenticated reverse proxy or tunnel. Stop the server with Ctrl-C; a write
+in progress is allowed to finish.`
+
 func NewServeCmd() *cobra.Command {
 	var (
 		addr              string
@@ -77,7 +98,12 @@ func NewServeCmd() *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "serve",
 		Short: "Serve a local web view of your vault",
-		Args:  noArgs("serve"),
+		Long:  serveLong,
+		Example: `  bn serve
+  bn serve --port 9000 --no-open
+  bn serve --hosted --addr 0.0.0.0:8729
+  bn serve --read-only --state-dir ~/.local/state/bn-replica`,
+		Args: noArgs("serve"),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if err := refuseCombinedFlags(cmd, "serve", "read-only", "hosted"); err != nil {
 				return err

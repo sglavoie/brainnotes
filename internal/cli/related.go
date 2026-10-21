@@ -59,9 +59,13 @@ func NewRelatedCmd() *cobra.Command {
 	}
 
 	cmd := &cobra.Command{
-		Use:           "related <note>",
-		Short:         "Rank notes related to a source note",
-		Long:          "Rank notes related to a source note using deterministic text, graph, metadata, and recall signals. The source may be a title, relative path, or absolute path.",
+		Use:   "related <note>",
+		Short: "Rank notes related to a source note",
+		Long:  "Rank notes related to a source note using deterministic text, graph, metadata, and recall signals. The source may be a title, relative path, or absolute path.",
+		Example: `  bn related "Project Alpha"
+  bn related Notes/Current.md --mode connect --json
+  bn related Notes/Current.md --paths --null | xargs -0 -n1 printf '%s\n'
+  bn related Notes/Current.md -i --open`,
 		Args:          cobra.ExactArgs(1),
 		SilenceUsage:  true,
 		SilenceErrors: true,
