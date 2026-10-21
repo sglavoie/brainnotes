@@ -10,6 +10,7 @@ import { bindCaptureDraft } from "./capture-draft";
 import { CaptureWikilinks } from "./capture-wikilink";
 import { jsonPostRequest, readResponsePayload } from "./daily-brief-http";
 import { queryElement } from "./dom";
+import { captureFocusReturn } from "./focus-return";
 import { setStatusText } from "./status";
 import { isSubmitChord } from "./submit-chord";
 
@@ -18,23 +19,6 @@ type CaptureStatusKind = "" | "is-success" | "is-error" | "is-loading";
 
 export type CaptureDeps = {
   fetch?: FetchLike;
-};
-
-// Disabling the input can blur it. Only subsequent interaction outside the
-// capture controls cancels the normal return, including a click on plain text.
-const captureFocusReturn = (input: HTMLTextAreaElement, submit: HTMLButtonElement): (() => void) => {
-  const doc = input.ownerDocument;
-  let movedAway = false;
-  const observe = (event: Event): void => {
-    if (event.target !== input && event.target !== submit) movedAway = true;
-  };
-  doc.addEventListener("focusin", observe, true);
-  doc.addEventListener("pointerdown", observe, true);
-  return () => {
-    doc.removeEventListener("focusin", observe, true);
-    doc.removeEventListener("pointerdown", observe, true);
-    if (!movedAway && input.isConnected) input.focus();
-  };
 };
 
 class Capture {
@@ -128,7 +112,8 @@ class Capture {
     this.wikilinks.close();
     this.input.disabled = true;
     this.submit.disabled = true;
-    const returnFocus = captureFocusReturn(this.input, this.submit);
+    // Capture returns to the input even from Capture itself, ready for the next line.
+    const returnFocus = captureFocusReturn(this.input, [this.submit]);
     this.setStatus("Capturing…", "is-loading");
     const waiting = window.setTimeout(() =>
       this.setStatus("Waiting for capture confirmation… Your text is kept here.", "is-loading"), 500);

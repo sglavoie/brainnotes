@@ -6,6 +6,7 @@ import {
 } from "./api";
 import { asRecord } from "./api-internal";
 import { queryAllElements, queryElement } from "./dom";
+import { captureFocusReturn, focusedWithin } from "./focus-return";
 import { responseFailure } from "./request-outcome";
 import { setStatusText } from "./status";
 
@@ -118,7 +119,9 @@ export const initFrontmatterEditing = (deps: FrontmatterActionDeps = {}): void =
         return;
       }
       pending = true;
+      const focused = focusedWithin(form);
       const restore = disablePanel(panel);
+      const returnFocus = captureFocusReturn(focused);
       setStatus("Updating frontmatter…");
       try {
         const resp = await fetcher(action.request.url, action.request.init);
@@ -132,6 +135,7 @@ export const initFrontmatterEditing = (deps: FrontmatterActionDeps = {}): void =
       } finally {
         restore();
         pending = false;
+        returnFocus();
       }
     });
   }

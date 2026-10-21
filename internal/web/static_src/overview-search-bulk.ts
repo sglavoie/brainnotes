@@ -8,6 +8,7 @@ import {
   type BulkPreviewManagementResult,
 } from "./api";
 import { queryAllElements } from "./dom";
+import { captureFocusReturn, focusedWithin } from "./focus-return";
 import type { OverviewSearchElements } from "./overview-search-elements";
 import {
   bulkApplyFallbackMessage,
@@ -142,9 +143,22 @@ export abstract class OverviewSearchBulk {
     this.updateBulkControls();
   };
 
+  private returnBulkFocus: (() => void) | null = null;
+
+  // Busy disables the focused bulk control, which can blur it onto <body>; the
+  // focus returns to it once the request settles.
   protected setBulkBusy = (busy: boolean): void => {
+    if (busy) {
+      this.returnBulkFocus?.();
+      this.returnBulkFocus = captureFocusReturn(focusedWithin(this.els.root));
+    }
     this.bulkBusy = busy;
     this.updateBulkControls();
+    if (!busy) {
+      const returnFocus = this.returnBulkFocus;
+      this.returnBulkFocus = null;
+      returnFocus?.();
+    }
   };
 
   protected canRunBulk = (keys: string[]): boolean => {
