@@ -75,7 +75,6 @@ type filterErrorPosition struct {
 	Column int `json:"column"`
 }
 
-// writeFilterError renders a filter rejection as a structured 400.
 // writeFilterError reports a request the client must change as a 400. Its
 // message passes through the same reader redaction a management error does: a
 // filter can name a vault path, and the root stays on the serving machine.
