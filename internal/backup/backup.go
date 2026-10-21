@@ -84,11 +84,12 @@ func inspectRestore(vaultRoot, archivePath string, opts RestoreOptions, prefligh
 	if err != nil {
 		return nil, err
 	}
-	stageDir, entries, err := extractArchive(resolved)
+	// Describing a restore needs the entries, not their bytes, so nothing is
+	// staged: a preview writes nothing anywhere, in the vault or out of it.
+	entries, err := scanArchive(resolved, nil)
 	if err != nil {
 		return nil, err
 	}
-	defer os.RemoveAll(stageDir)
 	if preflight {
 		if err := preflightRestore(root, entries, opts.Wipe); err != nil {
 			return nil, err
@@ -369,11 +370,11 @@ func restore(vaultRoot, archivePath string, opts RestoreOptions, recovery bool) 
 		return nil, err
 	}
 
-	stageDir, entries, err := extractArchive(resolvedArchivePath)
+	stageDir, entries, cleanup, err := extractArchive(root, resolvedArchivePath)
 	if err != nil {
 		return nil, err
 	}
-	defer os.RemoveAll(stageDir)
+	defer cleanup()
 
 	if recovery {
 		if err := enableExistingRestoreAncestors(root, entries); err != nil {

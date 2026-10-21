@@ -1,6 +1,7 @@
 package vaultimport
 
 import (
+	"context"
 	"errors"
 	"fmt"
 
@@ -114,6 +115,15 @@ func (d *drain) passes() error {
 	}
 }
 
+// drainStopped reports a caller's stop as the error a drain returns. A nil
+// context never stops.
+func drainStopped(ctx context.Context) error {
+	if ctx == nil || ctx.Err() == nil {
+		return nil
+	}
+	return fmt.Errorf("vaultimport: drain stopped before the next package: %w", context.Cause(ctx))
+}
+
 func (d *drain) pass() (bool, error) {
 	state, err := d.load()
 	if err != nil {
@@ -127,6 +137,11 @@ func (d *drain) pass() (bool, error) {
 		found.reason, found.detail, found.blocker, found.conflict = "", "", "", nil
 		if held := d.hold(found, state); held {
 			continue
+		}
+		// The one place a stop is honoured: before a package starts, never while
+		// it is being applied. See DrainContext.
+		if err := drainStopped(d.ctx); err != nil {
+			return progress, err
 		}
 		applied, err := d.attempt(found)
 		if err != nil {

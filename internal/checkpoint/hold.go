@@ -148,15 +148,9 @@ func Hold(root string, opts Options) (*Held, error) {
 	if Joined(paths.root) {
 		return nil, ErrNested
 	}
-	// Wait-free, because a second client has nothing to add: the vault can only be
-	// quiet for one checkpoint at a time, and a caller told to come back later can
-	// decide that for itself.
-	claim, acquired, err := vault.TryLockPathHandle(paths.claim)
+	claim, err := takeClaim(paths)
 	if err != nil {
-		return nil, fmt.Errorf("checkpoint: claim vault: %w", err)
-	}
-	if !acquired {
-		return nil, ErrCheckpointActive
+		return nil, err
 	}
 	held, err := announce(paths, claim, opts)
 	if err != nil {
@@ -164,6 +158,31 @@ func Hold(root string, opts Options) (*Held, error) {
 		return nil, err
 	}
 	return held, nil
+}
+
+// claimGrace bounds how long Hold keeps asking for a claim lock somebody else
+// holds before it refuses as ErrCheckpointActive.
+//
+// It is not a queue for a second client — the vault can only be quiet for one
+// checkpoint at a time, and a caller told to come back later can decide that for
+// itself. It exists because the claim lock has one other kind of holder: a
+// writer's liveness probe (clientLive) try-locks it for an instant to learn
+// whether an announcing client is still alive. Refusing on the first attempt
+// would turn that probe into a spurious "another checkpoint is already
+// running". A probe holds the lock for microseconds and a live client for the
+// whole checkpoint, so a few polls tell the two apart.
+const claimGrace = 50 * time.Millisecond
+
+// takeClaim acquires the claim lock within claimGrace.
+func takeClaim(paths vaultPaths) (*vault.FileLock, error) {
+	claim, err := vault.LockFileHandle(paths.claim, true, claimGrace)
+	if err == nil {
+		return claim, nil
+	}
+	if vault.IsTxnLockBusy(err) {
+		return nil, ErrCheckpointActive
+	}
+	return nil, fmt.Errorf("checkpoint: claim vault: %w", err)
 }
 
 // announce writes the intent, drains, settles, and promotes the record.

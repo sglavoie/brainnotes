@@ -77,48 +77,94 @@ func JoinContextWithin(ctx context.Context, root string, wait time.Duration) (co
 	deadline := time.Now().Add(wait)
 	refs := slotFor(paths.root)
 	for {
-		handle, blocked, admitErr := refs.admit(ctx, paths, deadline)
+		handle, turn, admitErr := refs.admit(ctx, paths, deadline)
 		if admitErr != nil {
 			return ctx, noop, admitErr
 		}
-		if !blocked {
+		if handle != nil {
 			return markActiveContext(ctx, paths.root, handle)
 		}
-		if !time.Now().Before(deadline) {
-			return ctx, noop, fmt.Errorf("%w: it is copying the vault; retry once it finishes", ErrBarrierHeld)
-		}
-		if err := pollPause(ctx); err != nil {
+		if err := awaitTurn(ctx, turn, deadline); err != nil {
 			return ctx, noop, err
 		}
 	}
 }
 
 // admit makes one attempt to count a fresh logical write against this root and
-// returns its release handle. blocked reports a fresh in-process writer that
-// must wait for an announced checkpoint to clear before trying again.
-func (r *references) admit(ctx context.Context, paths vaultPaths, deadline time.Time) (func(), bool, error) {
+// returns its release handle. Without a handle, turn is what to wait on before
+// trying again: another goroutine's in-flight first acquisition, or nil when a
+// fresh in-process writer must poll for an announced checkpoint to clear.
+func (r *references) admit(ctx context.Context, paths vaultPaths, deadline time.Time) (func(), <-chan struct{}, error) {
 	r.mu.Lock()
-	defer r.mu.Unlock()
-	if r.depth == 0 {
-		release, err := acquireShared(ctx, paths, remaining(deadline))
-		if err != nil {
-			return nil, false, err
-		}
-		r.depth = 1
-		r.release = release
-		return r.handle(), false, nil
+	if r.depth > 0 {
+		defer r.mu.Unlock()
+		return r.admitNested(paths)
 	}
+	if r.acquiring != nil {
+		turn := r.acquiring
+		r.mu.Unlock()
+		return nil, turn, nil
+	}
+	turn := make(chan struct{})
+	r.acquiring = turn
+	r.mu.Unlock()
+	return r.acquireFirst(ctx, paths, deadline, turn)
+}
 
-	// The process already owns the shared flock. It is safe to count this
-	// admission only while no checkpoint has announced. Once announced, this
-	// is a new writer and must stand aside just like a writer in another
-	// process; true nested work has been identified by contextCovers.
+// acquireFirst takes the process's shared flock outside r.mu; see references
+// for why the mutex is not held across the wait.
+func (r *references) acquireFirst(ctx context.Context, paths vaultPaths, deadline time.Time, turn chan struct{}) (func(), <-chan struct{}, error) {
+	var release func()
+	err := errors.New("checkpoint: shared acquisition did not complete")
+	defer func() {
+		r.mu.Lock()
+		defer r.mu.Unlock()
+		r.acquiring = nil
+		close(turn)
+		if err == nil {
+			r.depth = 1
+			r.release = release
+		}
+	}()
+	release, err = acquireShared(ctx, paths, remaining(deadline))
+	if err != nil {
+		return nil, nil, err
+	}
+	return r.handle(), nil, nil
+}
+
+// admitNested counts one more admission against a flock the process already
+// owns. It is safe only while no checkpoint has announced. Once announced, this
+// is a new writer and must stand aside just like a writer in another process;
+// true nested work has been identified by contextCovers. The caller holds r.mu.
+func (r *references) admitNested(paths vaultPaths) (func(), <-chan struct{}, error) {
 	blocked, err := announced(paths)
 	if err != nil || blocked {
-		return nil, blocked, err
+		return nil, nil, err
 	}
 	r.depth++
-	return r.handle(), false, nil
+	return r.handle(), nil, nil
+}
+
+// awaitTurn waits for turn to close — or one poll interval when turn is nil —
+// for the deadline, or for ctx, and reports why the admission must give up.
+func awaitTurn(ctx context.Context, turn <-chan struct{}, deadline time.Time) error {
+	left := time.Until(deadline)
+	if left <= 0 {
+		return fmt.Errorf("%w: it is copying the vault; retry once it finishes", ErrBarrierHeld)
+	}
+	if turn == nil {
+		return pollPause(ctx)
+	}
+	timer := time.NewTimer(left)
+	defer timer.Stop()
+	select {
+	case <-ctx.Done():
+		return fmt.Errorf("checkpoint: wait for checkpoint to clear: %w", ctx.Err())
+	case <-turn:
+	case <-timer.C:
+	}
+	return nil
 }
 
 type joinedContext struct {
@@ -189,9 +235,9 @@ func Joined(root string) bool {
 //
 // Only a zero wait means the default. A negative wait is what remaining hands
 // over once the caller's deadline has passed, and it buys exactly one look and
-// one lock attempt: admit holds the per-root mutex here, so turning an expired
-// budget into a fresh DefaultWriterWait would stall every other writer in the
-// process for that long.
+// one lock attempt: other writers in the process queue behind this acquisition,
+// so turning an expired budget into a fresh DefaultWriterWait would stall them
+// for that long.
 func acquireShared(ctx context.Context, paths vaultPaths, wait time.Duration) (func(), error) {
 	if wait == 0 {
 		wait = DefaultWriterWait
@@ -210,7 +256,7 @@ func acquireShared(ctx context.Context, paths vaultPaths, wait time.Duration) (f
 			return nil, err
 		}
 		if !blocked {
-			return takeShared(paths, remaining(deadline))
+			return takeShared(ctx, paths, remaining(deadline))
 		}
 		if !time.Now().Before(deadline) {
 			return nil, fmt.Errorf("%w: it is copying the vault; retry once it finishes", ErrBarrierHeld)
@@ -250,8 +296,11 @@ func remaining(deadline time.Time) time.Duration {
 // same refusal an announced checkpoint gets. The two are the same situation seen
 // from either side of the race above, and a caller that distinguished them would
 // be reasoning about which one it lost.
-func takeShared(paths vaultPaths, wait time.Duration) (func(), error) {
-	release, err := vault.LockFile(paths.barrier, false, wait)
+//
+// The flock wait is the long one — it lasts as long as a checkpoint's copy — so
+// it is the one that most needs to honour ctx.
+func takeShared(ctx context.Context, paths vaultPaths, wait time.Duration) (func(), error) {
+	release, err := vault.LockFileContext(ctx, paths.barrier, false, wait)
 	if err == nil {
 		return release, nil
 	}
@@ -297,15 +346,21 @@ func clientLive(paths vaultPaths) (bool, error) {
 
 // references counts one vault root's joins inside this process.
 //
-// The mutex is held across acquisition, so a second goroutine joining while the
-// first is waiting out a checkpoint waits for it. That costs latency during a
-// checkpoint, which is the only time the wait is non-trivial, and it buys the
-// invariant the count depends on: the flock is taken exactly once per process
-// per vault, so the process contends with other processes and never with itself.
+// The invariant the count depends on is that the flock is taken exactly once
+// per process per vault, so the process contends with other processes and never
+// with itself. The first acquisition can wait out a whole checkpoint, so it
+// runs outside mu: the goroutine taking the flock publishes acquiring, and any
+// other goroutine joining the same vault meanwhile waits for that channel to
+// close — under its own context and deadline — and then tries again, rather
+// than queueing uncancellably on mu. mu itself guards only bookkeeping and the
+// wait-free announcement probe of a nested admission.
 type references struct {
 	mu      sync.Mutex
 	depth   int
 	release func()
+	// acquiring is non-nil while one goroutine is taking the shared flock for a
+	// depth of zero, and is closed when that attempt ends either way.
+	acquiring chan struct{}
 }
 
 var (

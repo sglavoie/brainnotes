@@ -1,6 +1,7 @@
 package vaultimport
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"os"
@@ -164,7 +165,26 @@ type Drained struct {
 // make a partial drain indistinguishable from one that did nothing, and the
 // difference is what the peer has already been told.
 func Drain(root string, opts Options) (*Drained, error) {
-	ctx, release, acquired, err := lockImports(root)
+	return DrainContext(context.Background(), root, opts)
+}
+
+// DrainContext is Drain that a caller can stop. ctx is consulted only at package
+// boundaries — before the interrupted-application recovery, and before each
+// package is attempted — and never while one is being applied: an application
+// abandoned half-way would leave exactly the interrupted state the recovery
+// pass exists to resolve, so once a package starts it runs to its end whatever
+// ctx says. A stop therefore leaves every package either fully applied or
+// untouched, and comes back like any other part-way refusal: with the report of
+// what had landed and an error wrapping ctx's.
+//
+// ctx also bounds the wait to join the checkpoint barrier. The context nested
+// writers and the content-history queries inside one package see is detached
+// from its cancellation, for the reason above.
+func DrainContext(ctx context.Context, root string, opts Options) (*Drained, error) {
+	if ctx == nil {
+		ctx = context.Background()
+	}
+	joined, release, acquired, err := lockImportsContext(ctx, root)
 	if err != nil {
 		return nil, err
 	}
@@ -172,7 +192,13 @@ func Drain(root string, opts Options) (*Drained, error) {
 	if !acquired {
 		return nil, fmt.Errorf("%w: no package was applied", ErrImportBusy)
 	}
-	opts.checkpointContext = ctx
+	if err := drainStopped(ctx); err != nil {
+		return nil, err
+	}
+	// Every durable step inside a package runs under this context, and a step
+	// abandoned half-way is the one outcome a drain must never produce, so the
+	// join marker is kept and the caller's cancellation is not.
+	opts.checkpointContext = context.WithoutCancel(joined)
 	recovery, err := recoverLocked(root, opts)
 	if err != nil {
 		return nil, err
@@ -181,7 +207,7 @@ func Drain(root string, opts Options) (*Drained, error) {
 	if err != nil {
 		return nil, err
 	}
-	run := &drain{root: root, opts: opts, pending: pending, channel: channel}
+	run := &drain{ctx: ctx, root: root, opts: opts, pending: pending, channel: channel}
 	if err := run.sweep(); err != nil {
 		// Nothing has been applied yet, so there is no partial report to carry: the
 		// sweep runs before the first package is looked at.
@@ -306,6 +332,9 @@ func before(a, b *candidate) bool {
 
 // drain is one pass over the channel.
 type drain struct {
+	// ctx is the caller's stop signal, consulted between packages only; nil
+	// never stops. See DrainContext.
+	ctx  context.Context
 	root string
 	opts Options
 	// channel says the incoming directory exists, which is what makes an absent
