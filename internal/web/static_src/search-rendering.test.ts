@@ -200,15 +200,18 @@ it("renders a pinned Library row as pressed and reverts a refused unpin", async 
   const [url] = fetchMock.mock.calls[0] as unknown as [string, RequestInit];
   expect(url).toBe("/api/pins/remove");
   expect(list.querySelector('[role="status"]')!.textContent).toBe("note moved");
-  expect(list.querySelector<HTMLElement>(".overview-pin-feedback")!.hidden).toBe(false);
+  expect(list.querySelector<HTMLElement>(".overview-pin-feedback")!.hasAttribute("data-empty")).toBe(false);
 
   fetchMock.mockImplementationOnce(async () => new Response(JSON.stringify({ ok: true }), { headers: { "Content-Type": "application/json" } }));
   const retry = list.querySelector<HTMLButtonElement>(".overview-pin-feedback button")!;
   retry.focus();
   retry.click();
   await waitForExpect(() => {
-    expect(list.querySelector<HTMLElement>(".overview-pin-feedback")!.hidden).toBe(true);
+    expect(list.querySelector<HTMLElement>(".overview-pin-feedback")!.hasAttribute("data-empty")).toBe(true);
   });
+  // The live region stays rendered (empty) so the next message is announced.
+  expect(list.querySelector<HTMLElement>('[role="status"]')!.isConnected).toBe(true);
+  expect(retry.hidden).toBe(true);
   expect(button!.getAttribute("aria-pressed")).toBe("false");
   expect(document.activeElement).toBe(button);
   expect(fetchMock).toHaveBeenCalledTimes(2);

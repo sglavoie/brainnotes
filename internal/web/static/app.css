@@ -2733,9 +2733,13 @@ code {
   margin-bottom: 0.75rem;
 }
 
-.overview-pin-feedback[hidden],
 .overview-selection[hidden] {
   display: none;
+}
+
+/* The pin status stays rendered so it is announced; an empty one takes no room. */
+.overview-pin-feedback[data-empty] {
+  margin-bottom: 0;
 }
 
 .overview-pin-feedback p {

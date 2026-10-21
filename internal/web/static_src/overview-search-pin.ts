@@ -18,16 +18,20 @@ export const renderOverviewPin = (doc: Document, result: SearchResult): {
   button.className = "bn-button pin-button overview-result-pin";
   button.setAttribute("data-pin-button", "");
 
+  // The status stays rendered while empty: a live region that appears in the
+  // same task as its text is often not announced. Only the spacing and the
+  // Retry button follow whether there is anything to say.
   const feedback = doc.createElement("div");
   feedback.className = "overview-pin-feedback";
-  feedback.hidden = true;
+  feedback.dataset.empty = "";
   const status = doc.createElement("p");
   status.setAttribute("role", "status");
   status.setAttribute("aria-live", "polite");
   const retry = doc.createElement("button");
   retry.type = "button";
   retry.className = "bn-button overview-bulk-button";
-  retry.textContent = "Retry";
+  retry.hidden = true;
+  retry.textContent = "Retry pin";
   retry.setAttribute("aria-label", `Retry pin action for ${result.title || result.key}`);
   retry.addEventListener("click", () => button.click());
   feedback.append(status, retry);
@@ -38,9 +42,11 @@ export const renderOverviewPin = (doc: Document, result: SearchResult): {
     button.textContent = label;
     button.setAttribute("aria-label", `${label} ${result.title || result.key}`);
   };
+  const hasMessage = (): boolean => status.textContent !== "";
   const report = (message: string): void => {
     status.textContent = message;
-    feedback.hidden = message === "";
+    feedback.toggleAttribute("data-empty", message === "");
+    if (message === "") retry.hidden = true;
   };
   const reportFailure = (outcome: PinOutcome): void => {
     report(outcome.message);
@@ -60,8 +66,8 @@ export const renderOverviewPin = (doc: Document, result: SearchResult): {
     const retryFocused = doc.activeElement === retry;
     button.disabled = true;
     retry.disabled = true;
-    retry.hidden = false;
-    if (!feedback.hidden) {
+    if (hasMessage()) {
+      retry.hidden = false;
       report(pinned ? "Unpinning note…" : "Pinning note…");
     }
     try {
@@ -81,7 +87,7 @@ export const renderOverviewPin = (doc: Document, result: SearchResult): {
     } finally {
       button.disabled = false;
       retry.disabled = false;
-      if (retryFocused && feedback.hidden) {
+      if (retryFocused && !hasMessage()) {
         button.focus();
       }
     }
