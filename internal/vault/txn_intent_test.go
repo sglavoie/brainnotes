@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
+	"github.com/sglavoie/brainnotes/internal/config"
 )
 
 // A commit is a sequence of durable state transitions, and the only honest way

@@ -5,8 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/textnorm"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/wikilink"
+	"github.com/sglavoie/brainnotes/internal/textnorm"
+	"github.com/sglavoie/brainnotes/internal/wikilink"
 )
 
 // relinkMediaExts names the embed extensions relink never rewrites: an

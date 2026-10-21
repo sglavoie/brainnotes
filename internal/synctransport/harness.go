@@ -9,9 +9,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/syncthingbin"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultfixture"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultsync"
+	"github.com/sglavoie/brainnotes/internal/syncthingbin"
+	"github.com/sglavoie/brainnotes/internal/vaultfixture"
+	"github.com/sglavoie/brainnotes/internal/vaultsync"
 )
 
 // Transport is a running two-process Syncthing cluster over one fixture pair.

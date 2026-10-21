@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
+	"github.com/sglavoie/brainnotes/internal/config"
 )
 
 // DefaultConfig is the brainnotes.toml a fixture vault gets when Options.Config

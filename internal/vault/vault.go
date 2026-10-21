@@ -14,8 +14,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/textnorm"
+	"github.com/sglavoie/brainnotes/internal/config"
+	"github.com/sglavoie/brainnotes/internal/textnorm"
 )
 
 // Vault is a handle to a notes directory plus the configuration that controls

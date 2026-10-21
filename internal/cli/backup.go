@@ -9,8 +9,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/backup"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
+	"github.com/sglavoie/brainnotes/internal/backup"
+	"github.com/sglavoie/brainnotes/internal/noteops"
 )
 
 // nowForBackup lets tests pin backup archive names.

@@ -12,11 +12,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/journal"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultfixture"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultgit"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultsync"
+	"github.com/sglavoie/brainnotes/internal/journal"
+	"github.com/sglavoie/brainnotes/internal/noteops"
+	"github.com/sglavoie/brainnotes/internal/vaultfixture"
+	"github.com/sglavoie/brainnotes/internal/vaultgit"
+	"github.com/sglavoie/brainnotes/internal/vaultsync"
 )
 
 // An import is six durable events with five gaps between them, and the only

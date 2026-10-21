@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
+	"github.com/sglavoie/brainnotes/internal/vault"
 )
 
 func TestExportCode_Basic(t *testing.T) {

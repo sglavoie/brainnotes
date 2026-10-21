@@ -4,8 +4,8 @@ import (
 	"path"
 	"strings"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/textnorm"
+	"github.com/sglavoie/brainnotes/internal/config"
+	"github.com/sglavoie/brainnotes/internal/textnorm"
 )
 
 // Class is what the portable-content inclusion policy says about one path.

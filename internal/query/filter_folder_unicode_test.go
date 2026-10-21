@@ -4,7 +4,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
+	"github.com/sglavoie/brainnotes/internal/vault"
 )
 
 // TestFolderComparesUnderNFCAndCase builds notes by path rather than on disk,

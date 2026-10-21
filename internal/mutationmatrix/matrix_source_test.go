@@ -11,8 +11,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/web"
+	"github.com/sglavoie/brainnotes/internal/noteops"
+	"github.com/sglavoie/brainnotes/internal/web"
 )
 
 // A raw-Markdown save replaces a whole note, so the fixture content below is a

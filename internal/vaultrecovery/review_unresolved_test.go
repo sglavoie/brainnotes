@@ -6,8 +6,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultimport"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultsync"
+	"github.com/sglavoie/brainnotes/internal/vaultimport"
+	"github.com/sglavoie/brainnotes/internal/vaultsync"
 )
 
 // TestReenrollmentRefusesWhileAConflictIsHeld covers the survivor holding a

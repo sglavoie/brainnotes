@@ -7,11 +7,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/journal"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultfixture"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultsync"
+	"github.com/sglavoie/brainnotes/internal/config"
+	"github.com/sglavoie/brainnotes/internal/journal"
+	"github.com/sglavoie/brainnotes/internal/noteops"
+	"github.com/sglavoie/brainnotes/internal/vaultfixture"
+	"github.com/sglavoie/brainnotes/internal/vaultsync"
 )
 
 // contestConfiguration puts the replicas in disagreement over the portable

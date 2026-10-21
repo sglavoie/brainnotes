@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/textnorm"
+	"github.com/sglavoie/brainnotes/internal/textnorm"
 )
 
 // noteInputSet collapses note arguments that name the same file. A raw string

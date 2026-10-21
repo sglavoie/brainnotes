@@ -8,11 +8,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultfixture"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultimport"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultsync"
+	"github.com/sglavoie/brainnotes/internal/config"
+	"github.com/sglavoie/brainnotes/internal/vault"
+	"github.com/sglavoie/brainnotes/internal/vaultfixture"
+	"github.com/sglavoie/brainnotes/internal/vaultimport"
+	"github.com/sglavoie/brainnotes/internal/vaultsync"
 )
 
 // The synchronization surface's fixture: two enrolled replicas, real packages,

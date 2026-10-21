@@ -7,8 +7,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/wikilink"
+	"github.com/sglavoie/brainnotes/internal/vault"
+	"github.com/sglavoie/brainnotes/internal/wikilink"
 )
 
 func (g *Graph) ExportDot(w io.Writer, nodes map[string]struct{}) error {

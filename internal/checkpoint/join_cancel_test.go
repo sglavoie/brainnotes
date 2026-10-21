@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
+	"github.com/sglavoie/brainnotes/internal/vault"
 )
 
 // holdBarrierExclusive takes the barrier the way a draining checkpoint does,

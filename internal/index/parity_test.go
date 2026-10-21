@@ -6,9 +6,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/query"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/queryexpr"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
+	"github.com/sglavoie/brainnotes/internal/query"
+	"github.com/sglavoie/brainnotes/internal/queryexpr"
+	"github.com/sglavoie/brainnotes/internal/vault"
 )
 
 // This file is the contract that makes the index safe to switch on: whatever a

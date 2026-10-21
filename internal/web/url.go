@@ -3,9 +3,9 @@ package web
 import (
 	"fmt"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/query"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
+	"github.com/sglavoie/brainnotes/internal/noteops"
+	"github.com/sglavoie/brainnotes/internal/query"
+	"github.com/sglavoie/brainnotes/internal/vault"
 )
 
 const (

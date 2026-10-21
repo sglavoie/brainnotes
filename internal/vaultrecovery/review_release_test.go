@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/checkpoint"
+	"github.com/sglavoie/brainnotes/internal/checkpoint"
 )
 
 // TestReviewApplyReportsAFailedCheckpointRelease proves an acceptance that

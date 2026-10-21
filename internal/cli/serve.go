@@ -15,10 +15,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/web"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/web/cssbuild"
+	"github.com/sglavoie/brainnotes/internal/config"
+	"github.com/sglavoie/brainnotes/internal/vault"
+	"github.com/sglavoie/brainnotes/internal/web"
+	"github.com/sglavoie/brainnotes/internal/web/cssbuild"
 )
 
 var runServe = func(ctx context.Context, cfg *config.Config, v *vault.Vault, opts web.Options) error {

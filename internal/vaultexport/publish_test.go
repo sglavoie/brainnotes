@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultsync"
+	"github.com/sglavoie/brainnotes/internal/vaultsync"
 )
 
 // TestReservedSequenceWithNoPackageIsReused is the common interruption: the

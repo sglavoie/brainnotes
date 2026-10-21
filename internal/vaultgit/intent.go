@@ -9,7 +9,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/agent"
+	"github.com/sglavoie/brainnotes/internal/agent"
 )
 
 // The recovery-intent protocol.

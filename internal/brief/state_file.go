@@ -10,10 +10,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/checkpoint"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/textnorm"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultstate"
+	"github.com/sglavoie/brainnotes/internal/checkpoint"
+	"github.com/sglavoie/brainnotes/internal/textnorm"
+	"github.com/sglavoie/brainnotes/internal/vault"
+	"github.com/sglavoie/brainnotes/internal/vaultstate"
 )
 
 type briefStateFile struct {

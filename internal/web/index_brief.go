@@ -8,9 +8,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/brief"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/editor"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/query"
+	"github.com/sglavoie/brainnotes/internal/brief"
+	"github.com/sglavoie/brainnotes/internal/editor"
+	"github.com/sglavoie/brainnotes/internal/query"
 )
 
 func rootBriefSlotViewFor(

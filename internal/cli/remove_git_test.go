@@ -6,8 +6,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultfixture"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultgit"
+	"github.com/sglavoie/brainnotes/internal/vaultfixture"
+	"github.com/sglavoie/brainnotes/internal/vaultgit"
 )
 
 func TestRemoveWithGitPreservesLatestBytesAndAllowsExternalDeletion(t *testing.T) {

@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/checkpoint"
+	"github.com/sglavoie/brainnotes/internal/checkpoint"
 )
 
 // renderCheckpointStatusJSON emits checkpoint.State verbatim.

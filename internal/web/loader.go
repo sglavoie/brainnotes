@@ -9,7 +9,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
+	"github.com/sglavoie/brainnotes/internal/vault"
 )
 
 // noteLoadTimeout bounds a single note read so one stalled file cannot block the

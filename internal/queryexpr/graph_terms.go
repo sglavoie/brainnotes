@@ -4,8 +4,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/query"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/textnorm"
+	"github.com/sglavoie/brainnotes/internal/query"
+	"github.com/sglavoie/brainnotes/internal/textnorm"
 )
 
 // Graph-traversal fields: the half of the reserved vocabulary that reads link

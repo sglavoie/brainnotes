@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
+	"github.com/sglavoie/brainnotes/internal/noteops"
 )
 
 // The lifecycle tests walk the four synthesis routes in the order a browser

@@ -6,7 +6,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/schema"
+	"github.com/sglavoie/brainnotes/internal/schema"
 )
 
 // LintError signals that lint found violations. main.go prints it and exits 1.

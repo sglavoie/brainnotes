@@ -6,8 +6,8 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/recall"
+	"github.com/sglavoie/brainnotes/internal/noteops"
+	"github.com/sglavoie/brainnotes/internal/recall"
 )
 
 const (

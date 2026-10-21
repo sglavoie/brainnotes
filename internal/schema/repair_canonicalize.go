@@ -3,7 +3,7 @@ package schema
 import (
 	"strings"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/textnorm"
+	"github.com/sglavoie/brainnotes/internal/textnorm"
 )
 
 // allowedKey is the form a value and an allowed spelling are compared in when

@@ -4,8 +4,8 @@ import (
 	"net/http"
 	"strconv"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/pins"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
+	"github.com/sglavoie/brainnotes/internal/pins"
+	"github.com/sglavoie/brainnotes/internal/vault"
 )
 
 const (

@@ -8,7 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/cockpit"
+	"github.com/sglavoie/brainnotes/internal/cockpit"
 )
 
 // NewDoctorCmd builds the read-only cockpit/health queue command. It surfaces

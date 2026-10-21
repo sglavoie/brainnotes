@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/cockpit"
+	"github.com/sglavoie/brainnotes/internal/cockpit"
 )
 
 // buildDoctorFixture writes a small vault whose diagnostics are deterministic:

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultsync"
+	"github.com/sglavoie/brainnotes/internal/vaultsync"
 )
 
 // TestDrainCallsAPackageStillBeingCopiedInUnreadableRatherThanFailed is about

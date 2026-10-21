@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
+	"github.com/sglavoie/brainnotes/internal/vault"
 )
 
 func normalizeWithinRoot(root, p string) (abs, relSlash string, err error) {

@@ -12,7 +12,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
+	"github.com/sglavoie/brainnotes/internal/noteops"
 )
 
 // saveWithAttachments posts a whole-file save that also names uploads to commit.

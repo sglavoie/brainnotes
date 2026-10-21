@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultgit"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultsync"
+	"github.com/sglavoie/brainnotes/internal/vaultgit"
+	"github.com/sglavoie/brainnotes/internal/vaultsync"
 )
 
 // run resolves whatever the last pass left behind, then exports.

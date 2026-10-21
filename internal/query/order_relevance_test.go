@@ -4,7 +4,7 @@ import (
 	"math"
 	"testing"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
+	"github.com/sglavoie/brainnotes/internal/vault"
 )
 
 // OrderNotesByRelevance is the one definition of what `relevance` and

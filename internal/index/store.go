@@ -10,7 +10,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
+	"github.com/sglavoie/brainnotes/internal/vault"
 )
 
 // formatVersion identifies the on-disk layout. Bump it on any change to entry

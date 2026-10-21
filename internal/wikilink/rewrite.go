@@ -3,7 +3,7 @@ package wikilink
 import (
 	"strings"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/textnorm"
+	"github.com/sglavoie/brainnotes/internal/textnorm"
 )
 
 // FirstReservedTargetRune returns the first rune in s that cannot appear

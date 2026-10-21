@@ -5,7 +5,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
+	"github.com/sglavoie/brainnotes/internal/noteops"
 )
 
 // synthesisPreviewTTL is how long a reviewed note stays applicable. It is far

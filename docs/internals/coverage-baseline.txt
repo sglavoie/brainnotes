@@ -9,49 +9,49 @@
 #
 # Regenerate with: just coverage
 
-ok  	github.com/sglavoie/sglavoie_brainnotes/cmd/bn	0.397s	coverage: 87.1% of statements
-ok  	github.com/sglavoie/sglavoie_brainnotes/cmd/bn-vault-guard	9.920s	coverage: 73.1% of statements
-ok  	github.com/sglavoie/sglavoie_brainnotes/cmd/bn-vault-sync	48.285s	coverage: 59.4% of statements
-ok  	github.com/sglavoie/sglavoie_brainnotes/internal/agent	(cached)	coverage: 89.7% of statements
-ok  	github.com/sglavoie/sglavoie_brainnotes/internal/attachments	58.616s	coverage: 75.5% of statements
-ok  	github.com/sglavoie/sglavoie_brainnotes/internal/audit	0.723s	coverage: [no statements]
-ok  	github.com/sglavoie/sglavoie_brainnotes/internal/backup	2.621s	coverage: 75.5% of statements
-ok  	github.com/sglavoie/sglavoie_brainnotes/internal/brief	2.244s	coverage: 75.8% of statements
-ok  	github.com/sglavoie/sglavoie_brainnotes/internal/buildinfo	(cached)	coverage: 86.7% of statements
-ok  	github.com/sglavoie/sglavoie_brainnotes/internal/checkpoint	8.074s	coverage: 84.8% of statements
-ok  	github.com/sglavoie/sglavoie_brainnotes/internal/cli	172.900s	coverage: 84.2% of statements
-ok  	github.com/sglavoie/sglavoie_brainnotes/internal/cockpit	7.167s	coverage: 83.6% of statements
-ok  	github.com/sglavoie/sglavoie_brainnotes/internal/config	(cached)	coverage: 92.0% of statements
-ok  	github.com/sglavoie/sglavoie_brainnotes/internal/editor	(cached)	coverage: 77.4% of statements
-ok  	github.com/sglavoie/sglavoie_brainnotes/internal/frontmatter	(cached)	coverage: 92.3% of statements
-ok  	github.com/sglavoie/sglavoie_brainnotes/internal/index	(cached)	coverage: 73.0% of statements
-ok  	github.com/sglavoie/sglavoie_brainnotes/internal/journal	(cached)	coverage: 75.9% of statements
-ok  	github.com/sglavoie/sglavoie_brainnotes/internal/mutationmatrix	287.135s	coverage: [no statements]
-ok  	github.com/sglavoie/sglavoie_brainnotes/internal/noteops	127.817s	coverage: 71.4% of statements
-ok  	github.com/sglavoie/sglavoie_brainnotes/internal/pins	(cached)	coverage: 93.4% of statements
-ok  	github.com/sglavoie/sglavoie_brainnotes/internal/properties	2.745s	coverage: 84.6% of statements
-ok  	github.com/sglavoie/sglavoie_brainnotes/internal/query	(cached)	coverage: 85.3% of statements
-ok  	github.com/sglavoie/sglavoie_brainnotes/internal/queryexpr	(cached)	coverage: 90.6% of statements
-ok  	github.com/sglavoie/sglavoie_brainnotes/internal/recall	2.433s	coverage: 86.4% of statements
-ok  	github.com/sglavoie/sglavoie_brainnotes/internal/restorestate	(cached)	coverage: 75.4% of statements
-ok  	github.com/sglavoie/sglavoie_brainnotes/internal/schema	(cached)	coverage: 92.9% of statements
-	github.com/sglavoie/sglavoie_brainnotes/internal/syncthingbin		coverage: 0.0% of statements
-	github.com/sglavoie/sglavoie_brainnotes/internal/synctransport		coverage: 0.0% of statements
-ok  	github.com/sglavoie/sglavoie_brainnotes/internal/template	(cached)	coverage: 80.1% of statements
-ok  	github.com/sglavoie/sglavoie_brainnotes/internal/textnorm	(cached)	coverage: 100.0% of statements
-ok  	github.com/sglavoie/sglavoie_brainnotes/internal/vault	(cached)	coverage: 76.3% of statements
-ok  	github.com/sglavoie/sglavoie_brainnotes/internal/vaultexport	199.315s	coverage: 90.3% of statements
-ok  	github.com/sglavoie/sglavoie_brainnotes/internal/vaultfixture	(cached)	coverage: 84.1% of statements
-ok  	github.com/sglavoie/sglavoie_brainnotes/internal/vaultgit	83.594s	coverage: 83.6% of statements
-ok  	github.com/sglavoie/sglavoie_brainnotes/internal/vaultimport	292.901s	coverage: 82.2% of statements
-ok  	github.com/sglavoie/sglavoie_brainnotes/internal/vaultrecovery	131.445s	coverage: 75.9% of statements
-	github.com/sglavoie/sglavoie_brainnotes/internal/vaultstate		coverage: 0.0% of statements
-ok  	github.com/sglavoie/sglavoie_brainnotes/internal/vaultsync	177.899s	coverage: 75.7% of statements
-ok  	github.com/sglavoie/sglavoie_brainnotes/internal/vaultsyncd	189.106s	coverage: 84.7% of statements
-ok  	github.com/sglavoie/sglavoie_brainnotes/internal/web	229.541s	coverage: 83.5% of statements
-ok  	github.com/sglavoie/sglavoie_brainnotes/internal/web/cssbuild	(cached)	coverage: 87.9% of statements
-	github.com/sglavoie/sglavoie_brainnotes/internal/web/cssbuild/gen		coverage: 0.0% of statements
-ok  	github.com/sglavoie/sglavoie_brainnotes/internal/wikilink	(cached)	coverage: 96.9% of statements
-	github.com/sglavoie/sglavoie_brainnotes/scripts/lintratchet		coverage: 0.0% of statements
-	github.com/sglavoie/sglavoie_brainnotes/scripts/syncfixture		coverage: 0.0% of statements
-	github.com/sglavoie/sglavoie_brainnotes/scripts/syncthingbin		coverage: 0.0% of statements
+ok  	github.com/sglavoie/brainnotes/cmd/bn	0.397s	coverage: 87.1% of statements
+ok  	github.com/sglavoie/brainnotes/cmd/bn-vault-guard	9.920s	coverage: 73.1% of statements
+ok  	github.com/sglavoie/brainnotes/cmd/bn-vault-sync	48.285s	coverage: 59.4% of statements
+ok  	github.com/sglavoie/brainnotes/internal/agent	(cached)	coverage: 89.7% of statements
+ok  	github.com/sglavoie/brainnotes/internal/attachments	58.616s	coverage: 75.5% of statements
+ok  	github.com/sglavoie/brainnotes/internal/audit	0.723s	coverage: [no statements]
+ok  	github.com/sglavoie/brainnotes/internal/backup	2.621s	coverage: 75.5% of statements
+ok  	github.com/sglavoie/brainnotes/internal/brief	2.244s	coverage: 75.8% of statements
+ok  	github.com/sglavoie/brainnotes/internal/buildinfo	(cached)	coverage: 86.7% of statements
+ok  	github.com/sglavoie/brainnotes/internal/checkpoint	8.074s	coverage: 84.8% of statements
+ok  	github.com/sglavoie/brainnotes/internal/cli	172.900s	coverage: 84.2% of statements
+ok  	github.com/sglavoie/brainnotes/internal/cockpit	7.167s	coverage: 83.6% of statements
+ok  	github.com/sglavoie/brainnotes/internal/config	(cached)	coverage: 92.0% of statements
+ok  	github.com/sglavoie/brainnotes/internal/editor	(cached)	coverage: 77.4% of statements
+ok  	github.com/sglavoie/brainnotes/internal/frontmatter	(cached)	coverage: 92.3% of statements
+ok  	github.com/sglavoie/brainnotes/internal/index	(cached)	coverage: 73.0% of statements
+ok  	github.com/sglavoie/brainnotes/internal/journal	(cached)	coverage: 75.9% of statements
+ok  	github.com/sglavoie/brainnotes/internal/mutationmatrix	287.135s	coverage: [no statements]
+ok  	github.com/sglavoie/brainnotes/internal/noteops	127.817s	coverage: 71.4% of statements
+ok  	github.com/sglavoie/brainnotes/internal/pins	(cached)	coverage: 93.4% of statements
+ok  	github.com/sglavoie/brainnotes/internal/properties	2.745s	coverage: 84.6% of statements
+ok  	github.com/sglavoie/brainnotes/internal/query	(cached)	coverage: 85.3% of statements
+ok  	github.com/sglavoie/brainnotes/internal/queryexpr	(cached)	coverage: 90.6% of statements
+ok  	github.com/sglavoie/brainnotes/internal/recall	2.433s	coverage: 86.4% of statements
+ok  	github.com/sglavoie/brainnotes/internal/restorestate	(cached)	coverage: 75.4% of statements
+ok  	github.com/sglavoie/brainnotes/internal/schema	(cached)	coverage: 92.9% of statements
+	github.com/sglavoie/brainnotes/internal/syncthingbin		coverage: 0.0% of statements
+	github.com/sglavoie/brainnotes/internal/synctransport		coverage: 0.0% of statements
+ok  	github.com/sglavoie/brainnotes/internal/template	(cached)	coverage: 80.1% of statements
+ok  	github.com/sglavoie/brainnotes/internal/textnorm	(cached)	coverage: 100.0% of statements
+ok  	github.com/sglavoie/brainnotes/internal/vault	(cached)	coverage: 76.3% of statements
+ok  	github.com/sglavoie/brainnotes/internal/vaultexport	199.315s	coverage: 90.3% of statements
+ok  	github.com/sglavoie/brainnotes/internal/vaultfixture	(cached)	coverage: 84.1% of statements
+ok  	github.com/sglavoie/brainnotes/internal/vaultgit	83.594s	coverage: 83.6% of statements
+ok  	github.com/sglavoie/brainnotes/internal/vaultimport	292.901s	coverage: 82.2% of statements
+ok  	github.com/sglavoie/brainnotes/internal/vaultrecovery	131.445s	coverage: 75.9% of statements
+	github.com/sglavoie/brainnotes/internal/vaultstate		coverage: 0.0% of statements
+ok  	github.com/sglavoie/brainnotes/internal/vaultsync	177.899s	coverage: 75.7% of statements
+ok  	github.com/sglavoie/brainnotes/internal/vaultsyncd	189.106s	coverage: 84.7% of statements
+ok  	github.com/sglavoie/brainnotes/internal/web	229.541s	coverage: 83.5% of statements
+ok  	github.com/sglavoie/brainnotes/internal/web/cssbuild	(cached)	coverage: 87.9% of statements
+	github.com/sglavoie/brainnotes/internal/web/cssbuild/gen		coverage: 0.0% of statements
+ok  	github.com/sglavoie/brainnotes/internal/wikilink	(cached)	coverage: 96.9% of statements
+	github.com/sglavoie/brainnotes/scripts/lintratchet		coverage: 0.0% of statements
+	github.com/sglavoie/brainnotes/scripts/syncfixture		coverage: 0.0% of statements
+	github.com/sglavoie/brainnotes/scripts/syncthingbin		coverage: 0.0% of statements

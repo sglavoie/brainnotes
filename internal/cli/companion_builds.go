@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/buildinfo"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultgit"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultsyncd"
+	"github.com/sglavoie/brainnotes/internal/buildinfo"
+	"github.com/sglavoie/brainnotes/internal/vaultgit"
+	"github.com/sglavoie/brainnotes/internal/vaultsyncd"
 )
 
 // bnBuildID is this binary's build identifier. It is a variable so a test can

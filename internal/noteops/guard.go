@@ -1,7 +1,7 @@
 package noteops
 
 import (
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
+	"github.com/sglavoie/brainnotes/internal/vault"
 )
 
 // guardMutation refuses an operation whose vault root or targets resolve onto

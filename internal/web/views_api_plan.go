@@ -4,10 +4,10 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/queryexpr"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
+	"github.com/sglavoie/brainnotes/internal/config"
+	"github.com/sglavoie/brainnotes/internal/noteops"
+	"github.com/sglavoie/brainnotes/internal/queryexpr"
+	"github.com/sglavoie/brainnotes/internal/vault"
 )
 
 // planViewsRequest pins the configuration the plan was built from, so the commit

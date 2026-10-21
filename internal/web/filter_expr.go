@@ -6,9 +6,9 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/query"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/queryexpr"
+	"github.com/sglavoie/brainnotes/internal/config"
+	"github.com/sglavoie/brainnotes/internal/query"
+	"github.com/sglavoie/brainnotes/internal/queryexpr"
 )
 
 // exprFilterError reports a rejected expr= parameter. It keeps the expression

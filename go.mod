@@ -1,4 +1,4 @@
-module github.com/sglavoie/sglavoie_brainnotes
+module github.com/sglavoie/brainnotes
 
 go 1.26.2
 

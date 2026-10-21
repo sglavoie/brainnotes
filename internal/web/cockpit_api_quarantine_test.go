@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/cockpit"
+	"github.com/sglavoie/brainnotes/internal/cockpit"
 )
 
 func TestServer_CockpitAPI_QuarantinedNoteOmittedFromReads(t *testing.T) {

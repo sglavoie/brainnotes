@@ -7,10 +7,10 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/cockpit"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/query"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/schema"
+	"github.com/sglavoie/brainnotes/internal/cockpit"
+	"github.com/sglavoie/brainnotes/internal/config"
+	"github.com/sglavoie/brainnotes/internal/query"
+	"github.com/sglavoie/brainnotes/internal/schema"
 )
 
 func diagnosticBrokenTargets(notes []diagnosticLoadedNote, graph *query.Graph) []diagnosticGroup {

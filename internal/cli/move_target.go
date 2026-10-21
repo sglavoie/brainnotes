@@ -1,7 +1,7 @@
 package cli
 
 import (
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
+	"github.com/sglavoie/brainnotes/internal/vault"
 )
 
 // resolveMoveTarget resolves the note `bn move` acts on. It goes through the

@@ -69,12 +69,12 @@ import (
 	"regexp"
 	"syscall"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/buildinfo"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultrecovery"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultsync"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultsyncd"
+	"github.com/sglavoie/brainnotes/internal/buildinfo"
+	"github.com/sglavoie/brainnotes/internal/config"
+	"github.com/sglavoie/brainnotes/internal/vault"
+	"github.com/sglavoie/brainnotes/internal/vaultrecovery"
+	"github.com/sglavoie/brainnotes/internal/vaultsync"
+	"github.com/sglavoie/brainnotes/internal/vaultsyncd"
 )
 
 // Exit statuses. They are named because `-check`'s are an interface: a health

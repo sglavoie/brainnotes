@@ -4,7 +4,7 @@ import (
 	"errors"
 	"reflect"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/textnorm"
+	"github.com/sglavoie/brainnotes/internal/textnorm"
 )
 
 // ErrNotAList is returned by list-mutation methods when the target key exists

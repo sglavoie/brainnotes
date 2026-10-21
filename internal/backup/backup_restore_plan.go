@@ -9,7 +9,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
+	"github.com/sglavoie/brainnotes/internal/vault"
 )
 
 func planRestoreTransaction(root, stageDir string, entries []archiveEntry, desired map[string]struct{}, wipe bool) (*vault.FileTxn, []string, error) {

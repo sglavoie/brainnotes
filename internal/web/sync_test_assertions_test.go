@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultimport"
+	"github.com/sglavoie/brainnotes/internal/vaultimport"
 )
 
 func decodeSyncJSON(t *testing.T, body string, into any) {

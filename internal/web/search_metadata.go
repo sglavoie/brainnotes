@@ -3,7 +3,7 @@ package web
 import (
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
+	"github.com/sglavoie/brainnotes/internal/vault"
 )
 
 // Match query.OrderModified: only a parsed frontmatter timestamp counts, not

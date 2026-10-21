@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
+	"github.com/sglavoie/brainnotes/internal/config"
 )
 
 // TryCoerce attempts a lossless conversion of val to the kind described by def.

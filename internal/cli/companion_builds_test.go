@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultsyncd"
+	"github.com/sglavoie/brainnotes/internal/vaultsyncd"
 )
 
 func useBnBuild(t *testing.T, id string) {

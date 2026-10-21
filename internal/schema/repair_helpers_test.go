@@ -1,6 +1,6 @@
 package schema
 
-import "github.com/sglavoie/sglavoie_brainnotes/internal/frontmatter"
+import "github.com/sglavoie/brainnotes/internal/frontmatter"
 
 func buildFront(pairs ...any) *frontmatter.Map {
 	m := frontmatter.NewMap()

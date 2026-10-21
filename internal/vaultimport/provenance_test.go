@@ -6,9 +6,9 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultexport"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultsync"
+	"github.com/sglavoie/brainnotes/internal/vault"
+	"github.com/sglavoie/brainnotes/internal/vaultexport"
+	"github.com/sglavoie/brainnotes/internal/vaultsync"
 )
 
 // TestProvenanceIsDurableBeforeTheVaultIsTouched looks at the disk from inside

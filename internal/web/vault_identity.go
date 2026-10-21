@@ -1,8 +1,8 @@
 package web
 
 import (
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultsync"
+	"github.com/sglavoie/brainnotes/internal/vault"
+	"github.com/sglavoie/brainnotes/internal/vaultsync"
 )
 
 // vaultIdentityPrefix values keep the two identity spaces disjoint.

@@ -11,9 +11,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/agent"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/checkpoint"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
+	"github.com/sglavoie/brainnotes/internal/agent"
+	"github.com/sglavoie/brainnotes/internal/checkpoint"
+	"github.com/sglavoie/brainnotes/internal/config"
 )
 
 // defaultRemote is the remote a vault is pushed to when the caller names none.

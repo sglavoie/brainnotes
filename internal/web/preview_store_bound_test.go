@@ -4,8 +4,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/cockpit"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
+	"github.com/sglavoie/brainnotes/internal/cockpit"
+	"github.com/sglavoie/brainnotes/internal/noteops"
 )
 
 // previewCapCase drives one preview store through a receipt flood. Each store

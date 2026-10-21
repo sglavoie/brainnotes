@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/frontmatter"
+	"github.com/sglavoie/brainnotes/internal/config"
+	"github.com/sglavoie/brainnotes/internal/frontmatter"
 )
 
 // reviewDriftTasks builds the missing-review-date and stale-status advisory

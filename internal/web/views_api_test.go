@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
+	"github.com/sglavoie/brainnotes/internal/noteops"
 )
 
 // viewsTestConfigTOML adds three saved views to the shared property fixture: one

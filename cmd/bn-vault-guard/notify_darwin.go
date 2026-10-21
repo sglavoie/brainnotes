@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/agent"
+	"github.com/sglavoie/brainnotes/internal/agent"
 )
 
 // notifyTimeout bounds the osascript call. A notification is a courtesy: if the

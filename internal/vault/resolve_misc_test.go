@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
+	"github.com/sglavoie/brainnotes/internal/config"
 )
 
 func TestOpenRejectsEmptyVaultPath(t *testing.T) {

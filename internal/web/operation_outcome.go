@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/journal"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
+	"github.com/sglavoie/brainnotes/internal/journal"
+	"github.com/sglavoie/brainnotes/internal/noteops"
 )
 
 const operationOutcomeRoutePath = "/api/operations/outcome"

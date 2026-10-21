@@ -12,7 +12,7 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/cli"
+	"github.com/sglavoie/brainnotes/internal/cli"
 )
 
 func TestRunSuccess(t *testing.T) {

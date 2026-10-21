@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/journal"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
+	"github.com/sglavoie/brainnotes/internal/journal"
+	"github.com/sglavoie/brainnotes/internal/vault"
 )
 
 // binaryPayload is deliberately not text. A NUL byte, a lone 0xFF that is not

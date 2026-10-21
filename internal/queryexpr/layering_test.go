@@ -16,7 +16,7 @@ import (
 // properties, or recall, the reason for splitting it out of internal/query
 // would be gone — see doc.go and docs/internals/architecture.md.
 func TestPackageLayering(t *testing.T) {
-	const prefix = "github.com/sglavoie/sglavoie_brainnotes/internal/"
+	const prefix = "github.com/sglavoie/brainnotes/internal/"
 
 	allowed := map[string]bool{
 		"query":       true,

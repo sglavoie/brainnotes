@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/query"
+	"github.com/sglavoie/brainnotes/internal/query"
 )
 
 // parseBoolLiteral reads true/false case-insensitively, matching how boolField

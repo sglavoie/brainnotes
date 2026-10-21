@@ -9,8 +9,8 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/restorestate"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
+	"github.com/sglavoie/brainnotes/internal/restorestate"
+	"github.com/sglavoie/brainnotes/internal/vault"
 )
 
 const (

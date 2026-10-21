@@ -8,7 +8,7 @@ import (
 	"os"
 	"slices"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultsync"
+	"github.com/sglavoie/brainnotes/internal/vaultsync"
 )
 
 // finishResolutions carries every resolution this vault was interrupted inside

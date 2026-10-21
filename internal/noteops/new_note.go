@@ -3,7 +3,7 @@ package noteops
 import (
 	"strings"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/wikilink"
+	"github.com/sglavoie/brainnotes/internal/wikilink"
 )
 
 // NewNoteSource prepares a title-only note without requiring an existing note

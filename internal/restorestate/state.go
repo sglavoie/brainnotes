@@ -17,7 +17,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
+	"github.com/sglavoie/brainnotes/internal/vault"
 )
 
 const (

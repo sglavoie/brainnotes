@@ -22,7 +22,7 @@ sync_binary_name := "bn-vault-sync"
 sync_pkg := "./cmd/bn-vault-sync"
 
 source_checkout_root := justfile_directory()
-source_checkout_ldflags := "-X github.com/sglavoie/sglavoie_brainnotes/internal/cli.sourceCheckoutRoot=" + source_checkout_root
+source_checkout_ldflags := "-X github.com/sglavoie/brainnotes/internal/cli.sourceCheckoutRoot=" + source_checkout_root
 
 # The anchor for the new-code-only complexity gate: the commit
 # docs/internals/refactor-baseline.md measured its 281/271 ratchet floor at.
@@ -154,6 +154,15 @@ vault-sandbox *ARGS:
 # Run the real-browser end-to-end suite (needs `npm run test:e2e:install` once)
 test-e2e:
     npm run test:e2e
+
+# The README recordings. Both drive a throwaway copy of `scripts/demo/vault`
+# under the system temp directory: Playwright tours `bn serve` (started through
+# `scripts/vault_sandbox.py`) and VHS replays `scripts/demo/cli.tape`. Needs
+# ffmpeg and vhs on PATH, and Chromium from `npm run test:e2e:install`.
+
+# Re-record docs/assets/demo-web.gif and demo-cli.gif (TARGET: all, web or cli)
+demo TARGET="all":
+    node scripts/demo/record.mjs {{ TARGET }}
 
 # The real-transport gate, and `just test-e2e`'s counterpart for synchronization.
 # It provisions the pinned Syncthing release, builds two disposable vaults under

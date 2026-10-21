@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
+	"github.com/sglavoie/brainnotes/internal/vault"
 )
 
 // TestTyped_AllowedListIsNotEnforced is the point of the whole rule: you have

@@ -64,7 +64,7 @@ type internalDep struct {
 // internalDeps returns every internal/ import in this package's non-test files.
 func internalDeps(t *testing.T) []internalDep {
 	t.Helper()
-	const prefix = "github.com/sglavoie/sglavoie_brainnotes/internal/"
+	const prefix = "github.com/sglavoie/brainnotes/internal/"
 
 	files := parseImports(t, func(name string) bool {
 		return !strings.HasSuffix(name, "_test.go")

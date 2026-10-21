@@ -5,7 +5,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
+	"github.com/sglavoie/brainnotes/internal/noteops"
 )
 
 // handleCapture appends one quick-capture line to the configured inbox note.

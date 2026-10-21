@@ -21,7 +21,7 @@ import (
 // evaluate real queries against both load paths; that is a test-only edge and
 // creates no import cycle, since nothing in those packages imports index.
 func TestPackageLayering(t *testing.T) {
-	const prefix = "github.com/sglavoie/sglavoie_brainnotes/internal/"
+	const prefix = "github.com/sglavoie/brainnotes/internal/"
 
 	allowed := map[string]bool{
 		"vault":       true,

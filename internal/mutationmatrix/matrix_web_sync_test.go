@@ -4,9 +4,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultfixture"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultimport"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultsync"
+	"github.com/sglavoie/brainnotes/internal/vaultfixture"
+	"github.com/sglavoie/brainnotes/internal/vaultimport"
+	"github.com/sglavoie/brainnotes/internal/vaultsync"
 )
 
 // The conflict resolution routes, spelled out for the reason settingsPreviewRoute

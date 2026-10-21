@@ -8,8 +8,8 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/agent"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
+	"github.com/sglavoie/brainnotes/internal/agent"
+	"github.com/sglavoie/brainnotes/internal/noteops"
 )
 
 // readAgentPrompt validates the optional free-text prompt the insight routes

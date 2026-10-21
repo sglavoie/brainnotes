@@ -8,7 +8,7 @@ import (
 	"strings"
 
 	chromahtml "github.com/alecthomas/chroma/v2/formatters/html"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/query"
+	"github.com/sglavoie/brainnotes/internal/query"
 	"github.com/yuin/goldmark"
 	highlighting "github.com/yuin/goldmark-highlighting/v2"
 	"github.com/yuin/goldmark/ast"

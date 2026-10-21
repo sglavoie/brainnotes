@@ -7,7 +7,7 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/textnorm"
+	"github.com/sglavoie/brainnotes/internal/textnorm"
 )
 
 // TermContribution is one overlapping term's additive contribution to a

@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultsync"
+	"github.com/sglavoie/brainnotes/internal/vaultsync"
 )
 
 // The bodies one replica writes while the other is writing its own. They differ

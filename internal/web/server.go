@@ -10,12 +10,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/agent"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/brief"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/cockpit"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/index"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
+	"github.com/sglavoie/brainnotes/internal/agent"
+	"github.com/sglavoie/brainnotes/internal/brief"
+	"github.com/sglavoie/brainnotes/internal/cockpit"
+	"github.com/sglavoie/brainnotes/internal/config"
+	"github.com/sglavoie/brainnotes/internal/index"
+	"github.com/sglavoie/brainnotes/internal/vault"
 )
 
 const shutdownTimeout = 5 * time.Second

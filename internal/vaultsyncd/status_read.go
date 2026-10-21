@@ -9,12 +9,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/agent"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/buildinfo"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultexport"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultgit"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultimport"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultsync"
+	"github.com/sglavoie/brainnotes/internal/agent"
+	"github.com/sglavoie/brainnotes/internal/buildinfo"
+	"github.com/sglavoie/brainnotes/internal/vaultexport"
+	"github.com/sglavoie/brainnotes/internal/vaultgit"
+	"github.com/sglavoie/brainnotes/internal/vaultimport"
+	"github.com/sglavoie/brainnotes/internal/vaultsync"
 )
 
 // ReadOptions configure one status read.

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
+	"github.com/sglavoie/brainnotes/internal/config"
 )
 
 // TestConfigMigrateCrashHelper is the child process. os.Exit inside the hook

@@ -85,6 +85,18 @@ change, append `--update-snapshots`, inspect the changed images in
 avoid cross-platform font differences. A weekly and manually runnable
 qualification workflow exercises Chromium, Firefox, and WebKit at both widths.
 
+## README demos
+
+`just demo` re-records `docs/assets/demo-web.gif` and `docs/assets/demo-cli.gif`
+from the sample vault in `scripts/demo/vault`; `just demo web` or `just demo cli`
+records one. It needs [ffmpeg](https://ffmpeg.org/),
+[VHS](https://github.com/charmbracelet/vhs), and the Chromium from
+`npm run test:e2e:install`. The web tour is `scripts/demo/record.mjs` and the
+terminal session is `scripts/demo/cli.tape`. Both run against a throwaway copy of
+the vault under the system temporary directory, never against `$BNOTES_VAULT`.
+Re-record after a visible UI change, look at the result, and commit the GIFs.
+A tour step that cannot find its element fails the run and saves a screenshot.
+
 ## Before submitting a change
 
 Run `just ci` for formatting, Go vet and tests, the complexity gates, frontend

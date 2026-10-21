@@ -5,7 +5,7 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultgit"
+	"github.com/sglavoie/brainnotes/internal/vaultgit"
 )
 
 // Safety is the Git safety engine as a mutating operation needs it: refuse

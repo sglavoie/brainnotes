@@ -10,8 +10,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultimport"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultsync"
+	"github.com/sglavoie/brainnotes/internal/vaultimport"
+	"github.com/sglavoie/brainnotes/internal/vaultsync"
 )
 
 // world is what this program tells the browser suite, and every field is

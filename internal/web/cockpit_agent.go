@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/cockpit"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
+	"github.com/sglavoie/brainnotes/internal/cockpit"
+	"github.com/sglavoie/brainnotes/internal/noteops"
 )
 
 const dailyReviewAgentAPIRoutePath = "/api/daily-review/agent"

@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/recall"
+	"github.com/sglavoie/brainnotes/internal/noteops"
+	"github.com/sglavoie/brainnotes/internal/recall"
 )
 
 func TestSynthesisContextAPI_BuildsPacketFromSelection(t *testing.T) {

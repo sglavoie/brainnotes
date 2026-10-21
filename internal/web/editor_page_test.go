@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
+	"github.com/sglavoie/brainnotes/internal/noteops"
 )
 
 func getEditorPage(t *testing.T, baseURL, query string) (int, string) {

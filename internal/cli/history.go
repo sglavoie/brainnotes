@@ -8,7 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/journal"
+	"github.com/sglavoie/brainnotes/internal/journal"
 )
 
 // NewHistoryCmd returns the `history` subcommand. Exported for tests.

@@ -8,7 +8,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
+	"github.com/sglavoie/brainnotes/internal/config"
 )
 
 // TestPairVaultsAreDisposableGitRepositories is the demonstration that the pair

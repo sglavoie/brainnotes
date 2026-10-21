@@ -10,7 +10,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultstate"
+	"github.com/sglavoie/brainnotes/internal/vaultstate"
 )
 
 const (

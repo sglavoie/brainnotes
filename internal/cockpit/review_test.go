@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/frontmatter"
+	"github.com/sglavoie/brainnotes/internal/frontmatter"
 )
 
 // frontFrom parses a YAML frontmatter block (without the --- fences) into a Map.

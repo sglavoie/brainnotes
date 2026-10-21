@@ -4,7 +4,7 @@ import (
 	"path"
 	"strings"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
+	"github.com/sglavoie/brainnotes/internal/config"
 )
 
 // The tracked scope is fixed in code rather than read from the vault's

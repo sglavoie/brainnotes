@@ -10,7 +10,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/checkpoint"
+	"github.com/sglavoie/brainnotes/internal/checkpoint"
 )
 
 // checkpointRunner executes the child process. Tests replace it to avoid

@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
+	"github.com/sglavoie/brainnotes/internal/vault"
 )
 
 func TestSearch_InteractiveRequiresPatternOrFlag(t *testing.T) {

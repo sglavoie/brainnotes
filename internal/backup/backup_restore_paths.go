@@ -10,8 +10,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/checkpoint"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultsync"
+	"github.com/sglavoie/brainnotes/internal/checkpoint"
+	"github.com/sglavoie/brainnotes/internal/vaultsync"
 )
 
 func resolveVaultRoot(vaultRoot string) (string, error) {

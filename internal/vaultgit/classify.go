@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/journal"
+	"github.com/sglavoie/brainnotes/internal/journal"
 )
 
 // changeKind is what the engine decided a pending path is.

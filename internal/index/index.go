@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
+	"github.com/sglavoie/brainnotes/internal/vault"
 )
 
 // RelDir is the vault-relative directory holding every file this package

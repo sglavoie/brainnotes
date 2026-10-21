@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultsync"
+	"github.com/sglavoie/brainnotes/internal/vaultsync"
 )
 
 // waits is one scheduling rule's answer: why this package must wait, and which

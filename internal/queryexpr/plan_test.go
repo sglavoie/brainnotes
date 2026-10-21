@@ -3,7 +3,7 @@ package queryexpr
 import (
 	"testing"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/query"
+	"github.com/sglavoie/brainnotes/internal/query"
 )
 
 func TestPlan_NeedsGraph(t *testing.T) {

@@ -6,8 +6,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/cockpit"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
+	"github.com/sglavoie/brainnotes/internal/cockpit"
+	"github.com/sglavoie/brainnotes/internal/vault"
 )
 
 // doctorOptions is the flag state of one `bn doctor` invocation.

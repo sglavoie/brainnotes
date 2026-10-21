@@ -6,7 +6,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/wikilink"
+	"github.com/sglavoie/brainnotes/internal/wikilink"
 	"go.yaml.in/yaml/v3"
 )
 

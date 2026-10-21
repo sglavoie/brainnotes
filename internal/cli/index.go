@@ -9,8 +9,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/index"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
+	"github.com/sglavoie/brainnotes/internal/index"
+	"github.com/sglavoie/brainnotes/internal/vault"
 )
 
 // indexOptions is the flag state of one `bn index` invocation.

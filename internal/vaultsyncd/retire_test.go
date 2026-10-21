@@ -8,9 +8,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/checkpoint"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultexport"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultsync"
+	"github.com/sglavoie/brainnotes/internal/checkpoint"
+	"github.com/sglavoie/brainnotes/internal/vaultexport"
+	"github.com/sglavoie/brainnotes/internal/vaultsync"
 )
 
 func TestRetirementWaitsForCheckpoint(t *testing.T) {

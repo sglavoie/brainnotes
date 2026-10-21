@@ -8,7 +8,7 @@ import (
 	"strings"
 	"syscall"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
+	"github.com/sglavoie/brainnotes/internal/config"
 )
 
 // openMediaFile opens a resolved media path for serving and reports ok only

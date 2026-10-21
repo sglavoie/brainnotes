@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
+	"github.com/sglavoie/brainnotes/internal/config"
 )
 
 // Proposal is an inferred definition for an unconfigured property. Inference

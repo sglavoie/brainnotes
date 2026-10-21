@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/journal"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
+	"github.com/sglavoie/brainnotes/internal/journal"
+	"github.com/sglavoie/brainnotes/internal/vault"
 )
 
 // TestUndoForwardsTheAuthorizedStateIntoTheTransaction covers the middle hop of

@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/synctransport"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultsync"
+	"github.com/sglavoie/brainnotes/internal/synctransport"
+	"github.com/sglavoie/brainnotes/internal/vaultsync"
 )
 
 // live is the world from helpers_test.go with the fake transport replaced by two

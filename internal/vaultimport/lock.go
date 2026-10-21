@@ -4,9 +4,9 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/checkpoint"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultsync"
+	"github.com/sglavoie/brainnotes/internal/checkpoint"
+	"github.com/sglavoie/brainnotes/internal/vault"
+	"github.com/sglavoie/brainnotes/internal/vaultsync"
 )
 
 // lockFileName is the guard every import in a vault takes, beside the record it

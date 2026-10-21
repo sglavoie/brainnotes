@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultsync"
+	"github.com/sglavoie/brainnotes/internal/vaultsync"
 )
 
 // TestVaultIdentity_LocatedVaultIsStableAndDistinct covers the fallback, which is

@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/recall"
+	"github.com/sglavoie/brainnotes/internal/recall"
 )
 
 func TestRelatedNotesCrossLayerContract(t *testing.T) {

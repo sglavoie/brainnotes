@@ -9,7 +9,7 @@ import (
 	"runtime"
 	"testing"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
+	"github.com/sglavoie/brainnotes/internal/vault"
 )
 
 // largeRestorePayload is big enough that one copy of it is unmistakable in an

@@ -5,9 +5,9 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/frontmatter"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
+	"github.com/sglavoie/brainnotes/internal/config"
+	"github.com/sglavoie/brainnotes/internal/frontmatter"
+	"github.com/sglavoie/brainnotes/internal/vault"
 )
 
 func SetFrontmatter(vaultRoot, sourceRel string, mutations []FrontmatterMutation, fm *config.FrontmatterConfig, opts ...FrontmatterOption) (*FrontmatterResult, error) {

@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/checkpoint"
+	"github.com/sglavoie/brainnotes/internal/checkpoint"
 )
 
 func TestExternalStateWriteJoinsVaultCheckpoint(t *testing.T) {

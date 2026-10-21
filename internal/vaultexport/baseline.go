@@ -6,8 +6,8 @@ import (
 	"sort"
 	"strconv"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultgit"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultsync"
+	"github.com/sglavoie/brainnotes/internal/vaultgit"
+	"github.com/sglavoie/brainnotes/internal/vaultsync"
 )
 
 // exportBaseline describes the whole portable tree of one commit to a peer that

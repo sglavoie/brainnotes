@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/frontmatter"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
+	"github.com/sglavoie/brainnotes/internal/frontmatter"
+	"github.com/sglavoie/brainnotes/internal/vault"
 )
 
 func TestSaveSourceWritesTheSubmittedBytesVerbatim(t *testing.T) {

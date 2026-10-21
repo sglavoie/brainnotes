@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
+	"github.com/sglavoie/brainnotes/internal/config"
 )
 
 // TestMain scrubs $BNOTES_VAULT before any test in this package runs, which is

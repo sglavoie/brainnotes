@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/agent"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/journal"
+	"github.com/sglavoie/brainnotes/internal/agent"
+	"github.com/sglavoie/brainnotes/internal/journal"
 )
 
 // CommitPending records external changes: everything a person did to the vault

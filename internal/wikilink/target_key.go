@@ -4,7 +4,7 @@ import (
 	"path"
 	"strings"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/textnorm"
+	"github.com/sglavoie/brainnotes/internal/textnorm"
 )
 
 // TargetPathKey is the vault-path key a folder-qualified wikilink target, or a

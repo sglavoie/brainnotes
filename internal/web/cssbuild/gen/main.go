@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/web/cssbuild"
+	"github.com/sglavoie/brainnotes/internal/web/cssbuild"
 )
 
 func main() {

@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
+	"github.com/sglavoie/brainnotes/internal/config"
 )
 
 func TestServer_BulkAPI_FrontmatterSetPartialMissingKeysJournalsAndInvalidatesState(t *testing.T) {

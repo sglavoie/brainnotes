@@ -8,8 +8,8 @@ import (
 	"syscall"
 	"testing"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultsync"
+	"github.com/sglavoie/brainnotes/internal/vault"
+	"github.com/sglavoie/brainnotes/internal/vaultsync"
 )
 
 // TestRecoveryQualificationDiskExhaustionBeforeApplication covers capacity

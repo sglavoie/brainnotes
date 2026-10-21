@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/checkpoint"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/restorestate"
+	"github.com/sglavoie/brainnotes/internal/checkpoint"
+	"github.com/sglavoie/brainnotes/internal/restorestate"
 )
 
 func TestBarrierJoinErrorOnlyTreatsAHeldCheckpointAsBusy(t *testing.T) {

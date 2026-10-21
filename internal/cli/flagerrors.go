@@ -8,7 +8,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	editutil "github.com/sglavoie/sglavoie_brainnotes/internal/editor"
+	editutil "github.com/sglavoie/brainnotes/internal/editor"
 )
 
 // enumValueError is the one wording for a flag value outside a fixed set:

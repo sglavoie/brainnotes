@@ -6,7 +6,7 @@ import (
 	"sort"
 	"testing"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
+	"github.com/sglavoie/brainnotes/internal/vault"
 )
 
 func writeNote(t *testing.T, root, rel, content string) string {

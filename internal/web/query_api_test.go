@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
+	"github.com/sglavoie/brainnotes/internal/config"
 )
 
 // queryAPIVaultFiles is the fixture both endpoints read: a few tags, a folder,

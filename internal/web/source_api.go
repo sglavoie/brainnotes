@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/attachments"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/frontmatter"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
+	"github.com/sglavoie/brainnotes/internal/attachments"
+	"github.com/sglavoie/brainnotes/internal/frontmatter"
+	"github.com/sglavoie/brainnotes/internal/noteops"
 )
 
 const (

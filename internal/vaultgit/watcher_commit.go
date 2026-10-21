@@ -6,7 +6,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/agent"
+	"github.com/sglavoie/brainnotes/internal/agent"
 )
 
 // scanAndCommit reports whether it created a snapshot.

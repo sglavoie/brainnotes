@@ -9,8 +9,8 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultsync"
+	"github.com/sglavoie/brainnotes/internal/vault"
+	"github.com/sglavoie/brainnotes/internal/vaultsync"
 )
 
 // resolutionsName is the staged-revision store inside the synchronization state

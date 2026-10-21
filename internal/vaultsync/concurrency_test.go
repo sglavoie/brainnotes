@@ -6,7 +6,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultfixture"
+	"github.com/sglavoie/brainnotes/internal/vaultfixture"
 )
 
 // racers is how many goroutines each test below starts. Small enough to stay

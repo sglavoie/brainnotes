@@ -3,8 +3,8 @@ package vaultgit
 import (
 	"strings"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/agent"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
+	"github.com/sglavoie/brainnotes/internal/agent"
+	"github.com/sglavoie/brainnotes/internal/config"
 )
 
 // reloadPolicy polls the configuration source and applies what it finds.

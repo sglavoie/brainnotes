@@ -1,7 +1,7 @@
 package query
 
 import (
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
+	"github.com/sglavoie/brainnotes/internal/vault"
 	"os"
 	"path/filepath"
 	"testing"

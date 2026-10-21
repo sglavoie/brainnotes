@@ -6,7 +6,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/query"
+	"github.com/sglavoie/brainnotes/internal/query"
 )
 
 // RankingVersion identifies the stable scoring and explanation semantics.

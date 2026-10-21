@@ -5,7 +5,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultfixture"
+	"github.com/sglavoie/brainnotes/internal/vaultfixture"
 )
 
 // replicas is a pair of disposable vaults enrolled as two replicas of one

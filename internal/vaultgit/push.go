@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/agent"
+	"github.com/sglavoie/brainnotes/internal/agent"
 )
 
 // PushTimeout bounds one remote push. The watcher runs its push in the same

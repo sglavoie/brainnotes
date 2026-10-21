@@ -5,8 +5,8 @@ import (
 	"errors"
 	"sort"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/query"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
+	"github.com/sglavoie/brainnotes/internal/query"
+	"github.com/sglavoie/brainnotes/internal/vault"
 )
 
 // Evaluator runs a compiled plan against a corpus of notes. It is an interface

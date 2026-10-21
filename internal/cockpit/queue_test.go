@@ -6,8 +6,8 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
+	"github.com/sglavoie/brainnotes/internal/config"
+	"github.com/sglavoie/brainnotes/internal/vault"
 )
 
 // newTestVault writes files into a temp dir and opens a vault over it. The

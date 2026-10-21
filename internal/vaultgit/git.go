@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/agent"
+	"github.com/sglavoie/brainnotes/internal/agent"
 )
 
 const (

@@ -7,8 +7,8 @@ import (
 	"io/fs"
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/journal"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultsync"
+	"github.com/sglavoie/brainnotes/internal/journal"
+	"github.com/sglavoie/brainnotes/internal/vaultsync"
 )
 
 // operationToken names an import in this vault's own content history. Like every

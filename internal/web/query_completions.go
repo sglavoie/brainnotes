@@ -3,9 +3,9 @@ package web
 import (
 	"strings"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/properties"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/queryexpr"
+	"github.com/sglavoie/brainnotes/internal/config"
+	"github.com/sglavoie/brainnotes/internal/properties"
+	"github.com/sglavoie/brainnotes/internal/queryexpr"
 )
 
 // queryValueSource supplies the candidate values a field can take. Every source

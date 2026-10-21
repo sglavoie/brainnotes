@@ -4,8 +4,8 @@ import (
 	"context"
 	"strings"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/journal"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
+	"github.com/sglavoie/brainnotes/internal/journal"
+	"github.com/sglavoie/brainnotes/internal/vault"
 )
 
 // UndoOptions controls one restore of a journal entry.

@@ -6,7 +6,7 @@ import (
 	"math"
 	"testing"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
+	"github.com/sglavoie/brainnotes/internal/vault"
 )
 
 func ranked(relPath string, rank float64) Entry {

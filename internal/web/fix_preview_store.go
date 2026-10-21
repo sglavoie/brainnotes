@@ -7,8 +7,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/cockpit"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
+	"github.com/sglavoie/brainnotes/internal/cockpit"
+	"github.com/sglavoie/brainnotes/internal/noteops"
 )
 
 // fixPreviewTTL bounds how long a cockpit fix preview receipt stays valid. It

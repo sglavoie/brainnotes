@@ -3,7 +3,7 @@ package cli
 import (
 	"path/filepath"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/frontmatter"
+	"github.com/sglavoie/brainnotes/internal/frontmatter"
 )
 
 // snapshot captures a key's value (or absence) for later diffing.

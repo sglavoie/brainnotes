@@ -7,7 +7,7 @@ import (
 	"testing"
 	"time"
 
-	tmpl "github.com/sglavoie/sglavoie_brainnotes/internal/template"
+	tmpl "github.com/sglavoie/brainnotes/internal/template"
 )
 
 func buildNewFixture(t *testing.T) string {

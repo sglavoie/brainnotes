@@ -1,7 +1,7 @@
 package cli
 
 import (
-	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
+	"github.com/sglavoie/brainnotes/internal/noteops"
 )
 
 // wrapWikilinkValue wraps a bare string in `[[...]]` unless it is empty or

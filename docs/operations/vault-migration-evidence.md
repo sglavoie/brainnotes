@@ -14,10 +14,10 @@ filenames are never published to the content remote or to this code remote.
 
 | Layer | Location | State |
 | --- | --- | --- |
-| Old source (rollback) | `/Users/sglavoie/Documents/vault` | Intact, byte-for-byte unchanged, out of use |
-| Offline archive | `/Users/sglavoie/backups/old_backup/brainnotes-vault-pre-migration-20260826` | Verified, sealed `uchg` |
-| Canonical working vault | `/Users/sglavoie/BrainNotesVault` | Active, outside every File Provider root |
-| Remote content history | `sglavoie/brainnotes-vault` (GitHub) | Private, pushed, fresh-clone verified |
+| Old source (rollback) | `~/Documents/vault` | Intact, byte-for-byte unchanged, out of use |
+| Offline archive | `~/backups/old_backup/brainnotes-vault-pre-migration-20260826` | Verified, sealed `uchg` |
+| Canonical working vault | `~/BrainNotesVault` | Active, outside every File Provider root |
+| Remote content history | a private GitHub repository | Private, pushed, fresh-clone verified |
 
 Cutover completed 2026-08-28. Rollback status: **available and untested-by-need** —
 the old source is unmodified and remains the authoritative fallback until session 6
@@ -40,7 +40,7 @@ $ diskutil info disk5s1 | grep -E 'Mounted|Locked'
 ```
 
 On supervisor instruction the destination was moved to
-`/Users/sglavoie/backups/old_backup/` — an existing local backup location, outside
+`~/backups/old_backup/` — an existing local backup location, outside
 every File Provider root — and the session's completion contract was amended to
 match. The archive was re-created and re-verified from scratch at the new path.
 
@@ -60,11 +60,11 @@ match. The archive was re-created and re-verified from scratch at the new path.
 
 ## File Provider exposure
 
-The ancestor `/Users/sglavoie/Documents` carries File Provider extended attributes;
+The ancestor `~/Documents` carries File Provider extended attributes;
 this is the exposure the migration removes.
 
 ```
-$ xattr /Users/sglavoie/Documents
+$ xattr ~/Documents
 com.apple.file-provider-domain-id
 com.apple.fileprovider.detached#B
 com.apple.fileprovider.pinned#PX
@@ -76,8 +76,8 @@ File Provider roots on this machine: `Documents`, `Desktop`, `Dropbox`,
 carries **zero** File Provider attributes:
 
 ```
-/Users/sglavoie/BrainNotesVault -> file-provider xattrs: 0
-/Users/sglavoie                 -> file-provider xattrs: 0
+~/BrainNotesVault -> file-provider xattrs: 0
+~                               -> file-provider xattrs: 0
 /Users                          -> file-provider xattrs: 0
 ```
 
@@ -101,7 +101,7 @@ Post-change scan:
 ```
 
 Karabiner reloaded the edited configuration automatically; `core_service.log`
-records `Load /Users/sglavoie/.config/karabiner/karabiner.json… core_configuration
+records `Load ~/.config/karabiner/karabiner.json… core_configuration
 is updated.` at the edit timestamp.
 
 > **`~/.config/bnotes/config.toml` is inert.** This `bn` build has no user-level
@@ -195,7 +195,7 @@ references) cannot dirty the working tree.
 
 | Property | Value |
 | --- | --- |
-| Repository | `sglavoie/brainnotes-vault` |
+| Repository | private GitHub repository |
 | Visibility | `PRIVATE` |
 | Default branch | `main` |
 | Remote protocol | SSH |
@@ -227,15 +227,15 @@ nothing had to be stopped; no process held a writable handle beneath the old vau
 It was started against the new root, detached:
 
 ```
-nohup env BNOTES_VAULT=/Users/sglavoie/BrainNotesVault \
-  /Users/sglavoie/.go/bin/bn serve --no-open \
+nohup env BNOTES_VAULT=~/BrainNotesVault \
+  ~/go/bin/bn serve --no-open \
   > ~/.local/state/bnotes/serve.log 2>&1 &
 ```
 
 Serving at `http://127.0.0.1:8729`; the process holds no handle beneath the old
 vault; served HTML contains zero references to the old path. Read-only checks
 (`bn config`, `bn index`, `bn search`, `bn tags`, `bn doctor`, HTTP `GET /` → 200)
-all resolved against `/Users/sglavoie/BrainNotesVault`.
+all resolved against `~/BrainNotesVault`.
 
 ### Reversible test mutation
 
@@ -256,7 +256,7 @@ the baseline, and pushed.
 
 ## Old source disposition
 
-`/Users/sglavoie/Documents/vault` was left byte-for-byte intact and out of use. It
+`~/Documents/vault` was left byte-for-byte intact and out of use. It
 was not renamed, trashed, or deleted. Re-manifested at the end of the session:
 
 - Content manifest: 1291 / 1291 hashes match the session-start manifest.
@@ -309,7 +309,7 @@ New-root content manifest digest (1278 files, at baseline commit):
   affected files are byte-identical in the old source, the archive, and the new
   root, so this predates the migration. `bn undo <id>` still works when given an
   explicit entry ID, which is how the test mutation was reverted.
-- **The old source remains a resolvable vault.** `/Users/sglavoie/Documents/vault`
+- **The old source remains a resolvable vault.** `~/Documents/vault`
   still contains a `brainnotes.toml`, so `bn` invoked from inside it resolves there
   by upward search. This is intended for now — the old source is the rollback
   layer — but session 6 must neutralise it when retiring the directory.

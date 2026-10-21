@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
+	"github.com/sglavoie/brainnotes/internal/config"
 )
 
 func TestConfigSet_RejectsValuesTheVaultCannotHold(t *testing.T) {

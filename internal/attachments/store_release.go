@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/checkpoint"
+	"github.com/sglavoie/brainnotes/internal/checkpoint"
 )
 
 // Discard drops one of owner's uploads at the client's request.

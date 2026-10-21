@@ -9,8 +9,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
-	tmpl "github.com/sglavoie/sglavoie_brainnotes/internal/template"
+	"github.com/sglavoie/brainnotes/internal/config"
+	tmpl "github.com/sglavoie/brainnotes/internal/template"
 )
 
 // execReplace is patched in tests to avoid actually replacing the test process.

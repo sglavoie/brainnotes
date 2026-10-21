@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
+	"github.com/sglavoie/brainnotes/internal/vault"
 )
 
 // sourceSaveLedgerDir holds one keyed save's recorded outcome, as one file per
