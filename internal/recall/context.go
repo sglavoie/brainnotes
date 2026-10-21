@@ -239,7 +239,7 @@ func contextMetadata(metadata []MetadataValue) []ContextMetadataValue {
 	return values
 }
 
-func contextRelatedResult(rank int, result Result, document Document) (ContextRelatedResult, error) {
+func validateContextResult(result Result) error {
 	for _, field := range []struct {
 		label string
 		value string
@@ -251,16 +251,20 @@ func contextRelatedResult(rank int, result Result, document Document) (ContextRe
 		{label: "bridge title", value: result.BridgeTitle},
 	} {
 		if err := validateContextString(field.label, field.value); err != nil {
-			return ContextRelatedResult{}, err
+			return err
 		}
 	}
 	if math.IsNaN(result.Score) || math.IsInf(result.Score, 0) {
-		return ContextRelatedResult{}, fmt.Errorf("recall: context result %q has invalid score %v", result.Path, result.Score)
+		return fmt.Errorf("recall: context result %q has invalid score %v", result.Path, result.Score)
 	}
+	return nil
+}
+
+func contextResultReasons(result Result) ([]ContextReason, error) {
 	reasons := make([]ContextReason, len(result.Reasons))
 	for index, reason := range result.Reasons {
 		if math.IsNaN(reason.Contribution) || math.IsInf(reason.Contribution, 0) {
-			return ContextRelatedResult{}, fmt.Errorf(
+			return nil, fmt.Errorf(
 				"recall: context result %q reason %d has invalid contribution %v",
 				result.Path,
 				index,
@@ -268,12 +272,23 @@ func contextRelatedResult(rank int, result Result, document Document) (ContextRe
 			)
 		}
 		if err := validateContextString("reason detail", reason.Detail); err != nil {
-			return ContextRelatedResult{}, err
+			return nil, err
 		}
 		if err := validateContextString("reason kind", string(reason.Kind)); err != nil {
-			return ContextRelatedResult{}, err
+			return nil, err
 		}
 		reasons[index] = ContextReason(reason)
+	}
+	return reasons, nil
+}
+
+func contextRelatedResult(rank int, result Result, document Document) (ContextRelatedResult, error) {
+	if err := validateContextResult(result); err != nil {
+		return ContextRelatedResult{}, err
+	}
+	reasons, err := contextResultReasons(result)
+	if err != nil {
+		return ContextRelatedResult{}, err
 	}
 
 	identity := ContextNoteIdentity{Path: result.Path, Title: result.Title}
