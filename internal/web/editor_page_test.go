@@ -3,6 +3,7 @@ package web
 import (
 	"net/http"
 	"net/url"
+	"regexp"
 	"strconv"
 	"strings"
 	"testing"
@@ -330,6 +331,29 @@ func TestEditorPage_ConflictPanelStartsHidden(t *testing.T) {
 	_, body := getEditorPage(t, ts.URL, "?key=alpha")
 	if !strings.Contains(body, `data-source-conflict hidden`) {
 		t.Fatal("the conflict panel is not hidden on a freshly served editor page")
+	}
+}
+
+// TestEditorPage_HeadingsDoNotSkipLevels keeps the served outline navigable by
+// heading: the panels under the note's h1 are h2s and the management groups are
+// h3s under their own h2, so no level is skipped whichever panels are hidden.
+func TestEditorPage_HeadingsDoNotSkipLevels(t *testing.T) {
+	ts, _, _ := newSourceTestServer(t, Options{})
+
+	_, body := getEditorPage(t, ts.URL, "?key=alpha")
+	previous := 0
+	for _, match := range regexp.MustCompile(`<h([1-6])[\s>]`).FindAllStringSubmatch(body, -1) {
+		level, _ := strconv.Atoi(match[1])
+		if previous == 0 && level != 1 {
+			t.Fatalf("first heading is h%d, want h1", level)
+		}
+		if level > previous+1 {
+			t.Fatalf("heading h%d follows h%d, skipping a level", level, previous)
+		}
+		previous = level
+	}
+	if previous == 0 {
+		t.Fatal("the editor page has no headings")
 	}
 }
 

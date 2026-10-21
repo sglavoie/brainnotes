@@ -7480,7 +7480,7 @@ code {
   display: none;
 }
 
-.source-editor-recovery h3 {
+.source-editor-recovery h2 {
   margin: 0;
   color: var(--bn-warning);
   font-size: 1rem;
@@ -7569,7 +7569,7 @@ code {
   display: none;
 }
 
-.source-editor-conflict h3 {
+.source-editor-conflict h2 {
   margin: 0;
   color: var(--bn-danger);
   font-size: 1rem;
@@ -7817,7 +7817,7 @@ code {
   display: none;
 }
 
-.source-editor-attachments h3 {
+.source-editor-attachments h2 {
   margin: 0;
   font-size: 0.95rem;
 }
@@ -7941,7 +7941,7 @@ code {
   background: var(--bn-surface);
 }
 
-.source-editor-manage-group h4 {
+.source-editor-manage-group h3 {
   margin: 0;
   font-size: 0.9rem;
 }
@@ -8012,7 +8012,7 @@ code {
   display: none;
 }
 
-.source-editor-gate h3 {
+.source-editor-gate h2 {
   margin: 0;
   color: var(--bn-warning);
   font-size: 0.95rem;
