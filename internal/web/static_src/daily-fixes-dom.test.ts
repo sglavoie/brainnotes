@@ -4,6 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { managementMutationEventName } from "./api";
 import { initDailyFixes } from "./daily-fixes";
+import { loadQueue, type DailyFixesContext } from "./daily-fixes-actions";
 import {
   brokenTask,
   deadEndTask,
@@ -323,5 +324,65 @@ describe("daily fixes panel errors and refresh", () => {
       expect(document.querySelector(".review-item-title")?.textContent).toBe("Refreshed");
     });
     expect(document.querySelector("[data-fixes-status]")?.textContent).toBe("Fixes refreshed.");
+  });
+
+  it("holds a mutation refresh until an in-flight fix action finishes", async () => {
+    renderPanel();
+    let finishPreview: (response: Response) => void = () => {};
+    let queueCalls = 0;
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input) === "/api/fixes/preview") {
+        return new Promise<Response>((resolve) => { finishPreview = resolve; });
+      }
+      queueCalls += 1;
+      return jsonResponse(queuePayload([brokenTask()]));
+    });
+    initDailyFixes({ fetch: fetchMock as typeof fetch });
+    await waitForExpect(() => expect(document.querySelectorAll("[data-fixes-task]")).toHaveLength(1));
+
+    document.querySelector<HTMLButtonElement>('[data-fixes-fix-action="relink"]')?.click();
+    window.dispatchEvent(new CustomEvent(managementMutationEventName));
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(queueCalls).toBe(1);
+    expect(document.querySelector<HTMLButtonElement>("[data-fixes-reload]")?.disabled).toBe(true);
+
+    finishPreview(jsonResponse({ ok: true, message: "Preview ready.", action: "relink", task_id: "task_broken", previews: [], preview_id: "pv-1" }));
+    await waitForExpect(() => expect(document.querySelector("[data-fixes-status]")?.textContent).toBe("Fixes refreshed."));
+    expect(queueCalls).toBe(2);
+    expect(document.querySelector<HTMLButtonElement>("[data-fixes-reload]")?.disabled).toBe(false);
+  });
+
+});
+
+describe("daily fixes queue load ordering", () => {
+  it("drops an older queue load that answers after a newer one", async () => {
+    const replies: Array<(response: Response) => void> = [];
+    let generation = 0;
+    const renderResult = vi.fn();
+    const ctx = {
+      config: { queueEndpoint: "/api/cockpit" },
+      fetcher: vi.fn(() => new Promise<Response>((resolve) => { replies.push(resolve); })),
+      setBusy: vi.fn(),
+      setStatus: vi.fn(),
+      setError: vi.fn(),
+      showError: vi.fn(),
+      setQueueStale: vi.fn(),
+      renderResult,
+      beginLoad: () => {
+        const request = ++generation;
+        return () => request === generation;
+      },
+    } as unknown as DailyFixesContext;
+
+    const older = loadQueue(ctx);
+    const newer = loadQueue(ctx);
+    replies[1]?.(jsonResponse(queuePayload([brokenTask()])));
+    await newer;
+    replies[0]?.(jsonResponse(queuePayload([brokenTask(), orphanTask()])));
+    await older;
+
+    expect(renderResult).toHaveBeenCalledTimes(1);
+    expect(renderResult.mock.calls[0]?.[0].tasks).toHaveLength(1);
+    expect(ctx.setBusy).toHaveBeenCalledTimes(4);
   });
 });

@@ -46,6 +46,44 @@ const readFixesCountElements = (root: HTMLElement): FixesCountElements => ({
   totalGenerated: queryElement(root, "[data-fixes-count-total-generated]", HTMLElement),
 });
 
+type FixesBusyGate = {
+  set: (next: boolean) => void;
+  apply: () => void;
+  deferRefresh: () => boolean;
+};
+
+// Busy is counted, not toggled: applying a fix reloads the queue inside its
+// own busy span, and the inner reload finishing must not re-enable buttons
+// while the outer action is still running. A mutation reload requested while
+// anything runs waits until everything has finished, then runs once.
+const createFixesBusyGate = (root: HTMLElement, refresh: () => void): FixesBusyGate => {
+  let holders = 0;
+  let refreshPending = false;
+  const apply = (): void => {
+    const busy = holders > 0;
+    root.setAttribute("aria-busy", busy ? "true" : "false");
+    for (const button of queryAllElements(root, "[data-fixes-button]", HTMLButtonElement)) {
+      button.disabled = busy;
+    }
+  };
+  return {
+    apply,
+    set: (next: boolean): void => {
+      holders = Math.max(0, holders + (next ? 1 : -1));
+      apply();
+      if (holders === 0 && refreshPending) {
+        refreshPending = false;
+        refresh();
+      }
+    },
+    deferRefresh: (): boolean => {
+      if (holders === 0) return false;
+      refreshPending = true;
+      return true;
+    },
+  };
+};
+
 // initDailyFixes owns the panel: its elements, its mutable state, and the
 // wiring. Every queue action itself lives in daily-fixes-actions and receives
 // this context, so each one is a named function rather than a closure inside a
@@ -79,7 +117,8 @@ export const initDailyFixes = (deps: DailyFixesDeps = {}): void => {
 
   const countEls = readFixesCountElements(root);
   const previews = new Map<string, PreviewState>();
-  let busy = false;
+  const busy = createFixesBusyGate(root, () => void ctx.loadQueue("Fixes refreshed."));
+  let loadGeneration = 0;
   let ignoreNextMutation = false;
 
   const setStatus = (message: string, kind: StatusKind = ""): void => {
@@ -94,14 +133,6 @@ export const initDailyFixes = (deps: DailyFixesDeps = {}): void => {
     errorEl.hidden = message === "";
   };
 
-  const setBusy = (next: boolean): void => {
-    busy = next;
-    root.setAttribute("aria-busy", next ? "true" : "false");
-    for (const button of queryAllElements(root, "[data-fixes-button]", HTMLButtonElement)) {
-      button.disabled = next;
-    }
-  };
-
   const renderResult = (result: CockpitQueueResult): void => {
     previews.clear();
     renderCounts(countEls, result.counts);
@@ -112,7 +143,7 @@ export const initDailyFixes = (deps: DailyFixesDeps = {}): void => {
     if (emptyEl) {
       emptyEl.hidden = hasTasks;
     }
-    setBusy(busy);
+    busy.apply();
   };
 
   const ctx: DailyFixesContext = {
@@ -120,7 +151,7 @@ export const initDailyFixes = (deps: DailyFixesDeps = {}): void => {
     fetcher: deps.fetch || ((input, init) => window.fetch(input, init)),
     listEl,
     previews,
-    setBusy,
+    setBusy: busy.set,
     setStatus,
     setError,
     showError: (message: string): void => {
@@ -136,6 +167,10 @@ export const initDailyFixes = (deps: DailyFixesDeps = {}): void => {
       clearPreviewEl(listEl, id);
     },
     loadQueue: (successMessage = ""): Promise<void> => loadFixesQueue(ctx, successMessage),
+    beginLoad: (): (() => boolean) => {
+      const request = ++loadGeneration;
+      return () => request === loadGeneration;
+    },
     suppressNextMutation: (): void => {
       ignoreNextMutation = true;
     },
@@ -151,6 +186,7 @@ export const initDailyFixes = (deps: DailyFixesDeps = {}): void => {
       ignoreNextMutation = false;
       return;
     }
+    if (busy.deferRefresh()) return;
     void ctx.loadQueue("Fixes refreshed.");
   });
 
