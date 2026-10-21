@@ -112,6 +112,9 @@ export const reviewVisuals = (snapshot) => {
     await page.locator(SURFACE).click();
     await page.keyboard.press("ControlOrMeta+a");
     await page.keyboard.insertText(restored);
+    // The preview follows the draft after a debounce; wait for it so the
+    // snapshot never catches the note it replaced.
+    await expect(page.locator("[data-source-preview]")).toContainText("The earlier ending");
     await page.locator("[data-source-save]").click();
     await expect(page.locator("[data-source-conflict]")).toBeVisible();
     await page.locator("[data-source-conflict]").scrollIntoViewIfNeeded();
