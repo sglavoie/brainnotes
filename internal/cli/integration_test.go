@@ -200,13 +200,14 @@ func latestHistoryEntryID(t *testing.T) string {
 	if err != nil {
 		t.Fatalf("history: %v\n%s", err, out)
 	}
+	// Piped (as here) history prints entries only; the header is for a terminal.
 	lines := strings.Split(strings.TrimSpace(out), "\n")
-	if len(lines) < 2 {
+	if lines[0] == "" {
 		t.Fatalf("history has no entries:\n%s", out)
 	}
-	fields := strings.Split(lines[1], "\t")
+	fields := strings.Split(lines[0], "\t")
 	if len(fields) < 3 {
-		t.Fatalf("unexpected history row %q", lines[1])
+		t.Fatalf("unexpected history row %q", lines[0])
 	}
 	return fields[1]
 }

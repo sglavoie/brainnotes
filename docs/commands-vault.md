@@ -386,6 +386,10 @@ tab-separated with columns:
 - `ID` (entry id),
 - `COMMAND` (recorded source command).
 
+The header row naming those columns is printed only when stdout is a terminal,
+so piped output (`bn history | head -n 10`, `bn history | cut -f2`) is entries
+alone.
+
 `--json` prints `{"entries": [...]}` instead, each entry with its `id`,
 `timestamp`, `command` and the vault-relative `files` it changed. An empty
 journal prints nothing on stdout and says so on stderr.
