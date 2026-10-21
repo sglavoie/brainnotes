@@ -29,6 +29,8 @@ export type TemplatesPanel = {
   load: () => Promise<void>;
   draft: () => TemplateDraft;
   pending: () => TemplatePendingSave | null;
+  /** Whether the editor holds edits or an unconfirmed receipt. */
+  modified: () => boolean;
 };
 
 const listSummary = (result: TemplatesResult): [string, StatusKind] =>
@@ -217,5 +219,5 @@ export const createTemplatesPanel = (deps: TemplatesPanelDeps): TemplatesPanel |
   view.showPending(null);
   view.showDraft(emptyTemplateDraft());
 
-  return { load, draft: view.draft, pending: () => writer.pending() };
+  return { load, draft: view.draft, pending: () => writer.pending(), modified: guard.modified };
 };

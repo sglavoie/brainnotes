@@ -10,6 +10,8 @@ export const DISCARD_TEMPLATE_EDITS =
 export type TemplateConfirm = (message: string) => boolean | Promise<boolean>;
 
 export type TemplateDraftGuard = {
+  /** Whether the editor holds edits or a receipt no write has stored yet. */
+  modified: () => boolean;
   /** Runs `next` once the editor may be replaced, asking first if it holds edits. */
   replace: (next: () => void) => void;
   open: (name: string) => Promise<void>;
@@ -135,6 +137,7 @@ export const createTemplateDraftGuard = (deps: GuardDeps): TemplateDraftGuard =>
   };
 
   return {
+    modified,
     replace,
     open,
     supersede: () => {

@@ -10,7 +10,7 @@ import { renderConfigDiff, renderSettingsList, type SettingRow } from "./setting
 import { fetchSettings, type FetchLike } from "./settings-requests";
 import { setStatusText, type StatusKind } from "./status";
 import { parseDisplayedSetting } from "./settings-units";
-import { controlText, markSettingDraft, updateSettingRow } from "./settings-rows";
+import { controlText, markSettingDraft, settingRowsModified, updateSettingRow } from "./settings-rows";
 import { offerWriteOutcomeCheck } from "./write-outcome-check";
 
 export type SettingsPanelDeps = {
@@ -22,6 +22,8 @@ export type SettingsPanelDeps = {
 export type SettingsPanel = {
   load: () => Promise<void>;
   pending: () => SettingPendingSave | null;
+  /** Whether a row holds an unsaved edit or an unconfirmed preview. */
+  modified: () => boolean;
 };
 
 type SettingsElements = {
@@ -321,5 +323,9 @@ export const createSettingsPanel = (deps: SettingsPanelDeps): SettingsPanel | nu
   elements.refresh?.addEventListener("click", () => void load());
   showPending(null);
 
-  return { load, pending: () => writer.pending() };
+  return {
+    load,
+    pending: () => writer.pending(),
+    modified: () => writer.pending() !== null || settingRowsModified(rows),
+  };
 };
