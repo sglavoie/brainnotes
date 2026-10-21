@@ -34,46 +34,51 @@ jobs:
           go-version-file: go.mod
 
       # Every platform cross-compiles from here: nothing in the module uses cgo.
+      # The archives are staged outside the checkout: an untracked file in the
+      # working tree would make Go stamp the binaries as `-dirty`.
       - name: Build archives
         env:
           CGO_ENABLED: "0"
           VERSION: ${{ github.ref_type == 'tag' && github.ref_name || format('dev-{0}', github.sha) }}
         run: |
           set -euo pipefail
-          mkdir -p dist
+          dist="$RUNNER_TEMP/dist"
+          mkdir -p "$dist"
           for target in darwin/amd64 darwin/arm64 linux/amd64 linux/arm64 windows/amd64 windows/arm64; do
             goos="${target%/*}"
             goarch="${target#*/}"
             ext=""
             [ "$goos" = windows ] && ext=".exe"
             name="brainnotes_${VERSION}_${goos}_${goarch}"
-            stage="dist/$name"
+            stage="$dist/$name"
             mkdir -p "$stage"
             for cmd in bn bn-vault-guard bn-vault-sync; do
               GOOS="$goos" GOARCH="$goarch" go build -trimpath -ldflags "-s -w" -o "$stage/$cmd$ext" "./cmd/$cmd"
             done
             cp LICENSE README.md THIRD_PARTY_NOTICES.md "$stage/"
             if [ "$goos" = windows ]; then
-              (cd dist && zip -qr "$name.zip" "$name")
+              (cd "$dist" && zip -qr "$name.zip" "$name")
             else
-              tar -C dist -czf "dist/$name.tar.gz" "$name"
+              tar -C "$dist" -czf "$dist/$name.tar.gz" "$name"
             fi
             rm -rf "$stage"
           done
-          (cd dist && sha256sum * > checksums.txt)
-          ls -l dist
+          (cd "$dist" && sha256sum * > checksums.txt)
+          ls -l "$dist"
 
       - name: Smoke-test the Linux binary
         run: |
           set -euo pipefail
           dir="$(mktemp -d)"
-          tar -C "$dir" -xzf dist/*_linux_amd64.tar.gz
-          "$dir"/*/bn --version
+          tar -C "$dir" -xzf "$RUNNER_TEMP"/dist/*_linux_amd64.tar.gz
+          version="$("$dir"/*/bn --version)"
+          echo "$version"
+          case "$version" in *-dirty|*unknown) echo "release binary is not stamped with a clean revision" >&2; exit 1;; esac
 
       - uses: actions/upload-artifact@v7
         with:
           name: dist
-          path: dist/
+          path: ${{ runner.temp }}/dist/
           if-no-files-found: error
 
   publish:
