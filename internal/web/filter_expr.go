@@ -76,8 +76,13 @@ type filterErrorPosition struct {
 }
 
 // writeFilterError renders a filter rejection as a structured 400.
+// writeFilterError reports a request the client must change as a 400. Its
+// message passes through the same reader redaction a management error does: a
+// filter can name a vault path, and the root stays on the serving machine.
 func writeFilterError(w http.ResponseWriter, err error) {
-	writeManagementJSON(w, http.StatusBadRequest, buildFilterErrorResponse(err))
+	response := buildFilterErrorResponse(err)
+	response.Error.Message = redactForReader(w, response.Error.Message)
+	writeManagementJSON(w, http.StatusBadRequest, response)
 }
 
 func buildFilterErrorResponse(err error) filterErrorResponse {

@@ -2,6 +2,7 @@ package web
 
 import (
 	"encoding/json"
+	"html"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -88,7 +89,11 @@ func TestServer_RemoteReadersNeverSeeTheVaultRoot(t *testing.T) {
 			ts, root := newHTTPServerForFilesWithOptions(t, map[string][]byte{
 				config.FileName: []byte(""),
 				"Source.md":     []byte("---\ntitle: Source\n---\nBody\n"),
+				"Broken.md":     []byte("---\ntitle: [unterminated\n---\nBody\n"),
 			}, nil, tc.opts)
+
+			assertParseErrorRedaction(t, ts.URL, root, !tc.opts.ReadOnly, tc.redact)
+
 			writeTestFile(t, root, config.FileName, "[[[ not toml\n")
 
 			status := getConfigStatusError(t, ts.URL)
@@ -147,4 +152,40 @@ func TestVaultRootRedactorPrefersTheLongerSpelling(t *testing.T) {
 	if got := (vaultRootRedactor{}).redact("/var/v/a.md"); got != "/var/v/a.md" {
 		t.Fatalf("zero redactor changed the message: %q", got)
 	}
+}
+
+// assertParseErrorRedaction checks the surfaces a snapshot's parse error reaches.
+// A note whose frontmatter does not parse is reported by its absolute path, and
+// Health lists that error verbatim; a server that writes also returns it as a
+// property blocker's detail.
+func assertParseErrorRedaction(t *testing.T, baseURL, root string, writes, redact bool) {
+	t.Helper()
+	health := html.UnescapeString(getBodyOK(t, baseURL+healthRoutePath))
+	if !strings.Contains(health, "Broken.md") {
+		t.Fatalf("health did not report the broken note")
+	}
+	assertVaultRootRedaction(t, "health parse error", health, root, redact)
+	if !writes {
+		return
+	}
+	status, payload := postPropertyMutation(t, baseURL, propertyPreviewAPIRoutePath, "csrf-token", propertyMutationRequest{
+		Action: propertyActionUnset, Property: "title", Notes: []string{"Broken.md"},
+	})
+	if status != http.StatusOK || len(payload.Blockers) != 1 {
+		t.Fatalf("property preview status = %d, blockers = %#v", status, payload.Blockers)
+	}
+	assertVaultRootRedaction(t, "property blocker", payload.Blockers[0].Detail, root, redact)
+}
+
+func getBodyOK(t *testing.T, target string) string {
+	t.Helper()
+	resp, err := http.Get(target) // #nosec G107 -- test-only local URL
+	if err != nil {
+		t.Fatalf("GET %s: %v", target, err)
+	}
+	body := readResponseBody(t, resp)
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("GET %s status = %d", target, resp.StatusCode)
+	}
+	return body
 }

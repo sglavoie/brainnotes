@@ -226,6 +226,35 @@ func TestPropertiesPreview_BlocksNoteOutsideSnapshot(t *testing.T) {
 	}
 }
 
+// A note whose frontmatter does not parse is in the vault: the selection is
+// blocked because the note cannot be read, not because it went missing. The
+// snapshot records the failure under its vault-relative path, nested here so the
+// lookup is exercised with a separator.
+func TestPropertiesPreview_BlocksNoteWithBrokenFrontmatterAsParseError(t *testing.T) {
+	files := propertyTestNotes()
+	files["sub/Broken.md"] = "---\ntitle: [unterminated\n---\nBody.\n"
+	ts, _, _ := newPropertyServer(t, propertyTestConfigTOML, files)
+
+	status, payload := postPropertyMutation(t, ts.URL, propertyPreviewAPIRoutePath, propertyTestToken, propertyMutationRequest{
+		Action:   propertyActionUnset,
+		Property: "status",
+		Notes:    []string{"Alpha.md", "sub/Broken.md"},
+	})
+	if status != http.StatusOK {
+		t.Fatalf("status = %d", status)
+	}
+	if payload.PreviewID != "" {
+		t.Fatal("an unparseable note must block the whole selection")
+	}
+	if len(payload.Blockers) != 1 {
+		t.Fatalf("blockers = %#v", payload.Blockers)
+	}
+	blocker := payload.Blockers[0]
+	if blocker.Kind != propertyBlockerParseError || blocker.RelPath != "sub/Broken.md" || blocker.Detail == "" {
+		t.Fatalf("blocker = %#v, want a parse_error for sub/Broken.md", blocker)
+	}
+}
+
 // TestPropertiesApply_RollsBackWhenOneWriteFails makes the second staged write
 // impossible and asserts the first note is restored, because the workbench
 // promises multi-note actions are all-or-nothing.

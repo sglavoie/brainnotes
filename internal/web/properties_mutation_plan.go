@@ -210,7 +210,7 @@ func planPropertyNotes(
 	plan *propertyPlan,
 ) (map[string]*frontmatter.Map, error) {
 	byRelPath := snapshotNotesByRelPath(root, snapshot)
-	parseErrors := snapshotParseErrorsByRelPath(root, snapshot)
+	parseErrors := snapshotParseErrorsByRelPath(snapshot)
 	overrides := make(map[string]*frontmatter.Map, len(req.Notes))
 
 	for _, relPath := range req.Notes {

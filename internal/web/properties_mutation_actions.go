@@ -202,14 +202,17 @@ func snapshotNotesByRelPath(root string, snapshot vaultSnapshot) map[string]*vau
 	return out
 }
 
-func snapshotParseErrorsByRelPath(root string, snapshot vaultSnapshot) map[string]string {
+// snapshotParseErrorsByRelPath keys the snapshot's parse failures the way
+// snapshotNotesByRelPath keys its notes. A failure's Path is already
+// vault-relative (both note sources record it so), so it is only normalized to
+// slashes, never made relative a second time.
+func snapshotParseErrorsByRelPath(snapshot vaultSnapshot) map[string]string {
 	out := make(map[string]string, len(snapshot.parseErrors))
 	for _, failure := range snapshot.parseErrors {
-		rel, err := filepath.Rel(root, failure.Path)
-		if err != nil {
+		if failure.Path == "" {
 			continue
 		}
-		out[filepath.ToSlash(rel)] = failure.Error
+		out[filepath.ToSlash(failure.Path)] = failure.Error
 	}
 	return out
 }
