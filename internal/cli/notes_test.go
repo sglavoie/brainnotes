@@ -159,7 +159,7 @@ func TestResolveNoteInputs_DedupePreservesOrder(t *testing.T) {
 
 // TestResolveNoteInputs_DedupesCaseVariantsOfOneFile checks two spellings of
 // one note collapse to the first. On a case-sensitive volume `note.md` is a
-// different (missing) path, so both are kept and the assertion says so.
+// different, missing path, so the input is refused rather than deduplicated.
 func TestResolveNoteInputs_DedupesCaseVariantsOfOneFile(t *testing.T) {
 	root := t.TempDir()
 	upper := filepath.Join(root, "Note.md")
@@ -168,10 +168,13 @@ func TestResolveNoteInputs_DedupesCaseVariantsOfOneFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	want := []string{upper}
 	if !sameExistingFile(upper, lower) {
-		want = []string{upper, lower}
+		if _, err := resolveNoteInputs("", root, []string{upper, lower}, nil, false); err == nil {
+			t.Fatal("resolveNoteInputs accepted a case variant that names no file on a case-sensitive volume")
+		}
+		return
 	}
+	want := []string{upper}
 	got, err := resolveNoteInputs("", root, []string{upper, lower, upper}, nil, false)
 	if err != nil {
 		t.Fatalf("resolveNoteInputs: %v", err)
