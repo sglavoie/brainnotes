@@ -35,6 +35,25 @@ thing at the terminal and in the browser.
 
 ## Install
 
+### Prebuilt binaries
+
+Download the archive for your platform from the
+[latest release](https://github.com/sglavoie/brainnotes/releases/latest)
+(macOS, Linux and Windows, on x86-64 and ARM64), check it against
+`checksums.txt`, and put all three binaries (`bn`, `bn-vault-guard`,
+`bn-vault-sync`) in the same directory on your `PATH`. They must stay at the
+same version, so replace them together.
+
+```sh
+tar -xzf brainnotes_<version>_<os>_<arch>.tar.gz
+cp brainnotes_<version>_<os>_<arch>/bn* ~/.local/bin/
+```
+
+The binaries are not code-signed. On macOS, clear the download quarantine with
+`xattr -d com.apple.quarantine ~/.local/bin/bn*` if Gatekeeper refuses to run them.
+
+### From source
+
 Install [Go](https://go.dev/dl/) 1.26.2 or newer and
 [just](https://just.systems/man/en/) first. Add your Go install directory to
 `PATH` (`$(go env GOBIN)` if set, otherwise `$(go env GOPATH)/bin`) so `bn` is
