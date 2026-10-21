@@ -11,8 +11,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/recall"
+	"github.com/sglavoie/brainnotes/internal/config"
+	"github.com/sglavoie/brainnotes/internal/recall"
 )
 
 func TestServer_RelatedItemAPI_ConcurrentWritesPreserveEveryPair(t *testing.T) {

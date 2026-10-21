@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
+	"github.com/sglavoie/brainnotes/internal/noteops"
 )
 
 // A saved view's nav link carries `expr`, `sort`, `relative_to`, and `limit`.

@@ -8,8 +8,8 @@ import (
 	"os"
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/checkpoint"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
+	"github.com/sglavoie/brainnotes/internal/checkpoint"
+	"github.com/sglavoie/brainnotes/internal/vault"
 )
 
 // enrollmentPerm is the mode of the enrollment record. It holds identities

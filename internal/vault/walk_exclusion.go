@@ -3,7 +3,7 @@ package vault
 import (
 	"strings"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
+	"github.com/sglavoie/brainnotes/internal/config"
 )
 
 // WalkExclusion reports whether relSlash names a location Walk would never

@@ -5,9 +5,9 @@ import (
 	"math"
 	"strings"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/query"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/queryexpr"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
+	"github.com/sglavoie/brainnotes/internal/query"
+	"github.com/sglavoie/brainnotes/internal/queryexpr"
+	"github.com/sglavoie/brainnotes/internal/vault"
 )
 
 // queryexpr never ranks: a SortSpec says what ordering was asked for, and the

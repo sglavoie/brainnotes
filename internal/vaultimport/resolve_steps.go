@@ -5,7 +5,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultsync"
+	"github.com/sglavoie/brainnotes/internal/vaultsync"
 )
 
 // previewPath decides one contested path, and returns the content its steps

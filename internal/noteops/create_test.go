@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/journal"
+	"github.com/sglavoie/brainnotes/internal/journal"
 )
 
 func TestCreateStubFromBrokenTargetBareTargetCreatesBesideSource(t *testing.T) {

@@ -11,7 +11,7 @@
 // checkout (`debug.ReadBuildInfo`, setting `vcs.revision`), with `-dirty`
 // appended when the working tree had uncommitted changes. A build made outside
 // a checkout carries no revision; it may set one with
-// `-ldflags "-X github.com/sglavoie/sglavoie_brainnotes/internal/buildinfo.revision=<id>"`,
+// `-ldflags "-X github.com/sglavoie/brainnotes/internal/buildinfo.revision=<id>"`,
 // and otherwise reports Unknown. Two dirty builds of one revision compare equal
 // even when their changes differ: the identifier detects a binary that was not
 // rebuilt, not every possible difference.

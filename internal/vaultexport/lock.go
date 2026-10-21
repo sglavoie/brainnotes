@@ -3,8 +3,8 @@ package vaultexport
 import (
 	"fmt"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultsync"
+	"github.com/sglavoie/brainnotes/internal/vault"
+	"github.com/sglavoie/brainnotes/internal/vaultsync"
 )
 
 // lockProducer takes the vault's producer guard without waiting.

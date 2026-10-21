@@ -6,10 +6,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/journal"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultexport"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultfixture"
+	"github.com/sglavoie/brainnotes/internal/journal"
+	"github.com/sglavoie/brainnotes/internal/noteops"
+	"github.com/sglavoie/brainnotes/internal/vaultexport"
+	"github.com/sglavoie/brainnotes/internal/vaultfixture"
 )
 
 // killPoint is one durable transition and the two states either side of it.

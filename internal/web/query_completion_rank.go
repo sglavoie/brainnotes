@@ -4,8 +4,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/queryexpr"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/textnorm"
+	"github.com/sglavoie/brainnotes/internal/queryexpr"
+	"github.com/sglavoie/brainnotes/internal/textnorm"
 )
 
 // rankQueryCompletions filters candidates by the caret's prefix and orders

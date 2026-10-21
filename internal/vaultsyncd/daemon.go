@@ -6,8 +6,8 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/buildinfo"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultsync"
+	"github.com/sglavoie/brainnotes/internal/buildinfo"
+	"github.com/sglavoie/brainnotes/internal/vaultsync"
 )
 
 // DefaultInterval paces the loop.

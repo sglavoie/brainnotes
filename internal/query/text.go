@@ -3,8 +3,8 @@ package query
 import (
 	"strings"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/textnorm"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
+	"github.com/sglavoie/brainnotes/internal/textnorm"
+	"github.com/sglavoie/brainnotes/internal/vault"
 )
 
 // FoldText returns the canonical comparison form of s: surrounding whitespace

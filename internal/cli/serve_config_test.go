@@ -3,7 +3,7 @@ package cli
 import (
 	"testing"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
+	"github.com/sglavoie/brainnotes/internal/config"
 )
 
 // TestResolveServeConfig pins how --addr and --port compose over [serve].addr:

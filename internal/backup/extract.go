@@ -12,8 +12,8 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/restorestate"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultsync"
+	"github.com/sglavoie/brainnotes/internal/restorestate"
+	"github.com/sglavoie/brainnotes/internal/vaultsync"
 )
 
 // stageRelDir is where a restore stages the archive it is about to apply: the

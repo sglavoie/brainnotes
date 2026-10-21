@@ -3,8 +3,8 @@ package web
 import (
 	"testing"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/journal"
+	"github.com/sglavoie/brainnotes/internal/config"
+	"github.com/sglavoie/brainnotes/internal/journal"
 )
 
 // Every command literal this repository journals, classified. The table is the

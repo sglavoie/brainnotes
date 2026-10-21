@@ -3,8 +3,8 @@ package queryexpr
 import (
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/query"
+	"github.com/sglavoie/brainnotes/internal/config"
+	"github.com/sglavoie/brainnotes/internal/query"
 )
 
 // Env is the vault state a compiled query needs to become a predicate. It is

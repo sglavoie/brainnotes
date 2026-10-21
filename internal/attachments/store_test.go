@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/checkpoint"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultfixture"
+	"github.com/sglavoie/brainnotes/internal/checkpoint"
+	"github.com/sglavoie/brainnotes/internal/vaultfixture"
 )
 
 func TestStageWaitsForCheckpointBeforePublishingAnyUploadState(t *testing.T) {

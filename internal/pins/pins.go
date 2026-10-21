@@ -17,8 +17,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/textnorm"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
+	"github.com/sglavoie/brainnotes/internal/textnorm"
+	"github.com/sglavoie/brainnotes/internal/vault"
 )
 
 // PropertyName is the frontmatter key holding a note's pin rank.

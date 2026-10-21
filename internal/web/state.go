@@ -8,12 +8,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/index"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/properties"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/query"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/recall"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
+	"github.com/sglavoie/brainnotes/internal/config"
+	"github.com/sglavoie/brainnotes/internal/index"
+	"github.com/sglavoie/brainnotes/internal/properties"
+	"github.com/sglavoie/brainnotes/internal/query"
+	"github.com/sglavoie/brainnotes/internal/recall"
+	"github.com/sglavoie/brainnotes/internal/vault"
 )
 
 // noteSource produces the classified note load a snapshot is built from. The

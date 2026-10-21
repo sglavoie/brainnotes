@@ -3,7 +3,7 @@ package vaultgit
 import (
 	"context"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/agent"
+	"github.com/sglavoie/brainnotes/internal/agent"
 )
 
 // pendingSet is the classified, in-scope difference between the working tree

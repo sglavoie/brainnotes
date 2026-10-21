@@ -3,8 +3,8 @@ package cli
 import (
 	"sort"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
+	"github.com/sglavoie/brainnotes/internal/config"
+	"github.com/sglavoie/brainnotes/internal/vault"
 )
 
 type pickerFunc = func(items []string, extraArgs []string) ([]string, error)

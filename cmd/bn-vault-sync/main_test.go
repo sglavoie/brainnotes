@@ -9,12 +9,12 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultfixture"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultgit"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultrecovery"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultsync"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultsyncd"
+	"github.com/sglavoie/brainnotes/internal/vault"
+	"github.com/sglavoie/brainnotes/internal/vaultfixture"
+	"github.com/sglavoie/brainnotes/internal/vaultgit"
+	"github.com/sglavoie/brainnotes/internal/vaultrecovery"
+	"github.com/sglavoie/brainnotes/internal/vaultsync"
+	"github.com/sglavoie/brainnotes/internal/vaultsyncd"
 )
 
 // The command's own surface: which mode a flag selects, what each one prints,

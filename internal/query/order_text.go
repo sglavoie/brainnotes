@@ -4,7 +4,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
+	"github.com/sglavoie/brainnotes/internal/vault"
 )
 
 // orderTextMatches preserves the browser's title-hit, title, folder, key order.

@@ -5,7 +5,7 @@ import (
 	"io"
 	"sort"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/query"
+	"github.com/sglavoie/brainnotes/internal/query"
 )
 
 // relinkResidue is one unresolved link relink deliberately left alone because

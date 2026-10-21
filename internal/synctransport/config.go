@@ -7,7 +7,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/syncthingbin"
+	"github.com/sglavoie/brainnotes/internal/syncthingbin"
 )
 
 // ConfigVersion is the configuration schema the pinned release reads. It travels

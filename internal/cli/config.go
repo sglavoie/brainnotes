@@ -7,8 +7,8 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
-	editutil "github.com/sglavoie/sglavoie_brainnotes/internal/editor"
+	"github.com/sglavoie/brainnotes/internal/config"
+	editutil "github.com/sglavoie/brainnotes/internal/editor"
 )
 
 // NewConfigCmd builds the `config` command tree.

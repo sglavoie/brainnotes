@@ -4,7 +4,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultimport"
+	"github.com/sglavoie/brainnotes/internal/vaultimport"
 )
 
 func syncPlanViewOf(plan *vaultimport.Plan, receipt propertyPreviewReceipt) syncPlanView {

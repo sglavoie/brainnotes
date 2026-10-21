@@ -4,7 +4,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/properties"
+	"github.com/sglavoie/brainnotes/internal/properties"
 )
 
 // propertyDefinitionView is the configured definition rendered for transport.

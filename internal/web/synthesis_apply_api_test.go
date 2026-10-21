@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
+	"github.com/sglavoie/brainnotes/internal/noteops"
 )
 
 func TestSynthesisApplyAPI_CreatesTheReviewedNote(t *testing.T) {

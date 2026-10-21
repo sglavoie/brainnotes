@@ -4,8 +4,8 @@ import (
 	"net/url"
 	"strings"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/queryexpr"
+	"github.com/sglavoie/brainnotes/internal/noteops"
+	"github.com/sglavoie/brainnotes/internal/queryexpr"
 )
 
 // Freeze the complete browser selection into the shared query language before

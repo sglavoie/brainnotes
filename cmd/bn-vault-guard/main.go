@@ -59,10 +59,10 @@ import (
 	"path/filepath"
 	"syscall"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/buildinfo"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultgit"
+	"github.com/sglavoie/brainnotes/internal/buildinfo"
+	"github.com/sglavoie/brainnotes/internal/config"
+	"github.com/sglavoie/brainnotes/internal/vault"
+	"github.com/sglavoie/brainnotes/internal/vaultgit"
 )
 
 // guardLockRelPath is the single-instance lock. It sits beside the per-note

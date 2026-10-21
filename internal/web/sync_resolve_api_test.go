@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultimport"
+	"github.com/sglavoie/brainnotes/internal/vaultimport"
 )
 
 // decide is one path's decision, as the page sends it.

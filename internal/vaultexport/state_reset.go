@@ -4,8 +4,8 @@ import (
 	"context"
 	"fmt"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/checkpoint"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultsync"
+	"github.com/sglavoie/brainnotes/internal/checkpoint"
+	"github.com/sglavoie/brainnotes/internal/vaultsync"
 )
 
 // Reset clears the cursor, the path ledger, and any reservation, keeping the

@@ -6,10 +6,10 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/frontmatter"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/properties"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/schema"
+	"github.com/sglavoie/brainnotes/internal/config"
+	"github.com/sglavoie/brainnotes/internal/frontmatter"
+	"github.com/sglavoie/brainnotes/internal/properties"
+	"github.com/sglavoie/brainnotes/internal/schema"
 )
 
 // propertyKindsConfig declares one property per supported kind plus a

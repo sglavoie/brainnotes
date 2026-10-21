@@ -5,8 +5,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/pins"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
+	"github.com/sglavoie/brainnotes/internal/pins"
+	"github.com/sglavoie/brainnotes/internal/vault"
 )
 
 // Folder matches notes that live in folder or one of its descendants. folder is

@@ -3,8 +3,8 @@ package noteops
 import (
 	"testing"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/journal"
+	"github.com/sglavoie/brainnotes/internal/config"
+	"github.com/sglavoie/brainnotes/internal/journal"
 )
 
 func synthesisTestVault(t *testing.T) (string, *config.Config) {

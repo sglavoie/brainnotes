@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/query"
+	"github.com/sglavoie/brainnotes/internal/query"
 )
 
 func TestRankerGoldenSignalsAndModes(t *testing.T) {

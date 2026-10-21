@@ -10,7 +10,7 @@ import (
 	"os/exec"
 	"syscall"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/cli"
+	"github.com/sglavoie/brainnotes/internal/cli"
 )
 
 var execute = cli.Execute

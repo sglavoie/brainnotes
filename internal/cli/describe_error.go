@@ -4,7 +4,7 @@ import (
 	"errors"
 	"strings"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
+	"github.com/sglavoie/brainnotes/internal/noteops"
 )
 
 // describeError spells err for the terminal. It is err.Error() except that a

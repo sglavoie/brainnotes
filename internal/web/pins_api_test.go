@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
+	"github.com/sglavoie/brainnotes/internal/config"
 )
 
 func postPinRequest(t *testing.T, baseURL, route string, fields map[string]string, headerToken string) *http.Response {

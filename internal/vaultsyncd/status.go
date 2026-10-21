@@ -3,7 +3,7 @@ package vaultsyncd
 import (
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultsync"
+	"github.com/sglavoie/brainnotes/internal/vaultsync"
 )
 
 // State names one thing that is true of a vault's synchronization right now.

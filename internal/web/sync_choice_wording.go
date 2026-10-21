@@ -1,6 +1,6 @@
 package web
 
-import "github.com/sglavoie/sglavoie_brainnotes/internal/vaultimport"
+import "github.com/sglavoie/brainnotes/internal/vaultimport"
 
 // This file is the wording of a conflict and of the four decisions about it, and
 // it is in Go rather than in the page for one reason: what "keep mine" does to a

@@ -8,9 +8,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/recall"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
+	"github.com/sglavoie/brainnotes/internal/noteops"
+	"github.com/sglavoie/brainnotes/internal/recall"
+	"github.com/sglavoie/brainnotes/internal/vault"
 )
 
 // synthesisContextTTL is how long a context packet stays usable. Unlike a

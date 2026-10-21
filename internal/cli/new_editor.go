@@ -3,7 +3,7 @@ package cli
 import (
 	"os"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/editor"
+	"github.com/sglavoie/brainnotes/internal/editor"
 )
 
 // runEditor execs the editor on file. Its failures — an editor that is not

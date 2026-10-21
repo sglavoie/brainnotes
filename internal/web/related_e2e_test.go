@@ -8,8 +8,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/recall"
+	"github.com/sglavoie/brainnotes/internal/config"
+	"github.com/sglavoie/brainnotes/internal/recall"
 )
 
 func TestServer_RelatedEndToEnd_FeedbackExpiryAndOpenHistory(t *testing.T) {

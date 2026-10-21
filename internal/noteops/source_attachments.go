@@ -5,8 +5,8 @@ import (
 	"path"
 	"strings"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultgit"
+	"github.com/sglavoie/brainnotes/internal/vault"
+	"github.com/sglavoie/brainnotes/internal/vaultgit"
 )
 
 // AttachmentCommit is one staged upload a save is asking to put in the vault

@@ -3,7 +3,7 @@ package vault
 import (
 	"testing"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
+	"github.com/sglavoie/brainnotes/internal/config"
 )
 
 // TestCleanSlashRelEdgeCases exercises the unexported cleanSlashRel directly

@@ -8,10 +8,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/journal"
-	tmpl "github.com/sglavoie/sglavoie_brainnotes/internal/template"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
+	"github.com/sglavoie/brainnotes/internal/config"
+	"github.com/sglavoie/brainnotes/internal/journal"
+	tmpl "github.com/sglavoie/brainnotes/internal/template"
+	"github.com/sglavoie/brainnotes/internal/vault"
 )
 
 // Positional-argument completers that need more than a note title: the

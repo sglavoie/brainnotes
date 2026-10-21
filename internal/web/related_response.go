@@ -5,10 +5,10 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/brief"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/recall"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
+	"github.com/sglavoie/brainnotes/internal/brief"
+	"github.com/sglavoie/brainnotes/internal/noteops"
+	"github.com/sglavoie/brainnotes/internal/recall"
+	"github.com/sglavoie/brainnotes/internal/vault"
 )
 
 func newRelatedResponseBuilder(root string, snapshot vaultSnapshot, documents []recall.Document) relatedResponseBuilder {

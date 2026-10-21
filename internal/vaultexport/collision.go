@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"sort"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultgit"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultsync"
+	"github.com/sglavoie/brainnotes/internal/vaultgit"
+	"github.com/sglavoie/brainnotes/internal/vaultsync"
 )
 
 // rivalKind says why two paths cannot both exist on a replica that folds names.

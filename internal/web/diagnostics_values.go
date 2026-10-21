@@ -5,7 +5,7 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/frontmatter"
+	"github.com/sglavoie/brainnotes/internal/frontmatter"
 )
 
 func countDiagnosticValue(value any, counts map[string]int) {

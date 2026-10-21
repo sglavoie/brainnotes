@@ -14,8 +14,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/query"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/queryexpr"
+	"github.com/sglavoie/brainnotes/internal/query"
+	"github.com/sglavoie/brainnotes/internal/queryexpr"
 )
 
 func (s *Server) handleNote(w http.ResponseWriter, r *http.Request) {

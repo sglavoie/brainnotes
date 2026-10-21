@@ -1,10 +1,10 @@
 package cli
 
 import (
-	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/noteops"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/schema"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
+	"github.com/sglavoie/brainnotes/internal/config"
+	"github.com/sglavoie/brainnotes/internal/noteops"
+	"github.com/sglavoie/brainnotes/internal/schema"
+	"github.com/sglavoie/brainnotes/internal/vault"
 )
 
 // applyRepairs applies the planned repair actions to a single note. On dry-run

@@ -4,8 +4,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/query"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
+	"github.com/sglavoie/brainnotes/internal/query"
+	"github.com/sglavoie/brainnotes/internal/vault"
 )
 
 // lowerText lowers a bare word or quoted phrase onto query.Text. The needle is

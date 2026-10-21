@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/index"
+	"github.com/sglavoie/brainnotes/internal/index"
 )
 
 // TestIndexStatus_NotBuilt pins the report for a vault that has never been

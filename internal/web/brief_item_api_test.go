@@ -9,8 +9,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/brief"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
+	"github.com/sglavoie/brainnotes/internal/brief"
+	"github.com/sglavoie/brainnotes/internal/config"
 )
 
 func TestServer_BriefItemAPI_OpenRecordsAfterEditorStart(t *testing.T) {

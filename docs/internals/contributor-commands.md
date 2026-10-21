@@ -25,7 +25,7 @@ for every recipe below.
   dependencies are already installed; unstamped binaries fall back to
   current-directory checkout detection, then embedded assets.
 
-The Go module is `github.com/sglavoie/sglavoie_brainnotes`; the README installs
+The Go module is `github.com/sglavoie/brainnotes`; the README installs
 from a clone of `github.com/sglavoie/brainnotes`. Keep imports on the module
 path.
 

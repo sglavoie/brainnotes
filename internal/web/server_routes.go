@@ -5,8 +5,8 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/agent"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/brief"
+	"github.com/sglavoie/brainnotes/internal/agent"
+	"github.com/sglavoie/brainnotes/internal/brief"
 )
 
 func (srv *Server) routes(staticRoot fs.FS) http.Handler {

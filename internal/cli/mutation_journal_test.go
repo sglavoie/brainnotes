@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/journal"
+	"github.com/sglavoie/brainnotes/internal/journal"
 )
 
 func TestSet_WritesJournalEntryWithPreMutationSnapshot(t *testing.T) {

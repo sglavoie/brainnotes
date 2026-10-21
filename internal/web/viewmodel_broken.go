@@ -5,8 +5,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/query"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/wikilink"
+	"github.com/sglavoie/brainnotes/internal/query"
+	"github.com/sglavoie/brainnotes/internal/wikilink"
 )
 
 func brokenEntries(snapshot vaultSnapshot, filter string) []brokenPageEntry {

@@ -6,7 +6,7 @@ import (
 	"sort"
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
+	"github.com/sglavoie/brainnotes/internal/vault"
 )
 
 // RetentionPolicy controls journal pruning.

@@ -9,7 +9,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
+	"github.com/sglavoie/brainnotes/internal/vault"
 )
 
 func planWipe(root string, txn *vault.FileTxn, restored map[string]struct{}) ([]string, error) {

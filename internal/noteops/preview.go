@@ -6,7 +6,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/frontmatter"
+	"github.com/sglavoie/brainnotes/internal/frontmatter"
 )
 
 // PreviewChangeKind identifies which locus of a note a PreviewChange describes.

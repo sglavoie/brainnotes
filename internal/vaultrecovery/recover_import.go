@@ -3,7 +3,7 @@ package vaultrecovery
 import (
 	"errors"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultimport"
+	"github.com/sglavoie/brainnotes/internal/vaultimport"
 )
 
 // RecoverImportCommand is the one invocation that finishes interrupted import

@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/recall"
+	"github.com/sglavoie/brainnotes/internal/recall"
 )
 
 func TestServer_RelatedAPI_CachesCorpusUntilNoteReload(t *testing.T) {

@@ -4,7 +4,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultsync"
+	"github.com/sglavoie/brainnotes/internal/vaultsync"
 )
 
 func requireUnpublishedApplication(t *testing.T, r *replicas, dir string) *Result {

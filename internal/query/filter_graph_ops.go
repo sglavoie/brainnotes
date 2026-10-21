@@ -1,6 +1,6 @@
 package query
 
-import "github.com/sglavoie/sglavoie_brainnotes/internal/vault"
+import "github.com/sglavoie/brainnotes/internal/vault"
 
 // Graph-shaped predicate builders. Like Orphan and DeadEnd in filter_structural.go, each
 // returns a closure over an already-built *Graph (and, where structure beyond

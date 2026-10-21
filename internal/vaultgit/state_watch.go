@@ -3,7 +3,7 @@ package vaultgit
 import (
 	"time"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
+	"github.com/sglavoie/brainnotes/internal/config"
 )
 
 // LoadWatchState reports the debounce clock, defaulting to an empty one.

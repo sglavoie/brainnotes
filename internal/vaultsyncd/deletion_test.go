@@ -5,7 +5,7 @@ import (
 	"os"
 	"testing"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultgit"
+	"github.com/sglavoie/brainnotes/internal/vaultgit"
 )
 
 func TestExternalDeletionPropagatesAfterOfflineRetry(t *testing.T) {

@@ -3,7 +3,7 @@ package cockpit
 import (
 	"testing"
 
-	"github.com/sglavoie/sglavoie_brainnotes/internal/config"
+	"github.com/sglavoie/brainnotes/internal/config"
 )
 
 // hubSynthesisConfig returns a config that enables the hub-needs-synthesis rule,
