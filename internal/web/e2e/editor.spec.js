@@ -17,6 +17,7 @@ import { expect, gitStatus, manifest, test } from "./fixture.js";
 
 import {
   caretToEnd,
+  expectLiveCompletion,
   keptDrafts,
   openEditor,
   phraseFor,
@@ -111,8 +112,7 @@ test("typing [[ completes a wikilink from the vault", async ({ page }) => {
   // — the vault-relative path the server derives, not the folded key and not
   // the frontmatter title. Nothing below the browser can prove the popup opens.
   await page.keyboard.type("[[Bet");
-  const options = page.locator(".cm-tooltip-autocomplete li");
-  await expect(options.first()).toContainText("Beta");
+  await expectLiveCompletion(page, "Beta");
 
   await page.keyboard.press("Enter");
   await expect(page.locator(SURFACE)).toContainText("[[Beta]]");
@@ -132,8 +132,7 @@ test("a completion survives when the note matched on something other than its pa
   await caretToEnd(page);
 
   await page.keyboard.type("[[Cartograph");
-  const options = page.locator(".cm-tooltip-autocomplete li");
-  await expect(options.first()).toContainText("Notes/Fieldwork");
+  await expectLiveCompletion(page, "Notes/Fieldwork");
 
   await page.keyboard.press("Enter");
   await expect(page.locator(SURFACE)).toContainText("[[Notes/Fieldwork]]");
@@ -144,7 +143,7 @@ test("a completion survives when the note matched on something other than its pa
 // The price of asking the server on every keystroke, and the only place it can
 // be seen. Between a keystroke and the answer to the query it started,
 // CodeMirror leaves the previous list on screen and marks it disabled — same
-// options, same DOM, no attribute — and its Enter binding then declines, so the
+// options, told apart only by a class — and its Enter binding then declines, so the
 // key falls through to inserting a newline. Nothing in jsdom can observe that:
 // it is CodeMirror's own state field, reached through a keymap, over a real
 // async source.
@@ -165,8 +164,7 @@ test("a completion still open declines Enter rather than breaking the link", asy
 
   // And the keystroke is only deferred, not swallowed for good: once the query
   // lands the dialog is live again and the same Enter completes the link.
-  const options = page.locator(".cm-tooltip-autocomplete li");
-  await expect(options.first()).toContainText("Notes/Fieldwork");
+  await expectLiveCompletion(page, "Notes/Fieldwork");
   await page.keyboard.press("Enter");
   await expect(page.locator(SURFACE)).toContainText("[[Notes/Fieldwork]]");
 
@@ -225,8 +223,7 @@ test("a pause after [[ does not switch the guard off for everything typed next",
   const value = () => page.locator(SURFACE).innerText();
   expect(await value(), "Enter fell through to the document mid-query").not.toContain("[[Cartograph\n");
 
-  const options = page.locator(".cm-tooltip-autocomplete li");
-  await expect(options.first()).toContainText("Notes/Fieldwork");
+  await expectLiveCompletion(page, "Notes/Fieldwork");
   await page.keyboard.press("Enter");
   await expect(page.locator(SURFACE)).toContainText("[[Notes/Fieldwork]]");
 
