@@ -105,6 +105,14 @@ func buildNewlineOffsets(s string) []int {
 	return offsets
 }
 
+// BodyLineOffset returns how many file lines precede the note body at path: the
+// frontmatter block including both delimiters, or 0 when there is none or the
+// file cannot be read. Adding it to a 1-based body line gives the file line
+// that `bn graph --format code`, `bn search` and editors report.
+func BodyLineOffset(path string) int {
+	return bodyLineOffset(path)
+}
+
 func bodyLineOffset(path string) int {
 	data, err := os.ReadFile(path)
 	if err != nil {

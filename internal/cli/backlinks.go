@@ -142,11 +142,17 @@ func sortVerboseRows(rows []verboseRow) {
 
 func renderBodyLinks(path, body string, filter func(wikilink.Link) bool) []verboseRow {
 	var rows []verboseRow
+	// lineOffset turns a body line into the file line an editor shows. It
+	// costs a file read, so it is taken only once a link is reported.
+	lineOffset := -1
 	for _, link := range wikilink.Parse(body) {
 		if !filter(link) {
 			continue
 		}
-		lineNum := strings.Count(body[:link.Start], "\n") + 1
+		if lineOffset < 0 {
+			lineOffset = query.BodyLineOffset(path)
+		}
+		lineNum := lineOffset + strings.Count(body[:link.Start], "\n") + 1
 		ls := strings.LastIndexByte(body[:link.Start], '\n') + 1
 		le := strings.IndexByte(body[link.End:], '\n')
 		if le < 0 {

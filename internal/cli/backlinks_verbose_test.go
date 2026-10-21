@@ -49,6 +49,8 @@ func TestBacklinks_VerboseFrontmatter(t *testing.T) {
 	}
 }
 
+// Line numbers are file lines, as an editor shows them: the frontmatter block
+// counts, and a note without one starts at line 1.
 func TestBacklinks_VerboseMultiOccurrence(t *testing.T) {
 	isolateBnEnv(t)
 	root := t.TempDir()
@@ -56,6 +58,7 @@ func TestBacklinks_VerboseMultiOccurrence(t *testing.T) {
 	files := map[string]string{
 		"Target.md":   "---\ntitle: Target\n---\nTarget body.\n",
 		"MultiRef.md": "---\ntitle: MultiRef\n---\nFirst [[Target]] here.\nAnd second [[Target]] there.\n",
+		"Plain.md":    "Plain [[Target]] link.\n",
 	}
 	for rel, body := range files {
 		full := filepath.Join(root, filepath.FromSlash(rel))
@@ -70,8 +73,9 @@ func TestBacklinks_VerboseMultiOccurrence(t *testing.T) {
 	}
 	got := stripVaultLines(t, root, stdout)
 	want := []string{
-		"MultiRef.md:1\tFirst [[Target]] here.",
-		"MultiRef.md:2\tAnd second [[Target]] there.",
+		"MultiRef.md:4\tFirst [[Target]] here.",
+		"MultiRef.md:5\tAnd second [[Target]] there.",
+		"Plain.md:1\tPlain [[Target]] link.",
 	}
 	if !slices.Equal(got, want) {
 		t.Fatalf("multi-occurrence mismatch:\n got=%v\nwant=%v", got, want)
