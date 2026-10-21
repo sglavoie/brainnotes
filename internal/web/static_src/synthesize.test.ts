@@ -15,7 +15,6 @@ import {
   selectedKeys,
   start,
   statusText,
-  workbench,
 } from "./synthesize.test-helpers";
 
 afterEach(() => {
@@ -261,6 +260,24 @@ describe("synthesis vault search", () => {
     await vi.waitFor(() => {
       expect(query<HTMLElement>("[data-synthesize-search-status]").textContent).toBe(
         "search error"
+      );
+    });
+  });
+
+  it("names the Search control when a failed search carries no reason", async () => {
+    const fetcher = routedFetch({
+      search: () => {
+        throw new Error("");
+      },
+    });
+    await start({ fetch: fetcher, storage: memoryStorage(), clipboard: null });
+    query<HTMLInputElement>("[data-synthesize-search-input]").value = "topic";
+    query<HTMLFormElement>("[data-synthesize-search-form]").dispatchEvent(
+      new Event("submit", { bubbles: true, cancelable: true })
+    );
+    await vi.waitFor(() => {
+      expect(query<HTMLElement>("[data-synthesize-search-status]").textContent).toBe(
+        "Couldn't load search results. Check your connection, then select Search."
       );
     });
   });

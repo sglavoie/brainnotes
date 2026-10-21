@@ -356,3 +356,23 @@ describe("daily brief card refresh and Ask AI", () => {
     expect(fetchMock.mock.contexts.every((context) => context === undefined)).toBe(true);
   });
 });
+
+describe("daily brief action failures", () => {
+  it.each([
+    ["open", "Couldn't open the note."],
+    ["another", "Couldn't show another card."],
+  ] as const)("says what %s could not do when the reply is unusable", async (action, message) => {
+    document.body.innerHTML = briefRootHTML();
+    const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
+      if (String(input) === "/api/brief/item") throw new Error("");
+      return viewResponse();
+    });
+
+    initDailyBrief({ fetch: fetchMock as typeof fetch });
+    document.querySelector<HTMLButtonElement>(`[data-brief-slot="continue"] [data-brief-action-${action}]`)?.click();
+
+    await waitForExpect(() => {
+      expect(document.querySelector('[data-brief-slot-status="continue"]')?.textContent).toBe(message);
+    });
+  });
+});
