@@ -34,13 +34,14 @@
                 class="bn-button saved-views-save-button"
                 type="button"
                 data-saved-views-open
+                aria-controls="saved-view-form"
                 aria-expanded="false"
               >Save as view</button>
-              <form class="saved-views-save-form" data-saved-views-form hidden>
-                <pre class="saved-views-save-scope" data-saved-views-scope aria-live="polite"></pre>
+              <form class="saved-views-save-form" id="saved-view-form" data-saved-views-form hidden>
+                <pre class="saved-views-save-scope" id="saved-view-scope" data-saved-views-scope></pre>
                 <p class="saved-views-save-status is-warning" data-saved-views-excluded role="status" hidden></p>
                 <label class="saved-views-save-label" for="saved-view-name">Name</label>
-                <input id="saved-view-name" name="name" type="text" autocomplete="off" data-saved-views-name>
+                <input id="saved-view-name" name="name" type="text" autocomplete="off" aria-describedby="saved-view-scope" data-saved-views-name>
                 <label class="saved-views-save-label" for="saved-view-description">Description</label>
                 <input id="saved-view-description" name="description" type="text" autocomplete="off" data-saved-views-description>
                 <div class="saved-views-save-actions">

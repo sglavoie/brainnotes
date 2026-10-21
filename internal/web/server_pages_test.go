@@ -373,6 +373,12 @@ func TestServer_LibraryIncludesSaveAsViewControl(t *testing.T) {
 		`data-saved-views-save`,
 		`data-saved-views-csrf=`,
 		`data-saved-views-open`,
+		// The toggle names the form it reveals, and the name field is described
+		// by the scope summary, so a screen reader hears what the view will save.
+		`aria-controls="saved-view-form"`,
+		`id="saved-view-form"`,
+		`id="saved-view-scope"`,
+		`aria-describedby="saved-view-scope"`,
 		`Save as view`,
 		`data-saved-views-form`,
 		`data-saved-views-name`,

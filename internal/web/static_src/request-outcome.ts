@@ -47,8 +47,9 @@ export const responseFailure = (
   if (response.redirected) return unansweredRequest(purpose);
   const record = asRecord(payload);
   // Some existing refusal envelopes carry code/message without an ok field.
-  if (!response.ok && typeof record?.message === "string") {
-    return { ok: false, message: record.message };
+  const envelope = errorEnvelopeMessage(payload);
+  if (!response.ok && envelope !== "") {
+    return { ok: false, message: envelope };
   }
   if (typeof record?.ok !== "boolean") return unansweredRequest(purpose);
   if (!response.ok || record.ok === false) {
@@ -61,4 +62,41 @@ const refusalMessage = (response: ResponseInfo, record: Record<string, unknown>,
   if (record.message) return normalizeManagementErrorMessage(response.status, record);
   return purpose === "write" ? "The change was refused. Check the current values before trying again."
     : "The request was refused. Review your inputs and try again.";
+};
+
+// errorEnvelopeMessage reads the explanation from either refusal shape the
+// server writes: a top-level `message`, or the structured `{error: {message}}`
+// that filter and query rejections use.
+export const errorEnvelopeMessage = (payload: unknown): string => {
+  const record = asRecord(payload);
+  if (typeof record?.message === "string") return record.message;
+  const nested = asRecord(record?.error);
+  return typeof nested?.message === "string" ? nested.message : "";
+};
+
+// readQueryRejection answers whether a read failed because the server refused
+// the query itself: a 400 carrying its reason. That failure is the person's to
+// fix by editing the query; repeating the same request cannot succeed.
+export const readQueryRejection = async (response: Response): Promise<string> => {
+  if (response.status !== 400) return "";
+  try {
+    return errorEnvelopeMessage(await response.json());
+  } catch {
+    return "";
+  }
+};
+
+export const queryRejectionMessage = (reason: string): string =>
+  `${reason.trim().replace(/\.?$/, ".")} Edit the query to continue.`;
+
+// QueryRejectedError carries a query rejection through a fetch pipeline that
+// otherwise treats every failure as transient.
+export class QueryRejectedError extends Error {}
+
+// throwUnlessOK passes an answered read through, and otherwise throws either a
+// QueryRejectedError (the person must edit the query) or a plain Error.
+export const throwUnlessOK = async (response: Response, failure: string): Promise<Response> => {
+  if (response.ok) return response;
+  const rejection = await readQueryRejection(response);
+  throw rejection ? new QueryRejectedError(rejection) : new Error(failure);
 };

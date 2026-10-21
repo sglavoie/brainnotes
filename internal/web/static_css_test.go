@@ -407,3 +407,27 @@ func TestSavedViewsNavReservesHeightCSSContract(t *testing.T) {
 		}
 	}
 }
+
+// TestAutoFitGridTracksFitNarrowViewportsCSSContract pins the clamped minimum
+// on auto-fit/auto-fill grids whose track minimum is wider than a phone's
+// content box: a bare minmax(18rem, 1fr) forces a track wider than its
+// container and the page scrolls sideways.
+func TestAutoFitGridTracksFitNarrowViewportsCSSContract(t *testing.T) {
+	css := readStaticCSS(t)
+
+	for selector, track := range map[string]string{
+		".properties-list":             "repeat(auto-fill, minmax(min(18rem, 100%), 1fr))",
+		".source-editor-shortcut-list": "repeat(auto-fit, minmax(min(16rem, 100%), 1fr))",
+		".source-editor-manage-groups": "repeat(auto-fit, minmax(min(14rem, 100%), 1fr))",
+	} {
+		start := strings.Index(css, "\n"+selector+" {")
+		if start == -1 {
+			t.Fatalf("CSS rule %q not found", selector)
+		}
+		block := css[start:]
+		block = block[:strings.Index(block, "}")]
+		if !strings.Contains(block, "grid-template-columns: "+track+";") {
+			t.Fatalf("%s grid tracks are not clamped to the container; want %q in block:\n%s", selector, track, block)
+		}
+	}
+}

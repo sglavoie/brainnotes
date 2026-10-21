@@ -53,15 +53,6 @@ export type CaptureResult = {
   rel_path: string;
 };
 
-export type OpenNoteResult =
-  | {
-      ok: true;
-    }
-  | {
-      ok: false;
-      message: string;
-    };
-
 export type ManagementSuccessResult = {
   ok: true;
   message?: string;

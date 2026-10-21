@@ -2,50 +2,18 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { PropertyMutationResult, PropertySummary } from "./api";
-import { initPropertyDetail } from "./properties";
-import {
-  configInvalidMessage,
-  configRestartMessage,
-  createConfigStatusPoller,
-} from "./properties-config-status";
 import { createPreviewDialog, previewSummaryLabel } from "./properties-preview-dialog";
-import { renderRows } from "./properties-render";
 import {
   createPropertySchemaEditor,
   definitionError,
   parseAllowedValues,
 } from "./properties-schema-editor";
-import { createUndoToast } from "./properties-toast";
-import {
-  createValueControl,
-  datetimeLocalToRFC3339,
-  rfc3339ToDatetimeLocal,
-  scalarValueError,
-  wikilinkTargetError,
-} from "./properties-value-control";
-import {
-  actionConfirmLabel,
-  actionTitle,
-  editItemKind,
-  editKind,
-  mutationSuccessMessage,
-  rowIsEditable,
-  selectionLabel,
-  typedValueFrom,
-  undoToastMessage,
-} from "./properties-workbench-model";
 
 import {
-  detailPayload,
-  jsonResponse,
   mountWorkbench,
   mutationFixture,
   requireElement,
-  routedFetch,
-  submitEditor,
   summaryFixture,
-  waitForExpect,
 } from "./properties-workbench.test-helpers";
 
 afterEach(() => {
@@ -210,7 +178,9 @@ describe("preview dialog", () => {
       requireElement("[data-property-preview-files]", HTMLElement).textContent
     ).toContain("Notes/Alpha.md");
   });
+});
 
+describe("preview dialog dismissal and summary", () => {
   it("cancels on escape and restores focus to the opener", () => {
     const host = document.createElement("div");
     const opener = document.createElement("button");

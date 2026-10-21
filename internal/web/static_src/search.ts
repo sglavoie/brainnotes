@@ -1,4 +1,4 @@
-import { loadFailureMessage } from "./request-outcome";
+import { loadFailureMessage, queryRejectionMessage, readQueryRejection } from "./request-outcome";
 import { normalizeSearchResults, searchResultPath, type SearchResult } from "./api";
 import { getElementByID, queryElement } from "./dom";
 import { bindSearchShortcut } from "./search-shortcut";
@@ -168,6 +168,13 @@ class HeaderSearch {
     if (this.retryButton) this.retryButton.hidden = false;
   }
 
+  // A 400 names what is wrong with the query; repeating it would only be
+  // refused again, so the reason replaces the retry offer.
+  private showResponseFailure(rejection: string): void {
+    if (rejection) this.showFeedback(queryRejectionMessage(rejection));
+    else this.showFailure();
+  }
+
   private cancelPending(): void {
     window.clearTimeout(this.debounceToken);
     window.clearTimeout(this.loadingToken);
@@ -280,7 +287,8 @@ class HeaderSearch {
         return;
       }
       if (!resp.ok) {
-        if (this.settle(localToken)) this.showFailure();
+        const rejection = await readQueryRejection(resp);
+        if (this.settle(localToken)) this.showResponseFailure(rejection);
         return;
       }
       const payload = await resp.json();

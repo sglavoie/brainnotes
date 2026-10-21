@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, expect, it, vi } from "vitest";
-import { cancelGraphLoad, scheduleLoad } from "./graph-controller-load";
+import { cancelGraphLoad, loadGraph, scheduleLoad } from "./graph-controller-load";
 import { createGraphRuntime } from "./graph-controller-runtime";
 import { setStatus } from "./graph-controller-status";
 import { initOverviewSearchResults } from "./overview-search";
@@ -35,10 +35,7 @@ it("clears Library busy state when IME composition cancels an in-flight search",
   expect(document.querySelector("[data-overview-search-list]")?.hasAttribute("data-updating")).toBe(false);
 });
 
-it("restores the settled graph status when a load is canceled", () => {
-  vi.useFakeTimers();
-  vi.stubGlobal("fetch", vi.fn(() => new Promise(() => {})));
-  vi.stubGlobal("cytoscape", () => ({}));
+const graphRuntime = () => {
   const canvas = document.createElement("div");
   const status = document.createElement("p");
   const details = {
@@ -53,6 +50,14 @@ it("restores the settled graph status when a load is canceled", () => {
     zoomMatchesButton: null, resetLayoutButton: null,
     labelModeInputs: [], searchModeInputs: [],
   }, canvas, details);
+  return { runtime, status };
+};
+
+it("restores the settled graph status when a load is canceled", () => {
+  vi.useFakeTimers();
+  vi.stubGlobal("fetch", vi.fn(() => new Promise(() => {})));
+  vi.stubGlobal("cytoscape", () => ({}));
+  const { runtime, status } = graphRuntime();
   setStatus(runtime, "Loaded 3 nodes and 2 edges.");
   scheduleLoad(runtime, "new", 0);
   expect(status.textContent).toBe("Loading graph…");
@@ -61,4 +66,16 @@ it("restores the settled graph status when a load is canceled", () => {
   cancelGraphLoad(runtime);
   expect(status.textContent).toBe("Loaded 3 nodes and 2 edges.");
   expect(status.classList.contains("is-loading")).toBe(false);
+});
+
+it.each([
+  [400, { error: { message: "unknown field: foo" } }, "unknown field: foo. Edit the query to continue."],
+  [500, { code: "internal", message: "boom" }, "Couldn't load the graph (HTTP 500). Check your connection, then reload the page."],
+])("words a %i graph failure by whether the query was rejected", async (code, body, message) => {
+  vi.stubGlobal("fetch", vi.fn(async () => new Response(JSON.stringify(body), { status: code })));
+  vi.stubGlobal("cytoscape", () => ({}));
+  const { runtime, status } = graphRuntime();
+  await loadGraph(runtime, "foo:bar", runtime.requestToken);
+  expect(status.textContent).toBe(message);
+  expect(status.classList.contains("is-error")).toBe(true);
 });

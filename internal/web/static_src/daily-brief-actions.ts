@@ -76,7 +76,7 @@ export const runOpen = async (ctx: BriefActionContext, button: HTMLButtonElement
     }
     const result = normalizeBriefItemResponse(payload);
     if (!result.ok) {
-      ctx.setSlotStatus(slot, result.message || "Open failed.", "is-error");
+      ctx.setSlotStatus(slot, result.message || "Couldn't open the note.", "is-error");
       return;
     }
     announceConfirmedWrite();
@@ -91,7 +91,7 @@ export const runOpen = async (ctx: BriefActionContext, button: HTMLButtonElement
     ctx.setSlotStatus(slot, "Opened in editor. Refresh after saving changes.", "is-success");
     ctx.setGlobalStatus("Brief activity updated.", "is-success");
   } catch {
-    ctx.setSlotStatus(slot, "Open failed.", "is-error");
+    ctx.setSlotStatus(slot, "Couldn't open the note.", "is-error");
   } finally {
     ctx.setSlotsBusy([slot], false);
   }
@@ -104,7 +104,7 @@ export const runAnother = async (
   const slot = readButtonSlot(button);
   const cardID = readButtonCardID(button);
   if (!slot || !cardID || !ctx.config.csrfToken) {
-    ctx.setGlobalStatus("Another action unavailable.", "is-error");
+    ctx.setGlobalStatus("Couldn't show another card. Reload the page and try again.", "is-error");
     return;
   }
   const busySlots: BriefSlotKind[] = slot === "continue" ? ["continue", "connect"] : [slot];
@@ -121,7 +121,7 @@ export const runAnother = async (
     }
     const result = normalizeBriefItemResponse(payload);
     if (!result.ok) {
-      ctx.setSlotStatus(slot, result.message || "Another failed.", "is-error");
+      ctx.setSlotStatus(slot, result.message || "Couldn't show another card.", "is-error");
       return;
     }
 
@@ -133,7 +133,7 @@ export const runAnother = async (
     ctx.setGlobalStatus(statusMessage, "is-success");
     focusAnother(ctx.root, slot);
   } catch {
-    ctx.setSlotStatus(slot, "Another failed.", "is-error");
+    ctx.setSlotStatus(slot, "Couldn't show another card.", "is-error");
   } finally {
     ctx.setSlotsBusy(busySlots, false);
   }

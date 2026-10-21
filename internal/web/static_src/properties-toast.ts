@@ -1,3 +1,5 @@
+import { focusFallback, focusIsLost } from "./dom";
+
 export type UndoToastOptions = {
   message: string;
   journalID: string;
@@ -13,6 +15,16 @@ export type UndoToast = {
 
 export type UndoToastDeps = {
   onUndo: (journalID: string) => void;
+  // statusTarget names where focus goes after Undo hides the toast: the status
+  // line that reports the undo's progress.
+  statusTarget?: () => HTMLElement | null;
+};
+
+// triggerFrom remembers the control that caused the toast, so Dismiss can hand
+// focus back to it; a press inside the toast itself is not a trigger.
+const triggerFrom = (doc: Document, toast: HTMLElement): HTMLElement | null => {
+  const active = doc.activeElement;
+  return active instanceof HTMLElement && active !== doc.body && !toast.contains(active) ? active : null;
 };
 
 // createUndoToast builds the one post-write affordance. It is announced
@@ -68,11 +80,20 @@ export const createUndoToast = (
   host.appendChild(region);
 
   let entryID = "";
+  let trigger: HTMLElement | null = null;
 
   const hide = (): void => {
     entryID = "";
     element.hidden = true;
     message.textContent = "";
+  };
+
+  // Hiding the toast removes the focused button. Undo lands on its progress:
+  // the toast's own message when it stays up, else the page's status line.
+  const focusAfterUndo = (): void => {
+    if (!focusIsLost(doc)) return;
+    if (!element.hidden) focusFallback(message);
+    else focusFallback(deps.statusTarget?.() ?? (trigger?.isConnected ? trigger : null));
   };
 
   undo.addEventListener("click", () => {
@@ -82,12 +103,17 @@ export const createUndoToast = (
     }
     hide();
     deps.onUndo(pending);
+    focusAfterUndo();
   });
-  dismiss.addEventListener("click", hide);
+  dismiss.addEventListener("click", () => {
+    hide();
+    if (focusIsLost(doc) && trigger?.isConnected) trigger.focus();
+  });
 
   return {
     element,
     show: (options: UndoToastOptions): void => {
+      trigger = triggerFrom(doc, element) ?? trigger;
       entryID = options.journalID;
       message.textContent = options.message;
       history.href = options.historyHref;

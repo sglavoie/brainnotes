@@ -22,6 +22,7 @@ import {
   showHistoryPanelConflict,
   type HistoryPanelElements,
 } from "./history-panel-view";
+import { focusFallback, focusIsLost, queryAllElements } from "./dom";
 import type { StatusKind } from "./status";
 import { newWriteOperationID, offerWriteOutcomeCheck } from "./write-outcome-check";
 
@@ -89,31 +90,100 @@ const offerUndoOutcomeCheck = (io: HistoryPanelIO, operationID: string, beforeAn
   });
 };
 
-const createHistoryPanelController = (
-  elements: HistoryPanelElements,
-  deps: HistoryPanelDeps
-): { bind: () => void; load: (successMessage?: string) => Promise<void> } => {
-  const baseFetch = deps.fetch || fetch;
-  let entries: HistoryEntry[] = [];
-  let conflictEntryID = "";
-  let returnFocus: Element | null = null;
-  // The message the next mutation-event reload shows instead of the generic one.
-  let refreshMessage = "";
+type HistoryPanelState = {
+  entryCount: () => number;
+  hasConflict: () => boolean;
+  returnFocus: () => Element | null;
+};
 
-  const io: HistoryPanelIO = {
+const createHistoryPanelIO = (
+  elements: HistoryPanelElements,
+  deps: HistoryPanelDeps,
+  state: HistoryPanelState
+): HistoryPanelIO => {
+  const baseFetch = deps.fetch || fetch;
+  return {
     elements,
     fetcher: (input, init) => baseFetch(input, init),
     token: elements.root.getAttribute("data-history-csrf") || "",
     confirm: deps.confirm
       ? (preview) => Promise.resolve(deps.confirm!(undoDescription(preview)))
-      : (preview) => confirmUndo(preview, document, returnFocus),
+      : (preview) => confirmUndo(preview, document, state.returnFocus()),
     setBusy: (busy: boolean): void => {
-      setHistoryPanelBusy(elements, busy, entries.length, conflictEntryID !== "");
+      setHistoryPanelBusy(elements, busy, state.entryCount(), state.hasConflict());
     },
     setStatus: (message: string, kind: StatusKind = ""): void => {
       setHistoryPanelStatus(elements, message, kind);
     },
   };
+};
+
+// Disabling or rerendering the focused button drops focus to <body>. Put it
+// back on the same control when it still exists, else on the status line.
+const recoverHistoryFocus = (elements: HistoryPanelElements, returnFocus: Element | null): void => {
+  if (!focusIsLost(document)) return;
+  const target = returnFocus instanceof HTMLButtonElement ? returnFocus : null;
+  const entryID = target?.getAttribute("data-history-undo-entry");
+  const match = entryID
+    ? queryAllElements(elements.list, "[data-history-undo-entry]", HTMLButtonElement)
+      .find((button) => button.getAttribute("data-history-undo-entry") === entryID)
+    : target;
+  if (match?.isConnected && !match.disabled) match.focus();
+  else focusFallback(elements.status);
+};
+
+const showHistoryEntries = (io: HistoryPanelIO, count: number, successMessage: string): void => {
+  if (count === 0) {
+    io.setStatus("No recent changes.", "is-empty");
+    return;
+  }
+  io.setStatus(successMessage || `${count} recent changes.`, successMessage ? "is-success" : "");
+};
+
+type HistoryPanelActions = {
+  refresh: () => void;
+  undoLatest: () => void;
+  force: () => void;
+  mutated: () => void;
+};
+
+const bindHistoryPanel = (elements: HistoryPanelElements, actions: HistoryPanelActions): void => {
+  elements.refresh?.addEventListener("click", actions.refresh);
+  elements.undoLatest?.addEventListener("click", actions.undoLatest);
+  elements.force?.addEventListener("click", actions.force);
+  window.addEventListener(managementMutationEventName, actions.mutated);
+};
+
+// HistoryReloadState is what decides whether, and how, a reload renders.
+type HistoryReloadState = {
+  // The message the next mutation-event reload shows instead of the generic one.
+  message: string;
+  // Only the newest load may render: an older answer landing late would put a
+  // stale list back on screen.
+  generation: number;
+  // A mutation event during an undo waits for it (pending): a reload started
+  // mid-undo would re-enable the buttons while the undo is still in flight.
+  restoring: boolean;
+  pending: boolean;
+  // Set when a reload follows this panel's own undo, whose button the rerender
+  // or the busy state took focus from.
+  focusAfterLoad: boolean;
+};
+
+const createHistoryPanelController = (
+  elements: HistoryPanelElements,
+  deps: HistoryPanelDeps
+): { bind: () => void; load: (successMessage?: string) => Promise<void> } => {
+  let entries: HistoryEntry[] = [];
+  let conflictEntryID = "";
+  let returnFocus: Element | null = null;
+  const reload: HistoryReloadState = { message: "", generation: 0, restoring: false, pending: false, focusAfterLoad: false };
+
+  const io = createHistoryPanelIO(elements, deps, {
+    entryCount: () => entries.length,
+    hasConflict: () => conflictEntryID !== "",
+    returnFocus: () => returnFocus,
+  });
 
   const hideConflict = (): void => {
     conflictEntryID = "";
@@ -121,25 +191,47 @@ const createHistoryPanelController = (
   };
 
   const load = async (successMessage = ""): Promise<void> => {
+    const request = ++reload.generation;
     io.setBusy(true);
     io.setStatus("Loading history…", "is-loading");
     const outcome = await fetchHistoryPage(io.fetcher, HISTORY_ENDPOINT, {});
-    if (!outcome.ok) {
-      io.setBusy(false);
-      io.setStatus(outcome.message, "is-error");
-      return;
+    if (request !== reload.generation) return;
+    if (outcome.ok) {
+      entries = outcome.result.entries || [];
+      renderHistoryPanelEntries(elements, entries, (entryID) => void restore(entryID, plainRestore));
     }
-    entries = outcome.result.entries || [];
-    renderHistoryPanelEntries(elements, entries, (entryID) => void restore(entryID, plainRestore));
     io.setBusy(false);
-    if (entries.length === 0) {
-      io.setStatus("No recent changes.", "is-empty");
-      return;
+    if (outcome.ok) showHistoryEntries(io, entries.length, successMessage);
+    else io.setStatus(outcome.message, "is-error");
+    if (reload.focusAfterLoad) recoverHistoryFocus(elements, returnFocus);
+    reload.focusAfterLoad = false;
+  };
+
+  const refreshAfterMutation = (): void => {
+    reload.pending = reload.restoring;
+    if (reload.restoring) return;
+    hideConflict();
+    void load(reload.message || "History refreshed.");
+    reload.message = "";
+  };
+
+  // A confirmed undo changed notes that other panels show, so it is announced
+  // like any other write; this panel's own reload is the listener's.
+  const settleRestore = (outcome: RestoreOutcome): void => {
+    reload.restoring = false;
+    if (outcome.kind === "conflict") {
+      conflictEntryID = outcome.entryID;
+      io.setBusy(false);
     }
-    io.setStatus(
-      successMessage || `${entries.length} recent changes.`,
-      successMessage ? "is-success" : ""
-    );
+    if (outcome.kind === "restored") {
+      reload.message = outcome.message;
+      reload.focusAfterLoad = true;
+      window.dispatchEvent(new CustomEvent(managementMutationEventName));
+    } else {
+      recoverHistoryFocus(elements, returnFocus);
+      if (reload.pending) refreshAfterMutation();
+    }
+    if (outcome.kind === "uncertain") offerUndoOutcomeCheck(io, outcome.operationID, () => { reload.message = "Undo confirmed."; });
   };
 
   const restore = async (
@@ -151,40 +243,29 @@ const createHistoryPanelController = (
       return;
     }
     returnFocus = document.activeElement;
-    const outcome = await run(io, entryID);
-    if (outcome.kind === "conflict") {
-      conflictEntryID = outcome.entryID;
-      io.setBusy(false);
-      return;
+    reload.restoring = true;
+    let outcome: RestoreOutcome = { kind: "halted" };
+    try {
+      outcome = await run(io, entryID);
+    } finally {
+      settleRestore(outcome);
     }
-    if (outcome.kind === "restored") {
-      hideConflict();
-      await load(outcome.message);
-    }
-    if (outcome.kind === "uncertain") offerUndoOutcomeCheck(io, outcome.operationID, () => { refreshMessage = "Undo confirmed."; });
   };
 
   const bind = (): void => {
-    elements.refresh?.addEventListener("click", () => {
-      hideConflict();
-      void load();
-    });
-    elements.undoLatest?.addEventListener("click", () => {
-      void restore("", plainRestore);
-    });
-    elements.force?.addEventListener("click", () => {
-      if (conflictEntryID === "") {
-        io.setStatus("No conflict selected.", "is-error");
-        return;
-      }
-      void restore(conflictEntryID, forcedRestore);
-    });
-    window.addEventListener(managementMutationEventName, () => {
-      hideConflict();
-      void load(refreshMessage || "History refreshed.");
-      refreshMessage = "";
-    });
     hideConflict();
+    bindHistoryPanel(elements, {
+      refresh: () => {
+        hideConflict();
+        void load();
+      },
+      undoLatest: () => void restore("", plainRestore),
+      force: () => {
+        if (conflictEntryID === "") io.setStatus("No conflict selected.", "is-error");
+        else void restore(conflictEntryID, forcedRestore);
+      },
+      mutated: refreshAfterMutation,
+    });
   };
 
   return { bind, load };

@@ -17,10 +17,64 @@ import {
   type SynthesisRuntime,
 } from "./synthesize-runtime";
 import type { RelatedMode } from "./related-types";
+import { loadFailureMessage } from "./request-outcome";
 
 export type SynthesisDiscoveryActions = {
   selectMode: (mode: RelatedMode) => Promise<void>;
   runSearch: (query: string) => Promise<void>;
+};
+
+// createSynthesisSearch runs the vault search beside the suggestions. Only the
+// newest search renders; an older answer landing late is dropped.
+const createSynthesisSearch = (runtime: SynthesisRuntime): ((query: string) => Promise<void>) => {
+  const { config, model, view } = runtime;
+  let searchRequest = 0;
+  return async (query: string): Promise<void> => {
+    const trimmed = query.trim();
+    if (trimmed === "") {
+      searchRequest += 1;
+      runtime.searchEntries = null;
+      view.searchResults.replaceChildren();
+      setStatusText(view.searchStatus, "Enter a search term to find notes.", "");
+      return;
+    }
+    const requestID = searchRequest + 1;
+    searchRequest = requestID;
+    setStatusText(view.searchStatus, `Searching for ${trimmed}…`, "is-loading");
+    try {
+      const results = await requestSynthesisSearch(runtime.fetcher, config.searchEndpoint, trimmed);
+      if (searchRequest !== requestID) {
+        return;
+      }
+      const entries = results.flatMap((result) => {
+        const candidate = candidateFromSearchResult(result);
+        return candidate ? [candidate] : [];
+      });
+      runtime.rememberCandidates(entries);
+      runtime.searchEntries = entries;
+      renderSynthesisCandidates(
+        view.searchResults,
+        entries,
+        synthesisSelectedKeys(model),
+        config.anchor.key,
+        true,
+        SEARCH_EMPTY
+      );
+      const shown = view.searchResults.querySelectorAll("[data-synthesize-candidate]").length;
+      setStatusText(
+        view.searchStatus,
+        shown === 0 ? SEARCH_EMPTY : `${shown} ${shown === 1 ? "match" : "matches"} for ${trimmed}.`,
+        shown === 0 ? "is-empty" : "is-success"
+      );
+    } catch (error) {
+      if (searchRequest !== requestID) {
+        return;
+      }
+      runtime.searchEntries = null;
+      view.searchResults.replaceChildren();
+      setStatusText(view.searchStatus, errorMessage(error, loadFailureMessage("search results", "Search")), "is-error");
+    }
+  };
 };
 
 export const createSynthesisDiscoveryActions = (
@@ -33,7 +87,6 @@ export const createSynthesisDiscoveryActions = (
     connect: 0,
   };
   let activeMode: RelatedMode = "balanced";
-  let searchRequest = 0;
 
   const showSuggestionCount = (mode: RelatedMode): void => {
     const shown = view.suggestionResults[mode].querySelectorAll("[data-synthesize-candidate]").length;
@@ -84,7 +137,7 @@ export const createSynthesisDiscoveryActions = (
       if (mode === activeMode) {
         setStatusText(
           view.suggestionStatus,
-          errorMessage(error, "Suggestions could not be loaded."),
+          errorMessage(error, loadFailureMessage("suggestions", "the tab again")),
           "is-error"
         );
       }
@@ -105,52 +158,5 @@ export const createSynthesisDiscoveryActions = (
     return Promise.resolve();
   };
 
-  const runSearch = async (query: string): Promise<void> => {
-    const trimmed = query.trim();
-    if (trimmed === "") {
-      searchRequest += 1;
-      runtime.searchEntries = null;
-      view.searchResults.replaceChildren();
-      setStatusText(view.searchStatus, "Enter a search term to find notes.", "");
-      return;
-    }
-    const requestID = searchRequest + 1;
-    searchRequest = requestID;
-    setStatusText(view.searchStatus, `Searching for ${trimmed}…`, "is-loading");
-    try {
-      const results = await requestSynthesisSearch(runtime.fetcher, config.searchEndpoint, trimmed);
-      if (searchRequest !== requestID) {
-        return;
-      }
-      const entries = results.flatMap((result) => {
-        const candidate = candidateFromSearchResult(result);
-        return candidate ? [candidate] : [];
-      });
-      runtime.rememberCandidates(entries);
-      runtime.searchEntries = entries;
-      renderSynthesisCandidates(
-        view.searchResults,
-        entries,
-        synthesisSelectedKeys(model),
-        config.anchor.key,
-        true,
-        SEARCH_EMPTY
-      );
-      const shown = view.searchResults.querySelectorAll("[data-synthesize-candidate]").length;
-      setStatusText(
-        view.searchStatus,
-        shown === 0 ? SEARCH_EMPTY : `${shown} ${shown === 1 ? "match" : "matches"} for ${trimmed}.`,
-        shown === 0 ? "is-empty" : "is-success"
-      );
-    } catch (error) {
-      if (searchRequest !== requestID) {
-        return;
-      }
-      runtime.searchEntries = null;
-      view.searchResults.replaceChildren();
-      setStatusText(view.searchStatus, errorMessage(error, "Search failed."), "is-error");
-    }
-  };
-
-  return { selectMode, runSearch };
+  return { selectMode, runSearch: createSynthesisSearch(runtime) };
 };

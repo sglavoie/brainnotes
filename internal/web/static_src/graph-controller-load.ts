@@ -11,6 +11,7 @@ import {
   pruneExpandedFolders,
 } from "./graph-controller-runtime";
 import { setStatus } from "./graph-controller-status";
+import { queryRejectionMessage, readQueryRejection } from "./request-outcome";
 import { buildDisplayGraph } from "./graph-controller-view";
 import {
   applyGraphVisualState,
@@ -75,13 +76,25 @@ const fetchGraphPayload = async (
       return null;
     }
     if (!resp.ok) {
-      return { ok: false, message: `Graph load failed (${resp.status}).` };
+      const message = await graphFailureMessage(resp);
+      return current() ? { ok: false, message } : null;
     }
     const payload: unknown = await resp.json();
     return current() ? { ok: true, payload } : null;
   } catch {
-    return current() ? { ok: false, message: "Graph load failed." } : null;
+    return current() ? { ok: false, message: graphLoadFailure() } : null;
   }
+};
+
+// The graph has no retry control of its own, so the page reload is the retry.
+const graphLoadFailure = (status = 0): string =>
+  `Couldn't load the graph${status > 0 ? ` (HTTP ${status})` : ""}. Check your connection, then reload the page.`;
+
+// A 400 names what is wrong with the query, fixed by editing it; any other
+// failure got no usable answer and is worded as a load failure.
+const graphFailureMessage = async (resp: Response): Promise<string> => {
+  const rejection = await readQueryRejection(resp);
+  return rejection ? queryRejectionMessage(rejection) : graphLoadFailure(resp.status);
 };
 
 export const loadGraph = async (

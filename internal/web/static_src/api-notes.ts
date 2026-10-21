@@ -15,7 +15,6 @@ import type {
   NoteInsightResult,
   NoteKeyMutationRequest,
   OpenNoteRequest,
-  OpenNoteResult,
 } from "./api-types";
 
 export const managementMutationEventName = "bn:management:mutated";
@@ -147,14 +146,4 @@ export const normalizeOpenErrorMessage = (status: number, detail: unknown): stri
   }
   const message = normalizeParamValue(detail);
   return message || `Open failed (${status}).`;
-};
-
-export const normalizeOpenSuccess = (ok: boolean, status: number, detail: unknown): OpenNoteResult => {
-  if (ok) {
-    return { ok: true };
-  }
-  return {
-    ok: false,
-    message: normalizeOpenErrorMessage(status, detail),
-  };
 };

@@ -54,6 +54,9 @@ export type DailyFixesContext = {
   // fix reloads the queue, and the panel owns the "which message does the reload
   // report" decision.
   loadQueue: (successMessage?: string) => Promise<void>;
+  // beginLoad numbers a queue load; the answer it returns reports whether that
+  // load is still the newest, so an older response landing late is dropped.
+  beginLoad: () => () => boolean;
   // suppressNextMutation tells the panel that the mutation event it is about to
   // see is its own, so it does not reload a queue it already rendered.
   suppressNextMutation: () => void;
@@ -123,6 +126,7 @@ export const applyQueueResult = (
 };
 
 export const loadQueue = async (ctx: DailyFixesContext, successMessage = ""): Promise<void> => {
+  const current = ctx.beginLoad();
   ctx.setBusy(true);
   ctx.setError("");
   ctx.setQueueStale(true);
@@ -132,13 +136,14 @@ export const loadQueue = async (ctx: DailyFixesContext, successMessage = ""): Pr
       headers: { Accept: "application/json" },
     });
     const payload = await readResponsePayload(resp);
+    if (!current()) return;
     if (!resp.ok) {
       ctx.showError(normalizeManagementErrorMessage(resp.status, payload));
       return;
     }
     applyQueueResult(ctx, payload, successMessage, successMessage ? "is-success" : "");
   } catch {
-    ctx.showError(loadFailureMessage("the fixes queue", "Reload fixes"));
+    if (current()) ctx.showError(loadFailureMessage("the fixes queue", "Reload fixes"));
   } finally {
     ctx.setBusy(false);
   }

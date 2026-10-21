@@ -2,21 +2,6 @@
 
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { PropertyMutationResult, PropertySummary } from "./api";
-import { initPropertyDetail } from "./properties";
-import {
-  configInvalidMessage,
-  configRestartMessage,
-  createConfigStatusPoller,
-} from "./properties-config-status";
-import { createPreviewDialog, previewSummaryLabel } from "./properties-preview-dialog";
-import { renderRows } from "./properties-render";
-import {
-  createPropertySchemaEditor,
-  definitionError,
-  parseAllowedValues,
-} from "./properties-schema-editor";
-import { createUndoToast } from "./properties-toast";
 import {
   createValueControl,
   datetimeLocalToRFC3339,
@@ -30,22 +15,14 @@ import {
   editItemKind,
   editKind,
   mutationSuccessMessage,
-  rowIsEditable,
   selectionLabel,
   typedValueFrom,
   undoToastMessage,
 } from "./properties-workbench-model";
 
 import {
-  detailPayload,
-  jsonResponse,
-  mountWorkbench,
   mutationFixture,
-  requireElement,
-  routedFetch,
-  submitEditor,
   summaryFixture,
-  waitForExpect,
 } from "./properties-workbench.test-helpers";
 
 afterEach(() => {
@@ -108,22 +85,6 @@ describe("workbench model", () => {
     );
 
     expect(seeded?.items?.map((item) => item.text)).toEqual(["go", "web"]);
-  });
-
-  it("marks a hashless or unsupported row as uneditable", () => {
-    const base = {
-      rel_path: "Notes/Alpha.md",
-      title: "Alpha",
-      folder: "Notes",
-      path: "/note/notes/alpha",
-      hash: "hash",
-      present: true,
-      issues: [],
-      unsupported: false,
-    };
-    expect(rowIsEditable(base)).toBe(true);
-    expect(rowIsEditable({ ...base, hash: "" })).toBe(false);
-    expect(rowIsEditable({ ...base, unsupported: true })).toBe(false);
   });
 
   it("labels actions and selections", () => {

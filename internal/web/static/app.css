@@ -2733,9 +2733,13 @@ code {
   margin-bottom: 0.75rem;
 }
 
-.overview-pin-feedback[hidden],
 .overview-selection[hidden] {
   display: none;
+}
+
+/* The pin status stays rendered so it is announced; an empty one takes no room. */
+.overview-pin-feedback[data-empty] {
+  margin-bottom: 0;
 }
 
 .overview-pin-feedback p {
@@ -6046,7 +6050,7 @@ code {
 }
 
 .properties-list {
-  grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(18rem, 100%), 1fr));
   align-items: stretch;
   gap: 0.7rem;
   margin-top: 0.9rem;
@@ -7618,7 +7622,7 @@ code {
 
 .source-editor-shortcut-list {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(16rem, 100%), 1fr));
   gap: 0.25rem 1rem;
   margin: 0.5rem 0 0;
 }
@@ -7926,7 +7930,7 @@ code {
 
 .source-editor-manage-groups {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(14rem, 100%), 1fr));
   gap: 0.75rem;
   margin-top: 0.6rem;
 }

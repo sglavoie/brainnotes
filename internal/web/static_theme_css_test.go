@@ -190,7 +190,7 @@ func TestPropertiesWorkbenchCSSContract(t *testing.T) {
 		".properties-stat",
 		".properties-filters",
 		".properties-list",
-		"grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));",
+		"grid-template-columns: repeat(auto-fill, minmax(min(18rem, 100%), 1fr));",
 		".properties-item[data-properties-issues]",
 		".properties-filter-input:focus-visible",
 		".properties-filter-select:focus-visible",

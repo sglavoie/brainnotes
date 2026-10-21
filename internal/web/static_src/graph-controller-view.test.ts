@@ -1,10 +1,10 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  aggregateNodeIDForFolder,
   aggregateNodeIDPrefix,
   buildDisplayGraph,
   defaultGraphDisplayOptions,
-  folderForAggregateNodeID,
   folderGroupKey,
   isAggregateNodeID,
 } from "./graph-controller-view";
@@ -42,8 +42,7 @@ describe("isAggregateNodeID", () => {
     expect(aggregateNodeIDPrefix).toBe("folder:");
     expect(isAggregateNodeID("folder:Work/Notes")).toBe(true);
     expect(isAggregateNodeID("Work/Notes.md")).toBe(false);
-    expect(folderForAggregateNodeID("folder:Work/Notes")).toBe("Work/Notes");
-    expect(folderForAggregateNodeID("Work/Notes.md")).toBe("");
+    expect(aggregateNodeIDForFolder("Work/Notes")).toBe("folder:Work/Notes");
   });
 
   it("is not what the pipeline relies on: a note key starting with folder: stays a note", () => {
