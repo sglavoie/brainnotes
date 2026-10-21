@@ -62,6 +62,7 @@ export const createPropertyWorkbench = (
     onUndo: (journalID) => {
       void undo.run(journalID);
     },
+    statusTarget: () => queryElement(doc, "[data-property-status]", HTMLElement),
   });
   const editor = createWorkbenchEditor(doc);
   const state = createWorkbenchState();
