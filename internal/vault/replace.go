@@ -350,7 +350,16 @@ type presenceWatch struct {
 	vanished map[string]struct{}
 }
 
+// presenceVacancyObserved, when a test sets it, is called by a watcher each
+// time it records a watched path as missing. It lets a test that fakes a
+// vacancy hold the path away until the watcher has seen it, instead of sleeping
+// and hoping the poller sampled the gap. It is nil in production, and each
+// watcher reads it once when it starts, so the polling goroutine never races a
+// test restoring it.
+var presenceVacancyObserved func(path string)
+
 func watchPresence(paths []string) *presenceWatch {
+	observed := presenceVacancyObserved
 	watch := &presenceWatch{
 		done:     make(chan struct{}),
 		stopped:  make(chan struct{}),
@@ -366,6 +375,9 @@ func watchPresence(paths []string) *presenceWatch {
 					watch.mu.Lock()
 					watch.vanished[path] = struct{}{}
 					watch.mu.Unlock()
+					if observed != nil {
+						observed(path)
+					}
 				}
 			}
 			if first {

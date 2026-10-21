@@ -11,6 +11,41 @@ import (
 	"time"
 )
 
+// observeVacancies reports every vacancy a presence watcher records for the
+// rest of the test. A test must not call t.Parallel while using it: the hook is
+// package state. Sends never block the watcher; a dropped report is repeated on
+// the watcher's next pass for as long as the path stays missing.
+func observeVacancies(t *testing.T) <-chan string {
+	t.Helper()
+	reports := make(chan string, 1)
+	previous := presenceVacancyObserved
+	presenceVacancyObserved = func(path string) {
+		select {
+		case reports <- path:
+		default:
+		}
+	}
+	t.Cleanup(func() { presenceVacancyObserved = previous })
+	return reports
+}
+
+// awaitVacancy blocks until a watcher has recorded path as missing. The
+// deadline is only a guard against a hung test; a passing run never waits on
+// anything but the watcher.
+func awaitVacancy(reports <-chan string, path string) error {
+	deadline := time.After(30 * time.Second)
+	for {
+		select {
+		case got := <-reports:
+			if got == path {
+				return nil
+			}
+		case <-deadline:
+			return fmt.Errorf("no watcher reported %s missing", path)
+		}
+	}
+}
+
 // resetProvenVolumes drops the per-process capability cache around a test, so
 // one test's verdict cannot decide another's and the self-test itself is
 // observable.
@@ -45,6 +80,7 @@ func TestProveReplacementAcceptsTheProductionPrimitive(t *testing.T) {
 // to catch a volume whose behavior differs from its syscall's contract. Each
 // fake below is a way that can happen on a real filesystem.
 func TestProveReplacementRefusesMisbehavingPrimitives(t *testing.T) {
+	vacancies := observeVacancies(t)
 	cases := []struct {
 		name    string
 		wants   string
@@ -58,8 +94,11 @@ func TestProveReplacementRefusesMisbehavingPrimitives(t *testing.T) {
 				if err := os.Rename(destination, displaced); err != nil {
 					return "", err
 				}
-				// The gap a synchronizing file provider reads as a deletion.
-				time.Sleep(2 * time.Millisecond)
+				// The gap a synchronizing file provider reads as a deletion,
+				// held open until the watcher has seen it.
+				if err := awaitVacancy(vacancies, destination); err != nil {
+					return "", err
+				}
 				if err := os.Rename(source, destination); err != nil {
 					return "", err
 				}
@@ -326,11 +365,14 @@ func TestPresenceWatchSeesAVacancyAndOnlyAVacancy(t *testing.T) {
 		}
 	}
 
+	vacancies := observeVacancies(t)
 	watch := watchPresence([]string{continuous, vacated})
 	if err := os.Rename(vacated, vacated+".away"); err != nil {
 		t.Fatalf("rename away: %v", err)
 	}
-	time.Sleep(2 * time.Millisecond)
+	if err := awaitVacancy(vacancies, vacated); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.Rename(vacated+".away", vacated); err != nil {
 		t.Fatalf("rename back: %v", err)
 	}
