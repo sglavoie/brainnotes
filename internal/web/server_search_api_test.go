@@ -30,6 +30,14 @@ func TestServer_SearchAPI_ResultShapeAndRanking(t *testing.T) {
 		t.Fatalf("result count: got %d, want 4", len(results))
 	}
 
+	assertNeedleSearchRanking(t, results)
+	assertSearchResultNotePaths(t, results)
+}
+
+// assertNeedleSearchRanking checks the title match ranks ahead of the body
+// matches, which keep their path order.
+func assertNeedleSearchRanking(t *testing.T, results []searchResult) {
+	t.Helper()
 	if results[0].Title != "NeedleGuide" {
 		t.Fatalf("expected title match to rank first, got %#v", results[0])
 	}
@@ -42,7 +50,12 @@ func TestServer_SearchAPI_ResultShapeAndRanking(t *testing.T) {
 	if !slices.Equal(results[1].MatchedFields, []string{"body"}) {
 		t.Fatalf("body result matched fields: got %#v, want [body]", results[1].MatchedFields)
 	}
+}
 
+// assertSearchResultNotePaths checks every result carries a key and a /n/
+// note path, including the nested BodyTwo note.
+func assertSearchResultNotePaths(t *testing.T, results []searchResult) {
+	t.Helper()
 	for _, result := range results {
 		if result.Key == "" {
 			t.Fatalf("expected non-empty key in result: %#v", result)
@@ -72,15 +85,7 @@ func TestServer_SearchAPI_FilterOnlyAndCombinedFilters(t *testing.T) {
 	if filterStatus != http.StatusOK {
 		t.Fatalf("filter-only status: got %d, want %d", filterStatus, http.StatusOK)
 	}
-	if len(filterOnly) != 2 {
-		t.Fatalf("filter-only result count: got %d, want 2; results=%#v", len(filterOnly), filterOnly)
-	}
-	if filterOnly[0].Title != "Alpha" || filterOnly[1].Title != "Needle" {
-		t.Fatalf("filter-only results not sorted as expected: %#v", filterOnly)
-	}
-	if filterOnly[0].Snippet != "" || len(filterOnly[0].MatchedFields) != 0 {
-		t.Fatalf("filter-only result should not include text metadata: %#v", filterOnly[0])
-	}
+	assertFilterOnlySearchResults(t, filterOnly)
 
 	combined, _, combinedStatus := fetchSearchJSON(t, ts.URL+"/api/search?q=needle&tag=foo&folder=Work&status=active")
 	if combinedStatus != http.StatusOK {
@@ -91,6 +96,21 @@ func TestServer_SearchAPI_FilterOnlyAndCombinedFilters(t *testing.T) {
 	}
 	if !slices.Equal(combined[0].MatchedFields, []string{"title", "body"}) {
 		t.Fatalf("combined matched fields: got %#v, want [title body]", combined[0].MatchedFields)
+	}
+}
+
+// assertFilterOnlySearchResults checks a facet-only search returns the two
+// Work/foo notes in order, without text-match metadata.
+func assertFilterOnlySearchResults(t *testing.T, filterOnly []searchResult) {
+	t.Helper()
+	if len(filterOnly) != 2 {
+		t.Fatalf("filter-only result count: got %d, want 2; results=%#v", len(filterOnly), filterOnly)
+	}
+	if filterOnly[0].Title != "Alpha" || filterOnly[1].Title != "Needle" {
+		t.Fatalf("filter-only results not sorted as expected: %#v", filterOnly)
+	}
+	if filterOnly[0].Snippet != "" || len(filterOnly[0].MatchedFields) != 0 {
+		t.Fatalf("filter-only result should not include text metadata: %#v", filterOnly[0])
 	}
 }
 
@@ -245,6 +265,13 @@ func TestServer_SearchAPI_InvalidExprReturnsStructuredError(t *testing.T) {
 	if err := json.NewDecoder(resp.Body).Decode(&payload); err != nil {
 		t.Fatalf("decode error payload: %v", err)
 	}
+	assertUnknownFieldErrorPayload(t, payload)
+}
+
+// assertUnknownFieldErrorPayload checks the structured error the search API
+// returns for the "statuz:wip" unknown-field expression.
+func assertUnknownFieldErrorPayload(t *testing.T, payload filterErrorResponse) {
+	t.Helper()
 	if payload.Error.Param != "expr" || payload.Error.Query != "statuz:wip" {
 		t.Fatalf("error payload identity: %#v", payload.Error)
 	}

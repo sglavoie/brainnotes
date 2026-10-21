@@ -311,7 +311,27 @@ func TestSkippedPathDefersProvenDeletions(t *testing.T) {
 		t.Fatalf("chmod: %v", err)
 	}
 
-	result := h.commitPending()
+	assertDeletionDeferredBySkip(t, h, h.commitPending())
+
+	// Once the file is readable again the rename completes in one pass.
+	if err := os.Chmod(locked, 0o644); err != nil {
+		t.Fatalf("chmod: %v", err)
+	}
+	h.advance(time.Minute)
+	final := h.commitPending()
+	if !slices.Contains(final.Deleted, "Inbox/old name.md") {
+		t.Fatalf("the deferred deletion never landed: %+v", final)
+	}
+	tracked := h.trackedSet()
+	if tracked["Inbox/old name.md"] || !tracked["Zettel/new name.md"] {
+		t.Fatalf("the rename did not complete; tracked = %v", h.tracked())
+	}
+}
+
+// assertDeletionDeferredBySkip checks a pass that skipped the rename target
+// held back the source's deletion, its proof, and any block.
+func assertDeletionDeferredBySkip(t *testing.T, h *testHarness, result CommitResult) {
+	t.Helper()
 	if len(result.Skipped) == 0 {
 		t.Fatalf("expected the unreadable rename target to be skipped: %+v", result)
 	}
@@ -334,20 +354,6 @@ func TestSkippedPathDefersProvenDeletions(t *testing.T) {
 		if strings.HasPrefix(path, ".bnotes/journal/") {
 			t.Fatalf("the proving journal record was committed without the deletion it proves: %q", path)
 		}
-	}
-
-	// Once the file is readable again the rename completes in one pass.
-	if err := os.Chmod(locked, 0o644); err != nil {
-		t.Fatalf("chmod: %v", err)
-	}
-	h.advance(time.Minute)
-	final := h.commitPending()
-	if !slices.Contains(final.Deleted, "Inbox/old name.md") {
-		t.Fatalf("the deferred deletion never landed: %+v", final)
-	}
-	tracked := h.trackedSet()
-	if tracked["Inbox/old name.md"] || !tracked["Zettel/new name.md"] {
-		t.Fatalf("the rename did not complete; tracked = %v", h.tracked())
 	}
 }
 

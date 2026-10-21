@@ -52,20 +52,29 @@ func TestParseNoteFiltersParams(t *testing.T) {
 	if got, want := flags.Categories, []string{"Books"}; !slices.Equal(got, want) {
 		t.Fatalf("categories: got %#v, want %#v", got, want)
 	}
-	if flags.Status != "active" || flags.Type != "project" || flags.Folder != "Work" {
-		t.Fatalf("basic fields not parsed: %#v", flags)
-	}
-	if flags.Has != "status" || flags.Missing != "done" || flags.Age != ">30d" || flags.Created != "<7d" {
-		t.Fatalf("presence/age fields not parsed: %#v", flags)
-	}
-	if !flags.Orphan || !flags.BrokenLinks || !flags.DeadEnd {
-		t.Fatalf("issue flags not parsed: %#v", flags)
-	}
-	if flags.MinBacklinks != 2 || flags.MaxBacklinks != 5 || flags.MinLinks != 3 || flags.MaxLinks != 8 {
-		t.Fatalf("link counts not parsed: %#v", flags)
-	}
+	assertParsedFilterFields(t, flags)
 	if flags.Root != "/vault" || flags.Graph != graph {
 		t.Fatalf("root/graph not attached: root=%q graph=%p", flags.Root, flags.Graph)
+	}
+}
+
+// assertParsedFilterFields checks the scalar flags TestParseNoteFiltersParams
+// sets, one group of related fields per comparison.
+func assertParsedFilterFields(t *testing.T, flags query.Flags) {
+	t.Helper()
+	if got := [3]string{flags.Status, flags.Type, flags.Folder}; got != [3]string{"active", "project", "Work"} {
+		t.Fatalf("basic fields not parsed: %#v", flags)
+	}
+	presence := [4]string{flags.Has, flags.Missing, flags.Age, flags.Created}
+	if presence != [4]string{"status", "done", ">30d", "<7d"} {
+		t.Fatalf("presence/age fields not parsed: %#v", flags)
+	}
+	if got := [3]bool{flags.Orphan, flags.BrokenLinks, flags.DeadEnd}; got != [3]bool{true, true, true} {
+		t.Fatalf("issue flags not parsed: %#v", flags)
+	}
+	counts := [4]int{flags.MinBacklinks, flags.MaxBacklinks, flags.MinLinks, flags.MaxLinks}
+	if counts != [4]int{2, 5, 3, 8} {
+		t.Fatalf("link counts not parsed: %#v", flags)
 	}
 }
 
@@ -360,6 +369,13 @@ func TestParseNoteFiltersInvalidExprIsTyped(t *testing.T) {
 		t.Fatalf("wrapped error: got %T, want *queryexpr.ParseError", exprErr.Err)
 	}
 
+	assertUnknownFieldPayload(t, err)
+}
+
+// assertUnknownFieldPayload checks the caret payload built for the
+// "statuz:wip" unknown-field error.
+func assertUnknownFieldPayload(t *testing.T, err error) {
+	t.Helper()
 	payload := buildFilterErrorResponse(err)
 	if payload.Error.Param != "expr" || payload.Error.Query != "statuz:wip" {
 		t.Fatalf("payload identity: %#v", payload.Error)

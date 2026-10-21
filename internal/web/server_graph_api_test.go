@@ -160,20 +160,48 @@ func TestServer_GraphAPIJSON_FiltersNodesEdgesAndFilteredDegrees(t *testing.T) {
 	}
 
 	nodes := graphNodeDataByID(payload)
-	alpha := nodes["work/alpha"]
-	if alpha.InDegree != 1 || alpha.OutDegree != 2 || alpha.Degree != 3 {
-		t.Fatalf("alpha full degrees: got in=%d out=%d total=%d, want in=1 out=2 total=3", alpha.InDegree, alpha.OutDegree, alpha.Degree)
+	assertGraphNodeDegrees(t, "alpha", nodes["work/alpha"], [3]int{1, 2, 3}, [3]int{0, 1, 1})
+	assertGraphNodeDegrees(t, "beta", nodes["work/beta"], [3]int{1, 1, 2}, [3]int{1, 0, 1})
+}
+
+// assertGraphNodeDegrees checks a node's full and filtered degrees, each given
+// as {in, out, total}.
+func assertGraphNodeDegrees(t *testing.T, label string, node graphJSONNodeData, full, filtered [3]int) {
+	t.Helper()
+	if got := [3]int{node.InDegree, node.OutDegree, node.Degree}; got != full {
+		t.Fatalf("%s full degrees: got in=%d out=%d total=%d, want in=%d out=%d total=%d",
+			label, got[0], got[1], got[2], full[0], full[1], full[2])
 	}
-	if alpha.FilteredInDegree != 0 || alpha.FilteredOutDegree != 1 || alpha.FilteredDegree != 1 {
-		t.Fatalf("alpha filtered degrees: got in=%d out=%d total=%d, want in=0 out=1 total=1", alpha.FilteredInDegree, alpha.FilteredOutDegree, alpha.FilteredDegree)
+	got := [3]int{node.FilteredInDegree, node.FilteredOutDegree, node.FilteredDegree}
+	if got != filtered {
+		t.Fatalf("%s filtered degrees: got in=%d out=%d total=%d, want in=%d out=%d total=%d",
+			label, got[0], got[1], got[2], filtered[0], filtered[1], filtered[2])
 	}
-	beta := nodes["work/beta"]
-	if beta.InDegree != 1 || beta.OutDegree != 1 || beta.Degree != 2 {
-		t.Fatalf("beta full degrees: got in=%d out=%d total=%d, want in=1 out=1 total=2", beta.InDegree, beta.OutDegree, beta.Degree)
+}
+
+// graphIssueMetadata is the issue-flag subset of a graph node, compared whole.
+type graphIssueMetadata struct {
+	HasBroken   bool
+	BrokenCount int
+	IsOrphan    bool
+	IsDeadEnd   bool
+	OutDegree   int
+}
+
+func graphNodeIssueMetadata(node graphJSONNodeData) graphIssueMetadata {
+	return graphIssueMetadata{
+		HasBroken:   node.HasBroken,
+		BrokenCount: node.BrokenCount,
+		IsOrphan:    node.IsOrphan,
+		IsDeadEnd:   node.IsDeadEnd,
+		OutDegree:   node.OutDegree,
 	}
-	if beta.FilteredInDegree != 1 || beta.FilteredOutDegree != 0 || beta.FilteredDegree != 1 {
-		t.Fatalf("beta filtered degrees: got in=%d out=%d total=%d, want in=1 out=0 total=1", beta.FilteredInDegree, beta.FilteredOutDegree, beta.FilteredDegree)
-	}
+}
+
+// withoutOutDegree drops the out-degree for checks that do not constrain it.
+func (m graphIssueMetadata) withoutOutDegree() graphIssueMetadata {
+	m.OutDegree = 0
+	return m
 }
 
 func TestServer_GraphAPIJSON_IssueMetadataAndBrokenFilter(t *testing.T) {
@@ -187,15 +215,18 @@ func TestServer_GraphAPIJSON_IssueMetadataAndBrokenFilter(t *testing.T) {
 	nodes := graphNodeDataByID(payload)
 
 	broken := nodes["broken"]
-	if !broken.HasBroken || broken.BrokenCount != 1 || broken.IsOrphan || !broken.IsDeadEnd {
+	wantBroken := graphIssueMetadata{HasBroken: true, BrokenCount: 1, IsOrphan: false, IsDeadEnd: true}
+	if got := graphNodeIssueMetadata(broken); got.withoutOutDegree() != wantBroken {
 		t.Fatalf("broken metadata: got %#v, want broken count 1, not orphan, dead-end", broken)
 	}
 	linked := nodes["linked"]
-	if linked.HasBroken || linked.BrokenCount != 0 || !linked.IsOrphan || linked.IsDeadEnd {
+	wantLinked := graphIssueMetadata{HasBroken: false, BrokenCount: 0, IsOrphan: true, IsDeadEnd: false}
+	if got := graphNodeIssueMetadata(linked); got.withoutOutDegree() != wantLinked {
 		t.Fatalf("linked metadata: got %#v, want clean orphan with outgoing link", linked)
 	}
 	island := nodes["island"]
-	if island.HasBroken || island.BrokenCount != 0 || !island.IsOrphan || island.IsDeadEnd || island.OutDegree != 0 {
+	wantIsland := graphIssueMetadata{HasBroken: false, BrokenCount: 0, IsOrphan: true, IsDeadEnd: false, OutDegree: 0}
+	if graphNodeIssueMetadata(island) != wantIsland {
 		t.Fatalf("island metadata: got %#v, want clean orphan with out-degree zero but exempt from dead-end", island)
 	}
 

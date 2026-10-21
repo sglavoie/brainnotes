@@ -19,13 +19,25 @@ func rankedContextExcerpts(
 	lexical *LexicalIndex,
 ) []ContextExcerpt {
 	match, _ := lexical.Compare(source.Path, candidate.Path)
-	distinctiveWeights := make(map[string]float64, len(match.Terms))
-	for _, term := range match.Terms {
-		distinctiveWeights[term.Term] = 1 + term.Contribution
-	}
+	scored := scoreContextBlocks(candidate, match.Terms, contextReasonWeights(result.Reasons))
+	sortScoredContextBlocks(candidate, scored)
 
+	reasons := make([]ContextReason, len(result.Reasons))
+	for index, reason := range result.Reasons {
+		reasons[index] = ContextReason(reason)
+	}
+	excerpts := make([]ContextExcerpt, 0, min(MaxExcerptsPerRelatedNote, len(scored)))
+	for _, selected := range scored[:min(MaxExcerptsPerRelatedNote, len(scored))] {
+		if excerpt, ok := contextBlockExcerpt(candidate, selected, reasons); ok {
+			excerpts = append(excerpts, excerpt)
+		}
+	}
+	return excerpts
+}
+
+func contextReasonWeights(resultReasons []Reason) map[string]float64 {
 	reasonWeights := make(map[string]float64)
-	for _, reason := range result.Reasons {
+	for _, reason := range resultReasons {
 		weight := 0.25 + max(reason.Contribution, 0)
 		for _, term := range Tokenize(reason.Detail) {
 			if weight > reasonWeights[term] {
@@ -33,37 +45,62 @@ func rankedContextExcerpts(
 			}
 		}
 	}
+	return reasonWeights
+}
 
+func scoreContextBlocks(
+	candidate Document,
+	matchTerms []TermContribution,
+	reasonWeights map[string]float64,
+) []scoredContextBlock {
+	distinctiveWeights := make(map[string]float64, len(matchTerms))
+	for _, term := range matchTerms {
+		distinctiveWeights[term.Term] = 1 + term.Contribution
+	}
 	scored := make([]scoredContextBlock, 0, len(candidate.Blocks))
 	for index, block := range candidate.Blocks {
 		sourceBlock, ok := candidate.BlockSource(index)
 		if !ok || sourceBlock == "" || !utf8.ValidString(sourceBlock) {
 			continue
 		}
-		blockTerms := make(map[string]struct{})
-		for _, term := range Tokenize(block.Text) {
-			blockTerms[term] = struct{}{}
-		}
-		blockScore := 0.0
-		matchedDistinctive := make([]string, 0)
-		for _, term := range match.Terms {
-			if _, ok := blockTerms[term.Term]; !ok {
-				continue
-			}
-			blockScore += distinctiveWeights[term.Term]
-			matchedDistinctive = append(matchedDistinctive, term.Term)
-		}
-		for _, term := range sortedFloatKeys(reasonWeights) {
-			if _, ok := blockTerms[term]; ok {
-				blockScore += reasonWeights[term]
-			}
-		}
-		scored = append(scored, scoredContextBlock{
-			index:            index,
-			score:            blockScore,
-			distinctiveTerms: matchedDistinctive,
-		})
+		scored = append(scored, scoreContextBlock(index, block.Text, matchTerms, distinctiveWeights, reasonWeights))
 	}
+	return scored
+}
+
+func scoreContextBlock(
+	index int,
+	text string,
+	matchTerms []TermContribution,
+	distinctiveWeights map[string]float64,
+	reasonWeights map[string]float64,
+) scoredContextBlock {
+	blockTerms := make(map[string]struct{})
+	for _, term := range Tokenize(text) {
+		blockTerms[term] = struct{}{}
+	}
+	blockScore := 0.0
+	matchedDistinctive := make([]string, 0)
+	for _, term := range matchTerms {
+		if _, ok := blockTerms[term.Term]; !ok {
+			continue
+		}
+		blockScore += distinctiveWeights[term.Term]
+		matchedDistinctive = append(matchedDistinctive, term.Term)
+	}
+	for _, term := range sortedFloatKeys(reasonWeights) {
+		if _, ok := blockTerms[term]; ok {
+			blockScore += reasonWeights[term]
+		}
+	}
+	return scoredContextBlock{
+		index:            index,
+		score:            blockScore,
+		distinctiveTerms: matchedDistinctive,
+	}
+}
+
+func sortScoredContextBlocks(candidate Document, scored []scoredContextBlock) {
 	sort.SliceStable(scored, func(i, j int) bool {
 		if scored[i].score != scored[j].score {
 			return scored[i].score > scored[j].score
@@ -75,36 +112,34 @@ func rankedContextExcerpts(
 		}
 		return scored[i].index < scored[j].index
 	})
+}
 
-	reasons := make([]ContextReason, len(result.Reasons))
-	for index, reason := range result.Reasons {
-		reasons[index] = ContextReason(reason)
+func contextBlockExcerpt(
+	candidate Document,
+	selected scoredContextBlock,
+	reasons []ContextReason,
+) (ContextExcerpt, bool) {
+	block := candidate.Blocks[selected.index]
+	sourceBlock, _ := candidate.BlockSource(selected.index)
+	markdown, truncated := truncateContextRunes(sourceBlock, MaxExcerptRunes)
+	if markdown == candidate.Body {
+		markdown, truncated = excludeWholeRelatedBody(markdown)
 	}
-	excerpts := make([]ContextExcerpt, 0, min(MaxExcerptsPerRelatedNote, len(scored)))
-	for _, selected := range scored[:min(MaxExcerptsPerRelatedNote, len(scored))] {
-		block := candidate.Blocks[selected.index]
-		sourceBlock, _ := candidate.BlockSource(selected.index)
-		markdown, truncated := truncateContextRunes(sourceBlock, MaxExcerptRunes)
-		if markdown == candidate.Body {
-			markdown, truncated = excludeWholeRelatedBody(markdown)
-		}
-		if markdown == "" {
-			continue
-		}
-		excerpt := ContextExcerpt{
-			Path:             candidate.Path,
-			Title:            candidate.Title,
-			StartLine:        block.Location.StartLine,
-			EndLine:          block.Location.StartLine + strings.Count(markdown, "\n"),
-			Markdown:         markdown,
-			Truncated:        truncated,
-			DistinctiveTerms: append([]string(nil), selected.distinctiveTerms...),
-			Reasons:          append([]ContextReason(nil), reasons...),
-		}
-		excerpt.DistinctiveTerms = presentContextTerms(excerpt.Markdown, excerpt.DistinctiveTerms)
-		excerpts = append(excerpts, excerpt)
+	if markdown == "" {
+		return ContextExcerpt{}, false
 	}
-	return excerpts
+	excerpt := ContextExcerpt{
+		Path:             candidate.Path,
+		Title:            candidate.Title,
+		StartLine:        block.Location.StartLine,
+		EndLine:          block.Location.StartLine + strings.Count(markdown, "\n"),
+		Markdown:         markdown,
+		Truncated:        truncated,
+		DistinctiveTerms: append([]string(nil), selected.distinctiveTerms...),
+		Reasons:          append([]ContextReason(nil), reasons...),
+	}
+	excerpt.DistinctiveTerms = presentContextTerms(excerpt.Markdown, excerpt.DistinctiveTerms)
+	return excerpt, true
 }
 
 func truncateContextRunes(value string, maximum int) (string, bool) {

@@ -1,7 +1,6 @@
 package config
 
 import (
-	"slices"
 	"strings"
 	"testing"
 
@@ -94,65 +93,33 @@ agent_timeout_seconds = 120
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if cfg.Cockpit.LongTailLimit != 3 {
-		t.Errorf("Cockpit.LongTailLimit: got %d, want 3", cfg.Cockpit.LongTailLimit)
-	}
-	if cfg.Cockpit.LongTailMaxCount != 4 {
-		t.Errorf("Cockpit.LongTailMaxCount: got %d, want 4", cfg.Cockpit.LongTailMaxCount)
-	}
-	if cfg.Cockpit.LongTailHeadFactor != 6 {
-		t.Errorf("Cockpit.LongTailHeadFactor: got %d, want 6", cfg.Cockpit.LongTailHeadFactor)
-	}
-	wantDisabled := []string{"long_tail_value", "dead_end_note"}
-	if !slices.Equal(cfg.Cockpit.DisabledRules, wantDisabled) {
-		t.Errorf("Cockpit.DisabledRules: got %v, want %v", cfg.Cockpit.DisabledRules, wantDisabled)
-	}
-	wantPriority := []string{"broken_target", "schema_violation"}
-	if !slices.Equal(cfg.Cockpit.Priority, wantPriority) {
-		t.Errorf("Cockpit.Priority: got %v, want %v", cfg.Cockpit.Priority, wantPriority)
-	}
-	wantIgnore := []string{"created", "tags"}
-	if !slices.Equal(cfg.Cockpit.LongTailIgnoreProperties, wantIgnore) {
-		t.Errorf("Cockpit.LongTailIgnoreProperties: got %v, want %v", cfg.Cockpit.LongTailIgnoreProperties, wantIgnore)
-	}
-	if cfg.Cockpit.DailyLimit != 7 {
-		t.Errorf("Cockpit.DailyLimit: got %d, want 7", cfg.Cockpit.DailyLimit)
-	}
-	if cfg.Cockpit.ReviewDateProperty != "last_reviewed" {
-		t.Errorf("Cockpit.ReviewDateProperty: got %q, want %q", cfg.Cockpit.ReviewDateProperty, "last_reviewed")
-	}
-	if !slices.Equal(cfg.Cockpit.ReviewStatuses, []string{"Evergreen", "Reference"}) {
-		t.Errorf("Cockpit.ReviewStatuses: got %v", cfg.Cockpit.ReviewStatuses)
-	}
-	if !slices.Equal(cfg.Cockpit.WIPStatuses, []string{"WIP"}) {
-		t.Errorf("Cockpit.WIPStatuses: got %v", cfg.Cockpit.WIPStatuses)
-	}
-	if cfg.Cockpit.MaxWIP != 2 {
-		t.Errorf("Cockpit.MaxWIP: got %d, want 2", cfg.Cockpit.MaxWIP)
-	}
-	if cfg.Cockpit.StaleStatusDays != 45 {
-		t.Errorf("Cockpit.StaleStatusDays: got %d, want 45", cfg.Cockpit.StaleStatusDays)
-	}
-	if !slices.Equal(cfg.Cockpit.HubTypeValues, []string{"moc", "hub"}) {
-		t.Errorf("Cockpit.HubTypeValues: got %v", cfg.Cockpit.HubTypeValues)
-	}
-	if !slices.Equal(cfg.Cockpit.HubEmptyHeadings, []string{"## Synthesis"}) {
-		t.Errorf("Cockpit.HubEmptyHeadings: got %v", cfg.Cockpit.HubEmptyHeadings)
-	}
-	if !cfg.Cockpit.SensitiveScan {
+	cockpit := cfg.Cockpit
+	assertFields(t, map[string][2]int{
+		"Cockpit.LongTailLimit":       {cockpit.LongTailLimit, 3},
+		"Cockpit.LongTailMaxCount":    {cockpit.LongTailMaxCount, 4},
+		"Cockpit.LongTailHeadFactor":  {cockpit.LongTailHeadFactor, 6},
+		"Cockpit.DailyLimit":          {cockpit.DailyLimit, 7},
+		"Cockpit.MaxWIP":              {cockpit.MaxWIP, 2},
+		"Cockpit.StaleStatusDays":     {cockpit.StaleStatusDays, 45},
+		"Cockpit.AgentTimeoutSeconds": {cockpit.AgentTimeoutSeconds, 120},
+	})
+	assertFields(t, map[string][2]string{
+		"Cockpit.ReviewDateProperty": {cockpit.ReviewDateProperty, "last_reviewed"},
+		"Cockpit.AgentCommand":       {cockpit.AgentCommand, "my-agent --daily"},
+	})
+	assertSliceFields(t, map[string][2][]string{
+		"Cockpit.DisabledRules":            {cockpit.DisabledRules, {"long_tail_value", "dead_end_note"}},
+		"Cockpit.Priority":                 {cockpit.Priority, {"broken_target", "schema_violation"}},
+		"Cockpit.LongTailIgnoreProperties": {cockpit.LongTailIgnoreProperties, {"created", "tags"}},
+		"Cockpit.ReviewStatuses":           {cockpit.ReviewStatuses, {"Evergreen", "Reference"}},
+		"Cockpit.WIPStatuses":              {cockpit.WIPStatuses, {"WIP"}},
+		"Cockpit.HubTypeValues":            {cockpit.HubTypeValues, {"moc", "hub"}},
+		"Cockpit.HubEmptyHeadings":         {cockpit.HubEmptyHeadings, {"## Synthesis"}},
+		"Cockpit.SensitiveIgnorePaths":     {cockpit.SensitiveIgnorePaths, {"Templates"}},
+		"Cockpit.SensitiveIgnorePatterns":  {cockpit.SensitiveIgnorePatterns, {"EXAMPLE_[A-Z]+"}},
+	})
+	if !cockpit.SensitiveScan {
 		t.Errorf("Cockpit.SensitiveScan: got false, want true")
-	}
-	if !slices.Equal(cfg.Cockpit.SensitiveIgnorePaths, []string{"Templates"}) {
-		t.Errorf("Cockpit.SensitiveIgnorePaths: got %v", cfg.Cockpit.SensitiveIgnorePaths)
-	}
-	if !slices.Equal(cfg.Cockpit.SensitiveIgnorePatterns, []string{"EXAMPLE_[A-Z]+"}) {
-		t.Errorf("Cockpit.SensitiveIgnorePatterns: got %v", cfg.Cockpit.SensitiveIgnorePatterns)
-	}
-	if cfg.Cockpit.AgentCommand != "my-agent --daily" {
-		t.Errorf("Cockpit.AgentCommand: got %q", cfg.Cockpit.AgentCommand)
-	}
-	if cfg.Cockpit.AgentTimeoutSeconds != 120 {
-		t.Errorf("Cockpit.AgentTimeoutSeconds: got %d, want 120", cfg.Cockpit.AgentTimeoutSeconds)
 	}
 }
 

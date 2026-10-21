@@ -36,15 +36,13 @@ func TestLoad_DefaultsApplied(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if cfg.Templates.Dir != "Templates" {
-		t.Errorf("Templates.Dir: got %q, want %q", cfg.Templates.Dir, "Templates")
-	}
-	if cfg.Templates.DefaultExtension != ".md" {
-		t.Errorf("Templates.DefaultExtension: got %q, want %q", cfg.Templates.DefaultExtension, ".md")
-	}
-	if cfg.Serve.Addr != DefaultServeAddr {
-		t.Errorf("Serve.Addr: got %q, want %q", cfg.Serve.Addr, DefaultServeAddr)
-	}
+	assertFields(t, map[string][2]string{
+		"Templates.Dir":              {cfg.Templates.Dir, "Templates"},
+		"Templates.DefaultExtension": {cfg.Templates.DefaultExtension, ".md"},
+		"Serve.Addr":                 {cfg.Serve.Addr, DefaultServeAddr},
+		"Capture.InboxNote":          {cfg.Capture.InboxNote, DefaultCaptureInboxNote},
+		"Capture.Heading":            {cfg.Capture.Heading, DefaultCaptureHeading},
+	})
 	if !cfg.Serve.BrowserEnabled() {
 		t.Errorf("Serve.BrowserEnabled: got false, want true")
 	}
@@ -58,23 +56,13 @@ func TestLoad_DefaultsApplied(t *testing.T) {
 			DefaultRelatedMetadataProperties,
 		)
 	}
-	if cfg.Brief.ExcludeFolders == nil || len(cfg.Brief.ExcludeFolders) != 0 {
-		t.Errorf("Brief.ExcludeFolders: got %#v, want empty non-nil slice", cfg.Brief.ExcludeFolders)
-	}
-	if cfg.Brief.ExcludeTypes == nil || len(cfg.Brief.ExcludeTypes) != 0 {
-		t.Errorf("Brief.ExcludeTypes: got %#v, want empty non-nil slice", cfg.Brief.ExcludeTypes)
-	}
-	if cfg.Agent.Command == nil || len(cfg.Agent.Command) != 0 {
-		t.Errorf("Agent.Command: got %#v, want empty non-nil slice", cfg.Agent.Command)
-	}
+	assertEmptyNonNil(t, map[string][]string{
+		"Brief.ExcludeFolders": cfg.Brief.ExcludeFolders,
+		"Brief.ExcludeTypes":   cfg.Brief.ExcludeTypes,
+		"Agent.Command":        cfg.Agent.Command,
+	})
 	if cfg.Agent.TimeoutSeconds != DefaultAgentTimeoutSeconds {
 		t.Errorf("Agent.TimeoutSeconds: got %d, want %d", cfg.Agent.TimeoutSeconds, DefaultAgentTimeoutSeconds)
-	}
-	if cfg.Capture.InboxNote != DefaultCaptureInboxNote {
-		t.Errorf("Capture.InboxNote: got %q, want %q", cfg.Capture.InboxNote, DefaultCaptureInboxNote)
-	}
-	if cfg.Capture.Heading != DefaultCaptureHeading {
-		t.Errorf("Capture.Heading: got %q, want %q", cfg.Capture.Heading, DefaultCaptureHeading)
 	}
 	// Defaults merged into Ignore.
 	for _, want := range DefaultIgnore {
