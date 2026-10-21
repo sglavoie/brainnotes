@@ -224,6 +224,20 @@ const pendingRenderer = (
   applyFilter();
 };
 
+// listBusyMarker marks the list busy for a read and returns the function that
+// ends it. Reads are counted apart from the panel's `reading`, which an edit
+// also bumps to discard a read: the list stays busy until the latest answers.
+const listBusyMarker = (list: HTMLElement) => {
+  let loading = 0;
+  return (): (() => void) => {
+    const listing = ++loading;
+    list.setAttribute("aria-busy", "true");
+    return () => {
+      if (listing === loading) list.setAttribute("aria-busy", "false");
+    };
+  };
+};
+
 /**
  * Mounts the portable-settings panel.
  *
@@ -298,13 +312,16 @@ export const createSettingsPanel = (deps: SettingsPanelDeps): SettingsPanel | nu
   };
 
   let linkedSettingVisited = false;
+  const markListBusy = listBusyMarker(elements.list);
   const load = async (): Promise<void> => {
     if (writer.busy()) return;
     writer.cancel();
     const issue = ++reading;
     showPending(null);
     setStatus("Loading settings…", "is-loading");
+    const listed = markListBusy();
     const outcome = await fetchSettings(deps.fetch);
+    listed();
     if (issue !== reading) return;
     if (!outcome.ok) {
       setStatus(outcome.message, "is-error");
@@ -323,9 +340,6 @@ export const createSettingsPanel = (deps: SettingsPanelDeps): SettingsPanel | nu
   elements.refresh?.addEventListener("click", () => void load());
   showPending(null);
 
-  return {
-    load,
-    pending: () => writer.pending(),
-    modified: () => writer.pending() !== null || settingRowsModified(rows),
-  };
+  const modified = (): boolean => writer.pending() !== null || settingRowsModified(rows);
+  return { load, pending: () => writer.pending(), modified };
 };

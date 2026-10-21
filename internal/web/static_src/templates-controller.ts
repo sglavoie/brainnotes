@@ -61,14 +61,20 @@ type ListingReader = () => Promise<TemplatesResult | null>;
  * knows which files the templates directory now holds. Each request is
  * numbered, so a superseded one resolves to null and paints nothing.
  */
-const createListingReader = (fetcher: FetchLike, view: TemplatesView): ListingReader => {
+const createListingReader = (
+  fetcher: FetchLike,
+  view: TemplatesView,
+  list: HTMLElement
+): ListingReader => {
   let reading = 0;
   return async () => {
     const issue = ++reading;
+    list.setAttribute("aria-busy", "true");
     const outcome = await fetchTemplates(fetcher);
     if (issue !== reading) {
       return null;
     }
+    list.setAttribute("aria-busy", "false");
     if (!outcome.ok) {
       view.setStatus(outcome.message, "is-error");
       return null;
@@ -152,7 +158,7 @@ export const createTemplatesPanel = (deps: TemplatesPanelDeps): TemplatesPanel |
     return null;
   }
   const view = createTemplatesView(elements);
-  const reload = createListingReader(deps.fetch, view);
+  const reload = createListingReader(deps.fetch, view, elements.list);
   const guard = createTemplateDraftGuard({
     root: deps.root, fetch: deps.fetch, view, writer: () => writer, confirm: deps.confirm,
     reload: () => void reload(),
