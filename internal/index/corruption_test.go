@@ -36,123 +36,15 @@ func TestCorruptStateRebuildsSilently(t *testing.T) {
 		// case on a platform where the corruption cannot be staged.
 		corrupt func(t *testing.T, path string) bool
 	}{
-		{
-			name: "truncated gob",
-			corrupt: func(t *testing.T, path string) bool {
-				data, err := os.ReadFile(path)
-				if err != nil {
-					t.Fatalf("read state: %v", err)
-				}
-				if len(data) < 8 {
-					t.Fatalf("state file is only %d bytes; nothing to truncate", len(data))
-				}
-				writeState(t, path, data[:len(data)/2])
-				return true
-			},
-		},
-		{
-			name: "zero bytes",
-			corrupt: func(t *testing.T, path string) bool {
-				writeState(t, path, nil)
-				return true
-			},
-		},
-		{
-			name: "garbage bytes",
-			corrupt: func(t *testing.T, path string) bool {
-				writeState(t, path, []byte("this is not a gob stream at all"))
-				return true
-			},
-		},
-		{
-			name: "wrong version",
-			corrupt: func(t *testing.T, path string) bool {
-				writeState(t, path, encodeState(t, state{
-					Version: formatVersion + 1,
-					Root:    filepath.Dir(filepath.Dir(filepath.Dir(path))),
-				}))
-				return true
-			},
-		},
-		{
-			name: "wrong root",
-			corrupt: func(t *testing.T, path string) bool {
-				// A vault that was copied or moved: same relative paths, a root
-				// this state file never described.
-				writeState(t, path, encodeState(t, state{
-					Version: formatVersion,
-					Root:    filepath.Join(t.TempDir(), "somewhere-else"),
-				}))
-				return true
-			},
-		},
-		{
-			name: "entry contradicting its own hash",
-			corrupt: func(t *testing.T, path string) bool {
-				root := filepath.Dir(filepath.Dir(filepath.Dir(path)))
-				writeState(t, path, encodeState(t, state{
-					Version: formatVersion,
-					Root:    root,
-					Entries: []entry{{
-						Rel:  "Alpha.md",
-						Size: 5,
-						// Bit rot: bytes that do not hash to the recorded value.
-						Hash: "0000000000000000000000000000000000000000000000000000000000000000",
-						Data: []byte("alpha"),
-					}},
-				}))
-				return true
-			},
-		},
-		{
-			name: "entry escaping the vault root",
-			corrupt: func(t *testing.T, path string) bool {
-				root := filepath.Dir(filepath.Dir(filepath.Dir(path)))
-				data := []byte("alpha")
-				writeState(t, path, encodeState(t, state{
-					Version: formatVersion,
-					Root:    root,
-					Entries: []entry{{
-						Rel:  "../outside.md",
-						Size: int64(len(data)),
-						Hash: vault.HashBytes(data),
-						Data: data,
-					}},
-				}))
-				return true
-			},
-		},
-		{
-			name: "mode 0000",
-			corrupt: func(t *testing.T, path string) bool {
-				if runtime.GOOS == "windows" {
-					t.Skip("file modes do not deny reads on windows")
-				}
-				if os.Geteuid() == 0 {
-					t.Skip("root bypasses file permissions")
-				}
-				if err := os.Chmod(path, 0o000); err != nil {
-					t.Fatalf("chmod state: %v", err)
-				}
-				return true
-			},
-		},
-		{
-			name: "symlink",
-			corrupt: func(t *testing.T, path string) bool {
-				target := filepath.Join(filepath.Dir(path), "elsewhere.gob")
-				if err := os.WriteFile(target, []byte("not the index"), 0o644); err != nil {
-					t.Fatalf("write symlink target: %v", err)
-				}
-				if err := os.Remove(path); err != nil {
-					t.Fatalf("remove state: %v", err)
-				}
-				if err := os.Symlink(target, path); err != nil {
-					t.Skipf("symlinks unavailable: %v", err)
-				}
-				return true
-			},
-		},
+		{name: "truncated gob", corrupt: corruptTruncatedGob},
+		{name: "zero bytes", corrupt: corruptZeroBytes},
+		{name: "garbage bytes", corrupt: corruptGarbageBytes},
+		{name: "wrong version", corrupt: corruptWrongVersion},
+		{name: "wrong root", corrupt: corruptWrongRoot},
+		{name: "entry contradicting its own hash", corrupt: corruptEntryHash},
+		{name: "entry escaping the vault root", corrupt: corruptEntryEscapingRoot},
+		{name: "mode 0000", corrupt: corruptModeZero},
+		{name: "symlink", corrupt: corruptSymlink},
 	}
 
 	for _, tc := range cases {
@@ -172,20 +64,7 @@ func TestCorruptStateRebuildsSilently(t *testing.T) {
 				return
 			}
 
-			ix, logs := newTestIndex(t, v)
-			result, err := ix.Load()
-			if err != nil {
-				t.Fatalf("a corrupt state file must never become a caller error: %v", err)
-			}
-			if got := relPaths(t, v.Root, result.Notes); !slices.Equal(got, corruptionWant) {
-				t.Errorf("notes = %v, want %v", got, corruptionWant)
-			}
-			if !result.Changed {
-				t.Error("a rebuilt index is cold and must report Changed")
-			}
-			if len(*logs) != 1 {
-				t.Errorf("want exactly one logged failure class, got %v", *logs)
-			}
+			assertCorruptStateRebuilt(t, v)
 
 			// The rebuild must also repair the file, so the damage costs one
 			// cold start rather than every start from here on. The mode-0000
@@ -194,19 +73,141 @@ func TestCorruptStateRebuildsSilently(t *testing.T) {
 			if tc.name == "mode 0000" {
 				return
 			}
-			next, nextLogs := newTestIndex(t, v)
-			healed := mustLoad(t, next)
-			if healed.Changed {
-				t.Error("the load after a rebuild must start warm from the repaired state file")
-			}
-			if got := relPaths(t, v.Root, healed.Notes); !slices.Equal(got, corruptionWant) {
-				t.Errorf("healed notes = %v, want %v", got, corruptionWant)
-			}
-			if len(*nextLogs) != 0 {
-				t.Errorf("the repaired state file still logged %v", *nextLogs)
-			}
+			assertCorruptStateHealed(t, v)
 		})
 	}
+}
+
+func assertCorruptStateRebuilt(t *testing.T, v *vault.Vault) {
+	t.Helper()
+	ix, logs := newTestIndex(t, v)
+	result, err := ix.Load()
+	if err != nil {
+		t.Fatalf("a corrupt state file must never become a caller error: %v", err)
+	}
+	if got := relPaths(t, v.Root, result.Notes); !slices.Equal(got, corruptionWant) {
+		t.Errorf("notes = %v, want %v", got, corruptionWant)
+	}
+	if !result.Changed {
+		t.Error("a rebuilt index is cold and must report Changed")
+	}
+	if len(*logs) != 1 {
+		t.Errorf("want exactly one logged failure class, got %v", *logs)
+	}
+}
+
+func assertCorruptStateHealed(t *testing.T, v *vault.Vault) {
+	t.Helper()
+	next, nextLogs := newTestIndex(t, v)
+	healed := mustLoad(t, next)
+	if healed.Changed {
+		t.Error("the load after a rebuild must start warm from the repaired state file")
+	}
+	if got := relPaths(t, v.Root, healed.Notes); !slices.Equal(got, corruptionWant) {
+		t.Errorf("healed notes = %v, want %v", got, corruptionWant)
+	}
+	if len(*nextLogs) != 0 {
+		t.Errorf("the repaired state file still logged %v", *nextLogs)
+	}
+}
+
+func corruptTruncatedGob(t *testing.T, path string) bool {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read state: %v", err)
+	}
+	if len(data) < 8 {
+		t.Fatalf("state file is only %d bytes; nothing to truncate", len(data))
+	}
+	writeState(t, path, data[:len(data)/2])
+	return true
+}
+
+func corruptZeroBytes(t *testing.T, path string) bool {
+	writeState(t, path, nil)
+	return true
+}
+
+func corruptGarbageBytes(t *testing.T, path string) bool {
+	writeState(t, path, []byte("this is not a gob stream at all"))
+	return true
+}
+
+func corruptWrongVersion(t *testing.T, path string) bool {
+	writeState(t, path, encodeState(t, state{
+		Version: formatVersion + 1,
+		Root:    filepath.Dir(filepath.Dir(filepath.Dir(path))),
+	}))
+	return true
+}
+
+func corruptWrongRoot(t *testing.T, path string) bool {
+	// A vault that was copied or moved: same relative paths, a root
+	// this state file never described.
+	writeState(t, path, encodeState(t, state{
+		Version: formatVersion,
+		Root:    filepath.Join(t.TempDir(), "somewhere-else"),
+	}))
+	return true
+}
+
+func corruptEntryHash(t *testing.T, path string) bool {
+	root := filepath.Dir(filepath.Dir(filepath.Dir(path)))
+	writeState(t, path, encodeState(t, state{
+		Version: formatVersion,
+		Root:    root,
+		Entries: []entry{{
+			Rel:  "Alpha.md",
+			Size: 5,
+			// Bit rot: bytes that do not hash to the recorded value.
+			Hash: "0000000000000000000000000000000000000000000000000000000000000000",
+			Data: []byte("alpha"),
+		}},
+	}))
+	return true
+}
+
+func corruptEntryEscapingRoot(t *testing.T, path string) bool {
+	root := filepath.Dir(filepath.Dir(filepath.Dir(path)))
+	data := []byte("alpha")
+	writeState(t, path, encodeState(t, state{
+		Version: formatVersion,
+		Root:    root,
+		Entries: []entry{{
+			Rel:  "../outside.md",
+			Size: int64(len(data)),
+			Hash: vault.HashBytes(data),
+			Data: data,
+		}},
+	}))
+	return true
+}
+
+func corruptModeZero(t *testing.T, path string) bool {
+	if runtime.GOOS == "windows" {
+		t.Skip("file modes do not deny reads on windows")
+	}
+	if os.Geteuid() == 0 {
+		t.Skip("root bypasses file permissions")
+	}
+	if err := os.Chmod(path, 0o000); err != nil {
+		t.Fatalf("chmod state: %v", err)
+	}
+	return true
+}
+
+func corruptSymlink(t *testing.T, path string) bool {
+	target := filepath.Join(filepath.Dir(path), "elsewhere.gob")
+	if err := os.WriteFile(target, []byte("not the index"), 0o644); err != nil {
+		t.Fatalf("write symlink target: %v", err)
+	}
+	if err := os.Remove(path); err != nil {
+		t.Fatalf("remove state: %v", err)
+	}
+	if err := os.Symlink(target, path); err != nil {
+		t.Skipf("symlinks unavailable: %v", err)
+	}
+	return true
 }
 
 // TestRepeatedCorruptionLogsOnce pins the once-per-failure-class-per-process

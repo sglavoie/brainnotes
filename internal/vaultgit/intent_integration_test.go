@@ -83,25 +83,7 @@ fi`)
 		t.Fatal("this test is meaningless unless the marker write actually failed")
 	}
 
-	record, present := broken.Interrupted()
-	if !present {
-		t.Fatal("the durable intent did not survive the failure that could not be marked")
-	}
-	if record.Phase != IntentPhasePlanned || record.NewOID != "" {
-		t.Fatalf("intent phase = %q new_oid = %q, want a planned record with no commit", record.Phase, record.NewOID)
-	}
-	if record.ID == "" || record.Ref != "refs/heads/main" || record.OldOID != safe {
-		t.Fatalf("intent record is missing its identity: %+v", record)
-	}
-	if record.ObservedAt.IsZero() || len(record.Recovery) == 0 {
-		t.Fatalf("intent record is missing its observation time or recovery steps: %+v", record)
-	}
-	if record.PathCount != 1 || !slices.Contains(record.Paths, "Inbox/note.md") {
-		t.Fatalf("intent record paths = %v (count %d)", record.Paths, record.PathCount)
-	}
-	if body := string(h.intentBytes()); strings.Contains(body, strings.TrimSpace(secretBody)) {
-		t.Fatalf("the intent record leaked note content:\n%s", body)
-	}
+	assertPlannedIntentRecord(t, h, broken, safe)
 
 	// Put the vault back exactly as the tip holds it. From here on, nothing about
 	// the working tree explains a refusal — only the record does.
@@ -109,22 +91,7 @@ fi`)
 	h.requireCleanWorkTree()
 
 	restarted := h.open(Options{})
-	if _, stillPresent := restarted.Interrupted(); !stillPresent {
-		t.Fatal("opening the vault retired a record it could not prove had landed")
-	}
-	preflightErr := restarted.Preflight(context.Background())
-	if !IsBlocked(preflightErr) {
-		t.Fatalf("Preflight after an unproven snapshot = %v, want a blocked failure", preflightErr)
-	}
-	if strings.Contains(preflightErr.Error(), strings.TrimSpace(secretBody)) {
-		t.Fatalf("the refusal leaked note content: %v", preflightErr)
-	}
-	if _, err := restarted.CommitPending(context.Background()); !IsBlocked(err) {
-		t.Fatalf("CommitPending after an unproven snapshot = %v, want a blocked failure", err)
-	}
-	if _, blocked := restarted.Blocked(); blocked {
-		t.Fatal("the refusal came from a marker, not from the intent record this test is about")
-	}
+	assertIntentRefusesAfterRestart(t, restarted)
 
 	// Clearing is the person's decision, and it is the same act as clearing a
 	// marker.
@@ -145,6 +112,60 @@ fi`)
 	}
 	if got := rawGit(t, h.root, "show", "HEAD:Inbox/note.md"); got != "edited "+strings.TrimSpace(secretBody) {
 		t.Fatalf("history holds %q after recovery", got)
+	}
+}
+
+// assertPlannedIntentRecord checks the durable intent a failed, unmarked
+// commit left behind: planned, identified, and free of note content.
+func assertPlannedIntentRecord(t *testing.T, h *testHarness, broken *Manager, safe string) {
+	t.Helper()
+	record, present := broken.Interrupted()
+	if !present {
+		t.Fatal("the durable intent did not survive the failure that could not be marked")
+	}
+	if record.Phase != IntentPhasePlanned || record.NewOID != "" {
+		t.Fatalf("intent phase = %q new_oid = %q, want a planned record with no commit", record.Phase, record.NewOID)
+	}
+	if record.ID == "" || record.Ref != "refs/heads/main" || record.OldOID != safe {
+		t.Fatalf("intent record is missing its identity: %+v", record)
+	}
+	assertIntentRecordDetails(t, h, record)
+}
+
+// assertIntentRecordDetails checks the intent record's observation time,
+// recovery steps and paths, and that it holds no note content.
+func assertIntentRecordDetails(t *testing.T, h *testHarness, record IntentRecord) {
+	t.Helper()
+	if record.ObservedAt.IsZero() || len(record.Recovery) == 0 {
+		t.Fatalf("intent record is missing its observation time or recovery steps: %+v", record)
+	}
+	if record.PathCount != 1 || !slices.Contains(record.Paths, "Inbox/note.md") {
+		t.Fatalf("intent record paths = %v (count %d)", record.Paths, record.PathCount)
+	}
+	if body := string(h.intentBytes()); strings.Contains(body, strings.TrimSpace(secretBody)) {
+		t.Fatalf("the intent record leaked note content:\n%s", body)
+	}
+}
+
+// assertIntentRefusesAfterRestart checks a reopened vault is refused by the
+// intent record alone, without leaking note content or relying on a marker.
+func assertIntentRefusesAfterRestart(t *testing.T, restarted *Manager) {
+	t.Helper()
+	if _, stillPresent := restarted.Interrupted(); !stillPresent {
+		t.Fatal("opening the vault retired a record it could not prove had landed")
+	}
+	preflightErr := restarted.Preflight(context.Background())
+	if !IsBlocked(preflightErr) {
+		t.Fatalf("Preflight after an unproven snapshot = %v, want a blocked failure", preflightErr)
+	}
+	if strings.Contains(preflightErr.Error(), strings.TrimSpace(secretBody)) {
+		t.Fatalf("the refusal leaked note content: %v", preflightErr)
+	}
+	if _, err := restarted.CommitPending(context.Background()); !IsBlocked(err) {
+		t.Fatalf("CommitPending after an unproven snapshot = %v, want a blocked failure", err)
+	}
+	if _, blocked := restarted.Blocked(); blocked {
+		t.Fatal("the refusal came from a marker, not from the intent record this test is about")
 	}
 }
 

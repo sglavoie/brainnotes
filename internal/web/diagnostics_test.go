@@ -39,16 +39,33 @@ func TestBuildDiagnosticsSummaryAggregatesIssues(t *testing.T) {
 		t.Fatalf("test snapshot should include every valid note, got %d", len(snapshot.notes))
 	}
 
-	if got.BrokenTargets[0].Label != "missing" || got.BrokenTargets[0].Count != 1 {
-		t.Fatalf("broken target aggregate = %#v, want missing count 1", got.BrokenTargets)
-	}
-	if got.BrokenTargets[0].Items[0].Title != "Source" || got.BrokenTargets[0].Items[0].Location == "" {
-		t.Fatalf("broken target source details missing: %#v", got.BrokenTargets[0].Items)
-	}
-	if got.BrokenTargets[0].Items[0].FolderPath != "/library?folder=Work" {
-		t.Fatalf("broken target folder path = %q, want /library?folder=Work", got.BrokenTargets[0].Items[0].FolderPath)
+	assertAggregatedBrokenTargets(t, got.BrokenTargets)
+	assertAggregatedNoteGroups(t, got)
+	assertAggregatedSchemaViolations(t, got)
+
+	longTail := longTailByProperty(got.LongTailValues)
+	if values := longTail["tags"]; len(values) == 0 || values[0].Value != "beta" || values[0].Count != 1 {
+		t.Fatalf("tags long-tail values = %#v, want rare values first", values)
 	}
 
+	assertAggregatedDiagnosticCards(t, got.Cards)
+}
+
+func assertAggregatedBrokenTargets(t *testing.T, got []diagnosticGroup) {
+	t.Helper()
+	if got[0].Label != "missing" || got[0].Count != 1 {
+		t.Fatalf("broken target aggregate = %#v, want missing count 1", got)
+	}
+	if got[0].Items[0].Title != "Source" || got[0].Items[0].Location == "" {
+		t.Fatalf("broken target source details missing: %#v", got[0].Items)
+	}
+	if got[0].Items[0].FolderPath != "/library?folder=Work" {
+		t.Fatalf("broken target folder path = %q, want /library?folder=Work", got[0].Items[0].FolderPath)
+	}
+}
+
+func assertAggregatedNoteGroups(t *testing.T, got diagnosticsSummary) {
+	t.Helper()
 	if titles := diagnosticTitles(got.OrphanNotes); !slices.Equal(titles, []string{"Island", "Source"}) {
 		t.Fatalf("orphan notes = %#v, want Island and Source; notes=%#v", titles, got.OrphanNotes)
 	}
@@ -59,7 +76,10 @@ func TestBuildDiagnosticsSummaryAggregatesIssues(t *testing.T) {
 	if len(got.DuplicateTitles) != 1 || got.DuplicateTitles[0].Label != "Target" || got.DuplicateTitles[0].Count != 2 {
 		t.Fatalf("duplicate title groups = %#v, want Target count 2", got.DuplicateTitles)
 	}
+}
 
+func assertAggregatedSchemaViolations(t *testing.T, got diagnosticsSummary) {
+	t.Helper()
 	if got.FrontmatterErrors != nil {
 		t.Fatalf("valid fixture should have no frontmatter errors: %#v", got.FrontmatterErrors)
 	}
@@ -72,22 +92,20 @@ func TestBuildDiagnosticsSummaryAggregatesIssues(t *testing.T) {
 	if got.SchemaViolations[0].Count != 2 {
 		t.Fatalf("someday violation count = %d, want 2", got.SchemaViolations[0].Count)
 	}
+}
 
-	longTail := longTailByProperty(got.LongTailValues)
-	if values := longTail["tags"]; len(values) == 0 || values[0].Value != "beta" || values[0].Count != 1 {
-		t.Fatalf("tags long-tail values = %#v, want rare values first", values)
-	}
-
-	cards := diagnosticCardsByKey(got.Cards)
+func assertAggregatedDiagnosticCards(t *testing.T, got []diagnosticCard) {
+	t.Helper()
+	cards := diagnosticCardsByKey(got)
 	if cards["broken"].Count != 1 || cards["orphan"].Count != 2 || cards["dead_end"].Count != 2 ||
 		cards["duplicate_titles"].Count != 2 || cards["schema_violations"].Count != 6 {
-		t.Fatalf("diagnostic card counts = %#v", got.Cards)
+		t.Fatalf("diagnostic card counts = %#v", got)
 	}
 	if cards["broken"].Path != "/health#diagnostic-broken-targets" ||
 		cards["orphan"].Path != "/health#diagnostic-orphans" ||
 		cards["dead_end"].Path != "/health#diagnostic-dead-ends" ||
 		cards["duplicate_titles"].Path != "/health#diagnostic-duplicate-titles" {
-		t.Fatalf("diagnostic card filter paths = %#v", got.Cards)
+		t.Fatalf("diagnostic card filter paths = %#v", got)
 	}
 }
 
@@ -239,23 +257,36 @@ func TestBuildDiagnosticsSummaryLongTailIgnoresConfiguredProperties(t *testing.T
 	if err != nil {
 		t.Fatalf("BuildQueue: %v", err)
 	}
+	cardDetails := longTailCardDetails(longTail)
+	queueDetails := longTailQueueDetails(queue)
+	if !slices.Equal(cardDetails, queueDetails) {
+		t.Fatalf("card set %#v != cockpit queue set %#v", cardDetails, queueDetails)
+	}
+}
+
+// longTailCardDetails renders the card's long-tail values as sorted
+// "property = value" details, the form the cockpit queue uses.
+func longTailCardDetails(longTail map[string][]diagnosticValueCount) []string {
 	cardDetails := make([]string, 0)
 	for property, values := range longTail {
 		for _, value := range values {
 			cardDetails = append(cardDetails, property+" = "+value.Value)
 		}
 	}
+	sort.Strings(cardDetails)
+	return cardDetails
+}
+
+// longTailQueueDetails returns the sorted details of the queue's long-tail tasks.
+func longTailQueueDetails(queue cockpit.Queue) []string {
 	queueDetails := make([]string, 0)
 	for _, task := range queue.Tasks {
 		if task.Kind == cockpit.RuleLongTailValue {
 			queueDetails = append(queueDetails, task.Detail)
 		}
 	}
-	sort.Strings(cardDetails)
 	sort.Strings(queueDetails)
-	if !slices.Equal(cardDetails, queueDetails) {
-		t.Fatalf("card set %#v != cockpit queue set %#v", cardDetails, queueDetails)
-	}
+	return queueDetails
 }
 
 func TestLoadDiagnosticsClassifiesHealthyParseAndTimeout(t *testing.T) {

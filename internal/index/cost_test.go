@@ -189,6 +189,20 @@ func TestLoadCostsAreOneReadPerMissAndOneParsePerNote(t *testing.T) {
 	}
 
 	indexed.reset()
+	assertWarmLoadCosts(t, v, ix, &indexed, directNotes, notes)
+}
+
+// assertWarmLoadCosts reloads a warmed index and checks it read nothing and
+// parsed every note, returning the same note set as the direct load.
+func assertWarmLoadCosts(
+	t *testing.T,
+	v *vault.Vault,
+	ix *Index,
+	indexed *loadCounts,
+	directNotes []*vault.Note,
+	notes int,
+) {
+	t.Helper()
 	warm := mustLoad(t, ix)
 	if indexed.reads != 0 {
 		t.Errorf("warm index load: %d reads, want 0 — the cache did not serve every entry", indexed.reads)

@@ -3,8 +3,39 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 )
+
+// assertFields reports every named field whose loaded value differs from want.
+func assertFields[T comparable](t *testing.T, fields map[string][2]T) {
+	t.Helper()
+	for name, pair := range fields {
+		if got, want := pair[0], pair[1]; got != want {
+			t.Errorf("%s: got %#v, want %#v", name, got, want)
+		}
+	}
+}
+
+// assertSliceFields reports every named slice that differs from want.
+func assertSliceFields(t *testing.T, fields map[string][2][]string) {
+	t.Helper()
+	for name, pair := range fields {
+		if got, want := pair[0], pair[1]; !slices.Equal(got, want) {
+			t.Errorf("%s: got %v, want %v", name, got, want)
+		}
+	}
+}
+
+// assertEmptyNonNil reports every named slice that is nil or not empty.
+func assertEmptyNonNil(t *testing.T, fields map[string][]string) {
+	t.Helper()
+	for name, got := range fields {
+		if got == nil || len(got) != 0 {
+			t.Errorf("%s: got %#v, want empty non-nil slice", name, got)
+		}
+	}
+}
 
 func writeFile(t *testing.T, path, content string) {
 	t.Helper()

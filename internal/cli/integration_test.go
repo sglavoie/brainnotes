@@ -48,6 +48,32 @@ func TestEndToEndScenario(t *testing.T) {
 		t.Fatalf("expected %s present: %v", newPath, err)
 	}
 
+	assertRenameRewroteLinks(t, root)
+	movedPath := moveSandWormsIntoBooks(t, root, newPath)
+
+	unsetRatingKeepsStatus(t, movedPath)
+}
+
+// unsetRatingKeepsStatus removes rating from the moved note and checks the
+// other properties survive in alphabetical order.
+func unsetRatingKeepsStatus(t *testing.T, movedPath string) {
+	t.Helper()
+	if _, err := runCLI(t, "", "unset", movedPath, "rating"); err != nil {
+		t.Fatalf("unset: %v", err)
+	}
+	body := readNote(t, movedPath)
+	if strings.Contains(body, "rating:") {
+		t.Fatalf("rating should be gone:\n%s", body)
+	}
+	if !strings.Contains(body, "status: Reading") {
+		t.Fatalf("other properties should remain:\n%s", body)
+	}
+	assertAlphabeticalKeys(t, body)
+}
+
+// assertRenameRewroteLinks checks every referrer of Dune now names Sand Worms.
+func assertRenameRewroteLinks(t *testing.T, root string) {
+	t.Helper()
 	review := readNote(t, filepath.Join(root, "References", "Dune Review.md"))
 	wantSubs := []string{
 		"[[Sand Worms]]",
@@ -74,7 +100,12 @@ func TestEndToEndScenario(t *testing.T) {
 	if !strings.Contains(project, "[[Sand Worms]]") {
 		t.Errorf("project body not rewritten:\n%s", project)
 	}
+}
 
+// moveSandWormsIntoBooks moves the renamed note and checks the folder-prefixed
+// link rewrite; it returns the moved path.
+func moveSandWormsIntoBooks(t *testing.T, root, newPath string) string {
+	t.Helper()
 	if _, err := runCLI(t, "", "move", newPath, "References/Books"); err != nil {
 		t.Fatalf("move: %v", err)
 	}
@@ -86,25 +117,14 @@ func TestEndToEndScenario(t *testing.T) {
 		t.Fatalf("expected old path gone, stat err=%v", err)
 	}
 
-	review = readNote(t, filepath.Join(root, "References", "Dune Review.md"))
+	review := readNote(t, filepath.Join(root, "References", "Dune Review.md"))
 	if !strings.Contains(review, "[[References/Books/Sand Worms]]") {
 		t.Errorf("expected folder-prefixed rewrite to References/Books/Sand Worms:\n%s", review)
 	}
 	if !strings.Contains(review, "[[Sand Worms]]") {
 		t.Errorf("expected bare [[Sand Worms]] preserved:\n%s", review)
 	}
-
-	if _, err := runCLI(t, "", "unset", movedPath, "rating"); err != nil {
-		t.Fatalf("unset: %v", err)
-	}
-	body = readNote(t, movedPath)
-	if strings.Contains(body, "rating:") {
-		t.Fatalf("rating should be gone:\n%s", body)
-	}
-	if !strings.Contains(body, "status: Reading") {
-		t.Fatalf("other properties should remain:\n%s", body)
-	}
-	assertAlphabeticalKeys(t, body)
+	return movedPath
 }
 
 // TestCaptureUndoScenario exercises capture → history → undo, covering both the

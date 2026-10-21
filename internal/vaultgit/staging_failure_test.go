@@ -335,6 +335,13 @@ func TestExactSnapshotSuccessfulNoOpRemovalStagingFailsClosed(t *testing.T) {
 		t.Fatal("the note left the history on a refused removal")
 	}
 
+	assertSilentRemovalLatchedBlock(t, h)
+}
+
+// assertSilentRemovalLatchedBlock checks the refused removal latched a block
+// naming the path, and that a reopened vault is still refused.
+func assertSilentRemovalLatchedBlock(t *testing.T, h *testHarness) {
+	t.Helper()
 	record, blocked := h.blockRecord()
 	if !blocked || record.Kind != KindCommitFailed {
 		t.Fatalf("a silently unstaged removal must latch an explained block: %+v", record)

@@ -87,53 +87,21 @@ func TestProveReplacementRefusesMisbehavingPrimitives(t *testing.T) {
 		replace func(source, destination string) (string, error)
 	}{
 		{
-			name:  "one that vacates the destination",
-			wants: "absent part-way through",
-			replace: func(source, destination string) (string, error) {
-				displaced := destination + ".away"
-				if err := os.Rename(destination, displaced); err != nil {
-					return "", err
-				}
-				// The gap a synchronizing file provider reads as a deletion,
-				// held open until the watcher has seen it.
-				if err := awaitVacancy(vacancies, destination); err != nil {
-					return "", err
-				}
-				if err := os.Rename(source, destination); err != nil {
-					return "", err
-				}
-				return displaced, nil
-			},
+			name:    "one that vacates the destination",
+			wants:   "absent part-way through",
+			replace: vacatingReplace(vacancies),
 		},
 		{
-			name:  "one that does not deliver the replacement",
-			wants: "did not take the replacement",
-			replace: func(source, destination string) (string, error) {
-				displaced := destination + ".away"
-				if err := os.WriteFile(displaced, []byte("something else\n"), 0o600); err != nil {
-					return "", err
-				}
-				return displaced, nil
-			},
+			name:    "one that does not deliver the replacement",
+			wants:   "did not take the replacement",
+			replace: undeliveredReplace,
 		},
 		{
 			name:  "one that loses the displaced content",
 			wants: "displaced content was not preserved",
 			// A copy rather than an exchange: the destination ends up correct,
 			// so only inspecting it would pass, but what it held is gone.
-			replace: func(source, destination string) (string, error) {
-				data, err := os.ReadFile(source)
-				if err != nil {
-					return "", err
-				}
-				if err := os.WriteFile(destination, data, replacementProbeMode); err != nil {
-					return "", err
-				}
-				if err := os.Chmod(destination, replacementProbeMode); err != nil {
-					return "", err
-				}
-				return source, nil
-			},
+			replace: copyingReplace,
 		},
 		{
 			name:  "one the kernel rejects outright",
@@ -148,20 +116,66 @@ func TestProveReplacementRefusesMisbehavingPrimitives(t *testing.T) {
 		t.Run(testCase.name, func(t *testing.T) {
 			dir := t.TempDir()
 			err := proveReplacement(dir, testCase.replace)
-			if err == nil {
-				t.Fatal("the self-test must refuse this volume")
-			}
-			if !IsUnsafeReplacement(err) {
-				t.Fatalf("refusal must be an *UnsafeReplacementError, got %T: %v", err, err)
-			}
-			if !strings.Contains(err.Error(), testCase.wants) {
-				t.Fatalf("refusal should say why (%q), got %q", testCase.wants, err.Error())
-			}
-			if !strings.Contains(err.Error(), dir) {
-				t.Fatalf("refusal must name what was refused, got %q", err.Error())
-			}
+			assertReplacementRefusal(t, err, dir, testCase.wants)
 		})
 	}
+}
+
+func assertReplacementRefusal(t *testing.T, err error, dir, wants string) {
+	t.Helper()
+	if err == nil {
+		t.Fatal("the self-test must refuse this volume")
+	}
+	if !IsUnsafeReplacement(err) {
+		t.Fatalf("refusal must be an *UnsafeReplacementError, got %T: %v", err, err)
+	}
+	if !strings.Contains(err.Error(), wants) {
+		t.Fatalf("refusal should say why (%q), got %q", wants, err.Error())
+	}
+	if !strings.Contains(err.Error(), dir) {
+		t.Fatalf("refusal must name what was refused, got %q", err.Error())
+	}
+}
+
+// vacatingReplace moves the destination away before delivering the source.
+func vacatingReplace(vacancies <-chan string) func(source, destination string) (string, error) {
+	return func(source, destination string) (string, error) {
+		displaced := destination + ".away"
+		if err := os.Rename(destination, displaced); err != nil {
+			return "", err
+		}
+		// The gap a synchronizing file provider reads as a deletion,
+		// held open until the watcher has seen it.
+		if err := awaitVacancy(vacancies, destination); err != nil {
+			return "", err
+		}
+		if err := os.Rename(source, destination); err != nil {
+			return "", err
+		}
+		return displaced, nil
+	}
+}
+
+func undeliveredReplace(source, destination string) (string, error) {
+	displaced := destination + ".away"
+	if err := os.WriteFile(displaced, []byte("something else\n"), 0o600); err != nil {
+		return "", err
+	}
+	return displaced, nil
+}
+
+func copyingReplace(source, destination string) (string, error) {
+	data, err := os.ReadFile(source)
+	if err != nil {
+		return "", err
+	}
+	if err := os.WriteFile(destination, data, replacementProbeMode); err != nil {
+		return "", err
+	}
+	if err := os.Chmod(destination, replacementProbeMode); err != nil {
+		return "", err
+	}
+	return source, nil
 }
 
 // A volume that failed the self-test may be a different filesystem by the next
