@@ -190,3 +190,17 @@ func TestMutationCommandsExposeGraphFindFlags(t *testing.T) {
 		})
 	}
 }
+
+// The link-count flags use -1 for "no bound"; --help must not present that
+// sentinel as a default, and the flags must still start unset.
+func TestFindFlagsHideSentinelDefaults(t *testing.T) {
+	ff := new(findFlags)
+	cmd := &cobra.Command{Use: "find"}
+	ff.register(cmd)
+	if usage := cmd.Flags().FlagUsages(); strings.Contains(usage, "(default -1)") {
+		t.Fatalf("help shows the -1 sentinel:\n%s", usage)
+	}
+	if ff.minBacklinks != -1 || ff.maxBacklinks != -1 || ff.minLinks != -1 || ff.maxLinks != -1 {
+		t.Fatalf("link-count flags must still default to -1: %+v", ff)
+	}
+}
