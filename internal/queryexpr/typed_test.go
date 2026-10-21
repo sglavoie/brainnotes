@@ -328,12 +328,3 @@ func TestTyped_LiteralParseErrors(t *testing.T) {
 		})
 	}
 }
-
-func contains(haystack []string, needle string) bool {
-	for _, s := range haystack {
-		if s == needle {
-			return true
-		}
-	}
-	return false
-}

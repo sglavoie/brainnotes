@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -82,19 +83,19 @@ limit = 2
 	// Newest first, then capped at two. Path order would have kept Alpha and
 	// Bravo, so this fails if either half of the view is dropped.
 	got := runFindOrdered(t, root, "find", "--view", "Recent WIP")
-	if want := []string{"Notes/Delta.md", "Notes/Alpha.md"}; !equalStrings(got, want) {
+	if want := []string{"Notes/Delta.md", "Notes/Alpha.md"}; !slices.Equal(got, want) {
 		t.Fatalf("find --view 'Recent WIP':\n got=%v\nwant=%v", got, want)
 	}
 
 	// The ordering on its own is the whole match set, newest first.
 	got = runFindOrdered(t, root, "find", "--view", "Sorted only")
-	if want := []string{"Notes/Delta.md", "Notes/Alpha.md", "Notes/Bravo.md"}; !equalStrings(got, want) {
+	if want := []string{"Notes/Delta.md", "Notes/Alpha.md", "Notes/Bravo.md"}; !slices.Equal(got, want) {
 		t.Fatalf("find --view 'Sorted only':\n got=%v\nwant=%v", got, want)
 	}
 
 	// A cap with no ordering caps the default path order.
 	got = runFindOrdered(t, root, "find", "--view", "Capped only")
-	if want := []string{"Notes/Alpha.md", "Notes/Bravo.md"}; !equalStrings(got, want) {
+	if want := []string{"Notes/Alpha.md", "Notes/Bravo.md"}; !slices.Equal(got, want) {
 		t.Fatalf("find --view 'Capped only':\n got=%v\nwant=%v", got, want)
 	}
 }
@@ -171,7 +172,7 @@ relative_to = "Alpha"
 	// its linked note follows, and the tied pair trails in path order.
 	got := runFindOrdered(t, root, "find", "--view", "Most related")
 	want := []string{"Notes/Alpha.md", "Notes/Delta.md", "Notes/Mike.md", "Notes/November.md"}
-	if !equalStrings(got, want) {
+	if !slices.Equal(got, want) {
 		t.Fatalf("find --view 'Most related':\n got=%v\nwant=%v", got, want)
 	}
 
@@ -179,7 +180,7 @@ relative_to = "Alpha"
 	// reversal would answer November, Mike, Delta, Alpha.
 	got = runFindOrdered(t, root, "find", "--view", "Least related uncapped")
 	want = []string{"Notes/Mike.md", "Notes/November.md", "Notes/Delta.md", "Notes/Alpha.md"}
-	if !equalStrings(got, want) {
+	if !slices.Equal(got, want) {
 		t.Fatalf("find --view 'Least related uncapped':\n got=%v\nwant=%v", got, want)
 	}
 
@@ -187,7 +188,7 @@ relative_to = "Alpha"
 	// back rather than only their order.
 	got = runFindOrdered(t, root, "find", "--view", "Least related")
 	want = []string{"Notes/Mike.md", "Notes/November.md"}
-	if !equalStrings(got, want) {
+	if !slices.Equal(got, want) {
 		t.Fatalf("find --view 'Least related':\n got=%v\nwant=%v", got, want)
 	}
 }
@@ -206,14 +207,14 @@ limit = 2
 `)
 
 	got := runFindOrdered(t, root, "find", "--view", "Recent WIP", "--sort", "modified")
-	if want := []string{"Notes/Bravo.md", "Notes/Alpha.md"}; !equalStrings(got, want) {
+	if want := []string{"Notes/Bravo.md", "Notes/Alpha.md"}; !slices.Equal(got, want) {
 		t.Fatalf("find --view 'Recent WIP' --sort modified:\n got=%v\nwant=%v", got, want)
 	}
 
 	// An explicit `path` sort is still explicit: it must win over the stored
 	// `-modified` rather than reading as "no ordering requested".
 	got = runFindOrdered(t, root, "find", "--view", "Recent WIP", "--sort", "path")
-	if want := []string{"Notes/Alpha.md", "Notes/Bravo.md"}; !equalStrings(got, want) {
+	if want := []string{"Notes/Alpha.md", "Notes/Bravo.md"}; !slices.Equal(got, want) {
 		t.Fatalf("find --view 'Recent WIP' --sort path:\n got=%v\nwant=%v", got, want)
 	}
 }
@@ -412,7 +413,7 @@ limit = 1
 		t.Fatal(err)
 	}
 	got := runFindOrdered(t, root, "find", "--view", "Text matches")
-	if !equalStrings(got, []string{"Notes/Bravo.md"}) {
+	if !slices.Equal(got, []string{"Notes/Bravo.md"}) {
 		t.Fatalf("match order: %v", got)
 	}
 }

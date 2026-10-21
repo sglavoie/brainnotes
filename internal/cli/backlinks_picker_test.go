@@ -3,6 +3,7 @@ package cli
 import (
 	"errors"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -23,7 +24,7 @@ func TestBacklinks_FzfPickNote(t *testing.T) {
 	}
 	got := relSlashLines(t, root, stdout)
 	want := []string{"Referrer1.md", "Referrer2.md", "Referrer3.md"}
-	if !equalStrings(got, want) {
+	if !slices.Equal(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
 	}
 }

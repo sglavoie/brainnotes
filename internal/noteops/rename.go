@@ -50,18 +50,6 @@ func WithRenameForce(force bool) RenameOption {
 	}
 }
 
-func WithRenameOutput(out io.Writer) RenameOption {
-	return func(o *renameOptions) {
-		o.out = out
-	}
-}
-
-func WithRenameJournalOptions(opts ...journal.RecorderOption) RenameOption {
-	return func(o *renameOptions) {
-		o.journalOptions = append(o.journalOptions, opts...)
-	}
-}
-
 // RenameNote renames targetPath and rewrites wikilinks pointing at its old
 // title. targetPath may be absolute or relative to the process.
 func RenameNote(v *vault.Vault, cfg *config.Config, targetPath, newTitle string, opts ...RenameOption) (*RenameResult, error) {

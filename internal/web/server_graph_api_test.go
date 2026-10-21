@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -147,7 +148,7 @@ func TestServer_GraphAPIJSON_FiltersNodesEdgesAndFilteredDegrees(t *testing.T) {
 	})
 
 	payload, _, _ := fetchGraphJSON(t, ts.URL+"/api/graph.json?tag=keep&folder=Work")
-	if !sameStrings(graphNodeIDs(payload), []string{"work/alpha", "work/beta"}) {
+	if !slices.Equal(graphNodeIDs(payload), []string{"work/alpha", "work/beta"}) {
 		t.Fatalf("filtered node ids: got %#v, want work/alpha and work/beta", graphNodeIDs(payload))
 	}
 	if len(payload.Edges) != 1 {
@@ -199,7 +200,7 @@ func TestServer_GraphAPIJSON_IssueMetadataAndBrokenFilter(t *testing.T) {
 	}
 
 	brokenOnly, _, _ := fetchGraphJSON(t, ts.URL+"/api/graph.json?broken=1")
-	if !sameStrings(graphNodeIDs(brokenOnly), []string{"broken"}) {
+	if !slices.Equal(graphNodeIDs(brokenOnly), []string{"broken"}) {
 		t.Fatalf("broken filter node ids: got %#v, want broken", graphNodeIDs(brokenOnly))
 	}
 	if len(brokenOnly.Edges) != 0 {
@@ -287,7 +288,7 @@ func TestServer_GraphAPIJSON_FocusModeKeepsFullGraphAndFlagsMatches(t *testing.T
 	unfiltered, _, _ := fetchGraphJSON(t, ts.URL+"/api/graph.json")
 	payload, _, _ := fetchGraphJSON(t, ts.URL+"/api/graph.json?q=NEEDLE&q_mode=focus")
 
-	if !sameStrings(graphNodeIDs(payload), graphNodeIDs(unfiltered)) {
+	if !slices.Equal(graphNodeIDs(payload), graphNodeIDs(unfiltered)) {
 		t.Fatalf("focus mode node ids: got %#v, want the unfiltered set %#v", graphNodeIDs(payload), graphNodeIDs(unfiltered))
 	}
 	if len(payload.Edges) != len(unfiltered.Edges) {
@@ -315,7 +316,7 @@ func TestServer_GraphAPIJSON_FocusModeStillAppliesFacets(t *testing.T) {
 	})
 
 	payload, _, _ := fetchGraphJSON(t, ts.URL+"/api/graph.json?q=needle&q_mode=focus&tag=keep")
-	if !sameStrings(graphNodeIDs(payload), []string{"work/alpha", "work/beta"}) {
+	if !slices.Equal(graphNodeIDs(payload), []string{"work/alpha", "work/beta"}) {
 		t.Fatalf("focus mode with facet node ids: got %#v, want work/alpha and work/beta", graphNodeIDs(payload))
 	}
 
@@ -369,12 +370,12 @@ func TestServer_GraphAPIJSON_ExprNarrowsTheIncludedSet(t *testing.T) {
 	})
 
 	exprOnly, _, _ := fetchGraphJSON(t, ts.URL+"/api/graph.json?expr="+url.QueryEscape("status:wip"))
-	if !sameStrings(graphNodeIDs(exprOnly), []string{"archive/gamma", "work/alpha"}) {
+	if !slices.Equal(graphNodeIDs(exprOnly), []string{"archive/gamma", "work/alpha"}) {
 		t.Fatalf("expr-only node ids: got %#v, want archive/gamma and work/alpha", graphNodeIDs(exprOnly))
 	}
 
 	withFacet, _, _ := fetchGraphJSON(t, ts.URL+"/api/graph.json?tag=keep&expr="+url.QueryEscape("status:wip"))
-	if !sameStrings(graphNodeIDs(withFacet), []string{"work/alpha"}) {
+	if !slices.Equal(graphNodeIDs(withFacet), []string{"work/alpha"}) {
 		t.Fatalf("expr must compose with the facet chip: got %#v, want work/alpha", graphNodeIDs(withFacet))
 	}
 }
@@ -387,7 +388,7 @@ func TestServer_GraphAPIJSON_FocusModeKeepsExprAsAStructuralFilter(t *testing.T)
 	})
 
 	payload, _, _ := fetchGraphJSON(t, ts.URL+"/api/graph.json?q=needle&q_mode=focus&expr="+url.QueryEscape("status:wip"))
-	if !sameStrings(graphNodeIDs(payload), []string{"work/alpha", "work/beta"}) {
+	if !slices.Equal(graphNodeIDs(payload), []string{"work/alpha", "work/beta"}) {
 		t.Fatalf("focus mode must still drop nodes the expression excludes: got %#v", graphNodeIDs(payload))
 	}
 
@@ -428,7 +429,7 @@ func TestServer_GraphAPIJSON_ExprResolvesGraphFields(t *testing.T) {
 
 	payload, _, _ := fetchGraphJSON(t, ts.URL+"/api/graph.json?expr="+url.QueryEscape("orphan:true"))
 	// Leaf links out to Hub but nothing links back, so it is an orphan too.
-	if !sameStrings(graphNodeIDs(payload), []string{"island", "leaf"}) {
+	if !slices.Equal(graphNodeIDs(payload), []string{"island", "leaf"}) {
 		t.Fatalf("graph-reading expression: got %#v, want island and leaf", graphNodeIDs(payload))
 	}
 }

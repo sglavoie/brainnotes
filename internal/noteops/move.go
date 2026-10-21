@@ -45,30 +45,6 @@ type moveOptions struct {
 // MoveOption customizes MoveNote.
 type MoveOption func(*moveOptions)
 
-func WithMoveCommand(command string) MoveOption {
-	return func(o *moveOptions) {
-		o.command = strings.TrimSpace(command)
-	}
-}
-
-func WithMoveForce(force bool) MoveOption {
-	return func(o *moveOptions) {
-		o.force = force
-	}
-}
-
-func WithMoveOutput(out io.Writer) MoveOption {
-	return func(o *moveOptions) {
-		o.out = out
-	}
-}
-
-func WithMoveJournalOptions(opts ...journal.RecorderOption) MoveOption {
-	return func(o *moveOptions) {
-		o.journalOptions = append(o.journalOptions, opts...)
-	}
-}
-
 // MoveNote moves targetPath into newFolderArg, preserving its filename and
 // rewriting only folder-qualified wikilinks.
 func MoveNote(v *vault.Vault, cfg *config.Config, targetPath, newFolderArg string, opts ...MoveOption) (*MoveResult, error) {

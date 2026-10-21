@@ -5,14 +5,12 @@ import (
 	"compress/gzip"
 	"errors"
 	"fmt"
-	"io"
 	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
 
 	"github.com/sglavoie/sglavoie_brainnotes/internal/checkpoint"
-	"github.com/sglavoie/sglavoie_brainnotes/internal/vault"
 	"github.com/sglavoie/sglavoie_brainnotes/internal/vaultsync"
 )
 
@@ -196,50 +194,6 @@ func normalizeDirMode(mode fs.FileMode) fs.FileMode {
 	// Restore materializes directories as owner-accessible first and applies this
 	// exact final mode only after their descendants are durable.
 	return mode.Perm()
-}
-
-func writeReaderAtomic(dest string, reader io.Reader, mode fs.FileMode) error {
-	parent := filepath.Dir(dest)
-	if err := os.MkdirAll(parent, 0o755); err != nil {
-		return fmt.Errorf("create parent directory %s: %w", parent, err)
-	}
-
-	tmp, err := os.CreateTemp(parent, ".tmp-*")
-	if err != nil {
-		return fmt.Errorf("create temp file in %s: %w", parent, err)
-	}
-
-	committed := false
-	defer func() {
-		if committed {
-			return
-		}
-
-		_ = tmp.Close()
-		_ = os.Remove(tmp.Name())
-	}()
-
-	if _, err := io.Copy(tmp, reader); err != nil {
-		return fmt.Errorf("write temp file for %s: %w", dest, err)
-	}
-	if err := tmp.Chmod(mode); err != nil {
-		return fmt.Errorf("chmod temp file for %s: %w", dest, err)
-	}
-	if err := tmp.Sync(); err != nil {
-		return fmt.Errorf("sync temp file for %s: %w", dest, err)
-	}
-	if err := tmp.Close(); err != nil {
-		return fmt.Errorf("close temp file for %s: %w", dest, err)
-	}
-	if err := os.Rename(tmp.Name(), dest); err != nil {
-		return fmt.Errorf("rename temp file into %s: %w", dest, err)
-	}
-	if err := vault.SyncDir(parent); err != nil {
-		return fmt.Errorf("sync parent directory for %s: %w", dest, err)
-	}
-
-	committed = true
-	return nil
 }
 
 func closeArchiveWriter(tw *tar.Writer, gzw *gzip.Writer, file *os.File) error {

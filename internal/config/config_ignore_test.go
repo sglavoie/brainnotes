@@ -1,6 +1,7 @@
 package config
 
 import (
+	"slices"
 	"strings"
 	"testing"
 )
@@ -10,7 +11,7 @@ func TestLoad_IgnoreMergesUserAndDefaults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if !contains(cfg.Ignore, "Drafts") {
+	if !slices.Contains(cfg.Ignore, "Drafts") {
 		t.Errorf("user ignore missing: %v", cfg.Ignore)
 	}
 	count := 0
@@ -38,7 +39,7 @@ func TestLoad_TrashIsDefaultIgnoredAndDeduped(t *testing.T) {
 	if trashCount != 1 {
 		t.Fatalf("expected Trash once after default merge, got %d (%v)", trashCount, cfg.Ignore)
 	}
-	if !contains(cfg.Ignore, "Drafts") {
+	if !slices.Contains(cfg.Ignore, "Drafts") {
 		t.Fatalf("user ignore missing: %v", cfg.Ignore)
 	}
 }
@@ -60,7 +61,7 @@ func TestLoad_IgnoreNormalizesRepeatedDotSlashPrefix(t *testing.T) {
 	if archiveCount != 1 {
 		t.Fatalf("expected Archive once after ././ normalization, got %d (%v)", archiveCount, cfg.Ignore)
 	}
-	if !contains(cfg.Ignore, "Drafts") {
+	if !slices.Contains(cfg.Ignore, "Drafts") {
 		t.Fatalf("expected Drafts after ./././ normalization: %v", cfg.Ignore)
 	}
 }
@@ -102,7 +103,7 @@ func TestLoad_IgnoreNormalizesBackslashes(t *testing.T) {
 		t.Fatalf("expected Archive once after backslash normalization, got %d (%v)",
 			archiveCount, cfg.Ignore)
 	}
-	if !contains(cfg.Ignore, "Drafts/Old") {
+	if !slices.Contains(cfg.Ignore, "Drafts/Old") {
 		t.Fatalf("expected Drafts/Old after backslash normalization: %v", cfg.Ignore)
 	}
 }
@@ -119,7 +120,7 @@ func TestLoad_IgnoreDropsAbsoluteEntries(t *testing.T) {
 					t.Fatalf("absolute ignore entry should be dropped, got %v", cfg.Ignore)
 				}
 			}
-			if !contains(cfg.Ignore, "Drafts") {
+			if !slices.Contains(cfg.Ignore, "Drafts") {
 				t.Fatalf("valid ignore entry should remain after dropping absolute path: %v", cfg.Ignore)
 			}
 		})
@@ -136,7 +137,7 @@ func TestLoad_IgnoreDropsParentTraversal(t *testing.T) {
 			t.Fatalf("parent-traversal ignore entry should be dropped, got %v", cfg.Ignore)
 		}
 	}
-	if !contains(cfg.Ignore, "Notes") {
+	if !slices.Contains(cfg.Ignore, "Notes") {
 		t.Fatalf("valid ignore entry should remain after dropping traversal: %v", cfg.Ignore)
 	}
 }

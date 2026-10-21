@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"slices"
 	"strings"
 	"testing"
 )
@@ -14,15 +15,15 @@ query = "status:wip"
 limit = 2
 `)
 	got := runFindOrdered(t, root, "find", "-q", "status:wip", "--sort", "-modified", "--limit", "1")
-	if want := []string{"Notes/Delta.md"}; !equalStrings(got, want) {
+	if want := []string{"Notes/Delta.md"}; !slices.Equal(got, want) {
 		t.Fatalf("find --sort -modified --limit 1: got=%v want=%v", got, want)
 	}
 	got = runFindOrdered(t, root, "find", "--view", "Capped", "--limit", "3")
-	if want := []string{"Notes/Alpha.md", "Notes/Bravo.md", "Notes/Delta.md"}; !equalStrings(got, want) {
+	if want := []string{"Notes/Alpha.md", "Notes/Bravo.md", "Notes/Delta.md"}; !slices.Equal(got, want) {
 		t.Fatalf("find --view Capped --limit 3: got=%v want=%v", got, want)
 	}
 	got = runFindOrdered(t, root, "find", "--view", "Capped", "--limit", "1")
-	if want := []string{"Notes/Alpha.md"}; !equalStrings(got, want) {
+	if want := []string{"Notes/Alpha.md"}; !slices.Equal(got, want) {
 		t.Fatalf("find --view Capped --limit 1: got=%v want=%v", got, want)
 	}
 }
@@ -48,7 +49,7 @@ func TestSearchLimit(t *testing.T) {
 	if err != nil {
 		t.Fatalf("search --limit 1: %v", err)
 	}
-	if got := searchRels(t, root, out); !equalStrings(got, []string{"Notes/Alpha.md"}) {
+	if got := searchRels(t, root, out); !slices.Equal(got, []string{"Notes/Alpha.md"}) {
 		t.Fatalf("search --limit 1 paths = %v", got)
 	}
 	out, err = runSearch(t, root, "keyword", "--count", "--limit", "1")

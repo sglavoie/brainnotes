@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"io"
 	"net/http"
+	"slices"
 	"testing"
 )
 
@@ -120,7 +121,7 @@ func TestBuildFacetsResponsePropertyOrdering(t *testing.T) {
 
 	got := optionValues(facets.Properties)
 	want := []string{"status", "alpha", "beta", "gamma", "tags"}
-	if !sameStrings(got, want) {
+	if !slices.Equal(got, want) {
 		t.Fatalf("property ordering = %#v, want %#v; properties=%#v", got, want, facets.Properties)
 	}
 }

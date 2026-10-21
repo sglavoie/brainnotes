@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -48,10 +49,10 @@ func TestBuildDiagnosticsSummaryAggregatesIssues(t *testing.T) {
 		t.Fatalf("broken target folder path = %q, want /library?folder=Work", got.BrokenTargets[0].Items[0].FolderPath)
 	}
 
-	if titles := diagnosticTitles(got.OrphanNotes); !sameStrings(titles, []string{"Island", "Source"}) {
+	if titles := diagnosticTitles(got.OrphanNotes); !slices.Equal(titles, []string{"Island", "Source"}) {
 		t.Fatalf("orphan notes = %#v, want Island and Source; notes=%#v", titles, got.OrphanNotes)
 	}
-	if titles := diagnosticTitles(got.DeadEndNotes); !sameStrings(titles, []string{"Target", "Target"}) {
+	if titles := diagnosticTitles(got.DeadEndNotes); !slices.Equal(titles, []string{"Target", "Target"}) {
 		t.Fatalf("dead-end notes = %#v, want both Target notes and not exempt Island; notes=%#v", titles, got.DeadEndNotes)
 	}
 
@@ -252,7 +253,7 @@ func TestBuildDiagnosticsSummaryLongTailIgnoresConfiguredProperties(t *testing.T
 	}
 	sort.Strings(cardDetails)
 	sort.Strings(queueDetails)
-	if !sameStrings(cardDetails, queueDetails) {
+	if !slices.Equal(cardDetails, queueDetails) {
 		t.Fatalf("card set %#v != cockpit queue set %#v", cardDetails, queueDetails)
 	}
 }

@@ -1,6 +1,7 @@
 package config
 
 import (
+	"slices"
 	"strings"
 	"testing"
 )
@@ -26,10 +27,10 @@ exclude_types = [" Journal ", "journal", "Scratch"]
 	if err != nil {
 		t.Fatalf("Load: %v", err)
 	}
-	if got, want := cfg.Brief.ExcludeFolders, []string{"Archive", "Drafts"}; !equalSlices(got, want) {
+	if got, want := cfg.Brief.ExcludeFolders, []string{"Archive", "Drafts"}; !slices.Equal(got, want) {
 		t.Fatalf("Brief.ExcludeFolders = %v, want %v", got, want)
 	}
-	if got, want := cfg.Brief.ExcludeTypes, []string{"journal", "scratch"}; !equalSlices(got, want) {
+	if got, want := cfg.Brief.ExcludeTypes, []string{"journal", "scratch"}; !slices.Equal(got, want) {
 		t.Fatalf("Brief.ExcludeTypes = %v, want %v", got, want)
 	}
 }

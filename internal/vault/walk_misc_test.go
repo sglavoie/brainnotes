@@ -3,6 +3,7 @@ package vault
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"testing"
 )
@@ -87,7 +88,7 @@ func TestWalkCaseInsensitiveExtension(t *testing.T) {
 	}
 	sort.Strings(visited)
 	want := []string{"lower.md", "mixed.Md", "upper.MD"}
-	if !equalStrings(visited, want) {
+	if !slices.Equal(visited, want) {
 		t.Errorf("walk visited %v, want %v", visited, want)
 	}
 }
@@ -109,7 +110,7 @@ func TestWalkDeeplyNested(t *testing.T) {
 	}
 	sort.Strings(visited)
 	want := []string{"a/b/c/d/e/f/g/h/deep.md", "shallow.md"}
-	if !equalStrings(visited, want) {
+	if !slices.Equal(visited, want) {
 		t.Errorf("walk visited %v, want %v", visited, want)
 	}
 }
@@ -133,7 +134,7 @@ func TestWalkRegularNonMarkdownExtensions(t *testing.T) {
 	}
 	sort.Strings(visited)
 	want := []string{"note.md"}
-	if !equalStrings(visited, want) {
+	if !slices.Equal(visited, want) {
 		t.Errorf("walk visited %v, want %v", visited, want)
 	}
 }
@@ -180,7 +181,7 @@ func TestWalkSkipsNestedHiddenDirs(t *testing.T) {
 	}
 	sort.Strings(visited)
 	want := []string{"Sub/note.md", "keep.md"}
-	if !equalStrings(visited, want) {
+	if !slices.Equal(visited, want) {
 		t.Errorf("walk visited %v, want %v", visited, want)
 	}
 }

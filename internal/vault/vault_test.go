@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -98,7 +99,7 @@ func TestWalkRespectsIgnore(t *testing.T) {
 		"References/book.md",
 		"root.md",
 	}
-	if !equalStrings(visited, want) {
+	if !slices.Equal(visited, want) {
 		t.Fatalf("walk visited:\n got=%v\nwant=%v", visited, want)
 	}
 }
@@ -161,7 +162,7 @@ func TestWalkIgnoreNormalizesBackslashes(t *testing.T) {
 	}
 	sort.Strings(visited)
 	want := []string{"Trash/visible-note.md", "keep.md"}
-	if !equalStrings(visited, want) {
+	if !slices.Equal(visited, want) {
 		t.Fatalf("walk visited:\n got=%v\nwant=%v", visited, want)
 	}
 }
@@ -192,7 +193,7 @@ func TestWalkRespectsIgnoredFiles(t *testing.T) {
 		"Nested/also-keep.md",
 		"keep.md",
 	}
-	if !equalStrings(visited, want) {
+	if !slices.Equal(visited, want) {
 		t.Fatalf("walk visited:\n got=%v\nwant=%v", visited, want)
 	}
 }
@@ -251,7 +252,7 @@ func TestWalkTemplatesDirNormalizesBackslashes(t *testing.T) {
 		t.Fatalf("walk: %v", err)
 	}
 	want := []string{"Meta/real.md"}
-	if !equalStrings(visited, want) {
+	if !slices.Equal(visited, want) {
 		t.Fatalf("walk visited:\n got=%v\nwant=%v", visited, want)
 	}
 }

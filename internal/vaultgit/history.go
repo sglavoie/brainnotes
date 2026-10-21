@@ -246,9 +246,7 @@ func (h *History) Inspect(ctx context.Context, commit string) (CommitInfo, error
 		return CommitInfo{}, fmt.Errorf("vaultgit: unreadable commit timestamp")
 	}
 	info := CommitInfo{OID: strings.TrimSpace(lines[0]), When: time.Unix(seconds, 0).UTC()}
-	for _, parent := range strings.Fields(lines[1]) {
-		info.Parents = append(info.Parents, parent)
-	}
+	info.Parents = append(info.Parents, strings.Fields(lines[1])...)
 	if !validObjectName(info.OID) {
 		return CommitInfo{}, fmt.Errorf("vaultgit: unreadable commit object name")
 	}

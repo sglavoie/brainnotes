@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -183,7 +184,7 @@ func TestLoadCostsAreOneReadPerMissAndOneParsePerNote(t *testing.T) {
 	if indexed.reads != notes || indexed.parses != notes {
 		t.Errorf("cold index load: %d reads and %d parses, want %d of each", indexed.reads, indexed.parses, notes)
 	}
-	if got, want := relPaths(t, v.Root, cold.Notes), relPaths(t, v.Root, directNotes); !equalStrings(got, want) {
+	if got, want := relPaths(t, v.Root, cold.Notes), relPaths(t, v.Root, directNotes); !slices.Equal(got, want) {
 		t.Fatalf("cold index note set = %v, want %v", got, want)
 	}
 
@@ -195,7 +196,7 @@ func TestLoadCostsAreOneReadPerMissAndOneParsePerNote(t *testing.T) {
 	if indexed.parses != notes {
 		t.Errorf("warm index load: %d parses, want %d — every walked note is parsed afresh, cached or not", indexed.parses, notes)
 	}
-	if got, want := relPaths(t, v.Root, warm.Notes), relPaths(t, v.Root, directNotes); !equalStrings(got, want) {
+	if got, want := relPaths(t, v.Root, warm.Notes), relPaths(t, v.Root, directNotes); !slices.Equal(got, want) {
 		t.Fatalf("warm index note set = %v, want %v", got, want)
 	}
 	if warm.Changed {

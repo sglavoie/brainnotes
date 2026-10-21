@@ -3,6 +3,7 @@ package cli
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -17,7 +18,7 @@ func TestBacklinks_VerboseBasic(t *testing.T) {
 	}
 	got := stripVaultLines(t, root, stdout)
 	want := readGoldenLines(t, "backlinks_verbose_basic.golden")
-	if !equalStrings(got, want) {
+	if !slices.Equal(got, want) {
 		t.Fatalf("verbose output mismatch:\n got=%v\nwant=%v", got, want)
 	}
 }
@@ -43,7 +44,7 @@ func TestBacklinks_VerboseFrontmatter(t *testing.T) {
 	}
 	got := stripVaultLines(t, root, stdout)
 	want := readGoldenLines(t, "backlinks_verbose_frontmatter.golden")
-	if !equalStrings(got, want) {
+	if !slices.Equal(got, want) {
 		t.Fatalf("verbose frontmatter mismatch:\n got=%v\nwant=%v", got, want)
 	}
 }
@@ -72,7 +73,7 @@ func TestBacklinks_VerboseMultiOccurrence(t *testing.T) {
 		"MultiRef.md:1\tFirst [[Target]] here.",
 		"MultiRef.md:2\tAnd second [[Target]] there.",
 	}
-	if !equalStrings(got, want) {
+	if !slices.Equal(got, want) {
 		t.Fatalf("multi-occurrence mismatch:\n got=%v\nwant=%v", got, want)
 	}
 }
@@ -158,7 +159,7 @@ func TestBacklinks_VerboseOnlyShowsLinksToSelectedDuplicateTarget(t *testing.T) 
 	}
 	got := stripVaultLines(t, root, stdout)
 	want := []string{"Ref.md:1\tOne [[Folder/Target]]."}
-	if !equalStrings(got, want) {
+	if !slices.Equal(got, want) {
 		t.Fatalf("duplicate-target verbose mismatch:\n got=%v\nwant=%v", got, want)
 	}
 }

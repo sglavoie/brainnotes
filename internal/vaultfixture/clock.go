@@ -57,14 +57,6 @@ func (c *Clock) Advance(d time.Duration) time.Time {
 	return c.now
 }
 
-// Set moves the clock to an absolute instant and returns it.
-func (c *Clock) Set(at time.Time) time.Time {
-	c.mu.Lock()
-	defer c.mu.Unlock()
-	c.now = at.UTC()
-	return c.now
-}
-
 // Tick advances the clock by one second and returns the new time. It is the
 // common case — "a later, distinguishable instant" — spelled once so tests do
 // not each invent their own step.

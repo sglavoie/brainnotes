@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -45,10 +46,10 @@ func TestParseNoteFiltersParams(t *testing.T) {
 	if filters.Query != "  Needle  " || filters.foldedQuery != "needle" {
 		t.Fatalf("query text: got raw=%q folded=%q", filters.Query, filters.foldedQuery)
 	}
-	if got, want := flags.Tags, []string{"foo", "bar"}; !sameStrings(got, want) {
+	if got, want := flags.Tags, []string{"foo", "bar"}; !slices.Equal(got, want) {
 		t.Fatalf("tags: got %#v, want %#v", got, want)
 	}
-	if got, want := flags.Categories, []string{"Books"}; !sameStrings(got, want) {
+	if got, want := flags.Categories, []string{"Books"}; !slices.Equal(got, want) {
 		t.Fatalf("categories: got %#v, want %#v", got, want)
 	}
 	if flags.Status != "active" || flags.Type != "project" || flags.Folder != "Work" {
@@ -265,18 +266,6 @@ func assertMatch(t *testing.T, filters noteFilters, note *vault.Note, want bool)
 	}
 }
 
-func sameStrings(got, want []string) bool {
-	if len(got) != len(want) {
-		return false
-	}
-	for i := range got {
-		if got[i] != want[i] {
-			return false
-		}
-	}
-	return true
-}
-
 func TestParseNoteFiltersExprComposesWithFacets(t *testing.T) {
 	v, snapshot, notes := newFilterTestSnapshot(t, map[string]string{
 		"Work/Both.md":     "---\ntags: [foo]\nstatus: wip\n---\nBody.\n",
@@ -378,7 +367,7 @@ func TestParseNoteFiltersInvalidExprIsTyped(t *testing.T) {
 	if payload.Error.Position == nil || payload.Error.Position.Line != 1 || payload.Error.Position.Column != 1 {
 		t.Fatalf("payload position: %#v", payload.Error.Position)
 	}
-	if !sameStrings(payload.Error.Suggestions, []string{"status"}) {
+	if !slices.Equal(payload.Error.Suggestions, []string{"status"}) {
 		t.Fatalf("payload suggestions: got %#v, want [status]", payload.Error.Suggestions)
 	}
 }

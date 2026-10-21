@@ -13,6 +13,7 @@ and `internal/web/static/` excluded by path as well as by header.
 | `just lint-new`   | Fails on any violation in a **function** changed since the ratchet base | **yes**, and in `just lint` |
 | `just lint-ratchet-selftest` | Proves the gate still catches a body-only complexity increase | no — a CI workflow step of its own |
 | `just lint-full`  | Reports the whole-tree count, exit 0        | no — a report |
+| `just lint-static` | staticcheck and `unused` over the whole tree, from `.golangci-staticcheck.yml`; no baseline | **yes**, and in `just lint` |
 | `just install-lint` | Installs the pinned golangci-lint         | no — CI calls it |
 
 ### The ratchet floor (initial S02 measurement)
@@ -175,10 +176,13 @@ There is **no ESLint equivalent of `gocognit`**, so cognitive complexity stays
 unmeasured on the TypeScript side. `complexity` is cyclomatic only.
 
 Dependencies: `eslint` and `typescript-eslint` in `devDependencies`.
-`typescript-eslint` 8.69 declares `typescript >=4.8.4 <6.1.0`, which covers the
-repo's pinned `^6.0.3`. Only the parser and the one rule from that plugin are
-used — no `recommended` preset — so no type-aware linting runs and the whole
-tree lints in about two seconds.
+`typescript-eslint` 8.72.0 declares `typescript >=4.8.4 <6.1.0`, which covers
+the TypeScript 6 API the repo pins exactly as
+`"typescript": "npm:@typescript/typescript6@6.0.2"`. The TypeScript 7 compiler
+sits beside it as `@typescript/native` and is not what the linter loads. Only
+the parser and the one rule from that plugin are used — no `recommended`
+preset — so no type-aware linting runs and the whole tree lints in about two
+seconds.
 
 ### The measured baseline — this closes the audit §6 TypeScript blind spot
 

@@ -2,6 +2,7 @@ package vaultgit
 
 import (
 	"context"
+	"slices"
 	"strconv"
 	"strings"
 	"testing"
@@ -80,7 +81,7 @@ func TestWatcherCommitsAsSoonAsTheFloorElapses(t *testing.T) {
 	rec.reset()
 	w.tick(ctx)
 	requireNoKind(t, rec, WatchEventCommitted)
-	if contains(h.tracked(), "second.md") {
+	if slices.Contains(h.tracked(), "second.md") {
 		t.Fatal("a ready burst was snapshotted inside the floor")
 	}
 
@@ -97,7 +98,7 @@ func TestWatcherCommitsAsSoonAsTheFloorElapses(t *testing.T) {
 	h.clock = *state.NextCommitDueAt
 	w.tick(ctx)
 	requireKind(t, rec, WatchEventCommitted)
-	if !contains(h.tracked(), "second.md") {
+	if !slices.Contains(h.tracked(), "second.md") {
 		t.Fatalf("the burst did not commit when its floor elapsed: %v", h.tracked())
 	}
 }
@@ -287,7 +288,7 @@ func TestWatcherRetriesAfterABusyPoll(t *testing.T) {
 
 	w.tick(ctx)
 	requireKind(t, rec, WatchEventCommitted)
-	if !contains(h.tracked(), "note.md") {
+	if !slices.Contains(h.tracked(), "note.md") {
 		t.Fatal("the retried snapshot did not record the note")
 	}
 }
@@ -322,7 +323,7 @@ func TestWatcherRestartResumesTheFloor(t *testing.T) {
 
 	restarted.tick(ctx)
 	requireNoKind(t, second, WatchEventCommitted)
-	if contains(h.tracked(), "second.md") {
+	if slices.Contains(h.tracked(), "second.md") {
 		t.Fatal("a restarted guard committed inside the floor it could not remember")
 	}
 
@@ -330,7 +331,7 @@ func TestWatcherRestartResumesTheFloor(t *testing.T) {
 	h.clock = anchor.Add(5 * time.Minute)
 	restarted.tick(ctx)
 	requireKind(t, second, WatchEventCommitted)
-	if !contains(h.tracked(), "second.md") {
+	if !slices.Contains(h.tracked(), "second.md") {
 		t.Fatalf("the resumed burst never committed: %v", h.tracked())
 	}
 }

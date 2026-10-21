@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -31,18 +32,6 @@ func entryIDs(entries []Entry) []string {
 		ids = append(ids, entry.ID)
 	}
 	return ids
-}
-
-func equalStrings(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
 }
 
 // The point of the change: a journal holding valid, manifest-less, malformed and
@@ -88,12 +77,12 @@ func TestListEntries_MixedValidAndCorruptEntries(t *testing.T) {
 	}
 
 	wantEntries := []string{"entry-c-newest", "entry-b-middle", "entry-a-oldest"}
-	if got := entryIDs(entries); !equalStrings(got, wantEntries) {
+	if got := entryIDs(entries); !slices.Equal(got, wantEntries) {
 		t.Fatalf("entries = %v, want %v (valid entries, newest-first)", got, wantEntries)
 	}
 
 	wantWarnings := []string{"entry-invalid", "entry-malformed", "entry-mismatched"}
-	if got := warningIDs(warnings); !equalStrings(got, wantWarnings) {
+	if got := warningIDs(warnings); !slices.Equal(got, wantWarnings) {
 		t.Fatalf("warnings = %v, want %v (the in-flight entry is not corruption)", got, wantWarnings)
 	}
 	for _, warning := range warnings {
@@ -151,10 +140,10 @@ func TestListEntries_UnreadableManifestBecomesWarning(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ListEntries() error = %v", err)
 	}
-	if got := entryIDs(entries); !equalStrings(got, []string{"entry-good"}) {
+	if got := entryIDs(entries); !slices.Equal(got, []string{"entry-good"}) {
 		t.Fatalf("entries = %v, want [entry-good]", got)
 	}
-	if got := warningIDs(warnings); !equalStrings(got, []string{"entry-locked"}) {
+	if got := warningIDs(warnings); !slices.Equal(got, []string{"entry-locked"}) {
 		t.Fatalf("warnings = %v, want [entry-locked]", got)
 	}
 }
@@ -251,7 +240,7 @@ func TestPrune_LeavesUnreadableEntriesAlone(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Prune() error = %v", err)
 	}
-	if !equalStrings(removed, []string{"entry-old"}) {
+	if !slices.Equal(removed, []string{"entry-old"}) {
 		t.Fatalf("removed = %v, want [entry-old]", removed)
 	}
 	if _, err := os.Stat(filepath.Join(journalRoot, "entry-broken")); err != nil {

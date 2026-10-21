@@ -30,9 +30,6 @@ type Status struct {
 	Problem string
 }
 
-// Healthy reports that the state file exists and can be used as-is.
-func (s Status) Healthy() bool { return s.Exists && s.Problem == "" }
-
 // Stat reports on the state file for the vault at root. It never rebuilds and
 // never writes; an unusable file is reported through Status.Problem rather than
 // returned as an error, because the index self-heals and a reader of the status

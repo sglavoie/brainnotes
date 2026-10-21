@@ -67,20 +67,6 @@ func WithBulkCommand(command string) BulkOption {
 	}
 }
 
-// WithBulkForce allows bulk move to overwrite existing files.
-func WithBulkForce(force bool) BulkOption {
-	return func(o *bulkOptions) {
-		o.force = force
-	}
-}
-
-// WithBulkOutput writes move rewrite summaries to out.
-func WithBulkOutput(out io.Writer) BulkOption {
-	return func(o *bulkOptions) {
-		o.out = out
-	}
-}
-
 // WithBulkTrashClock sets the timestamp source for trash collision suffixes.
 func WithBulkTrashClock(now func() time.Time) BulkOption {
 	return func(o *bulkOptions) {

@@ -2,6 +2,7 @@ package vaultgit
 
 import (
 	"context"
+	"slices"
 	"testing"
 	"time"
 )
@@ -82,7 +83,7 @@ func TestWatcherWhileOffReportsExternalDeletion(t *testing.T) {
 	w.tick(ctx)
 
 	event := requireKind(t, rec, WatchEventPending)
-	if !contains(event.Paths, "vanishes.md") {
+	if !slices.Contains(event.Paths, "vanishes.md") {
 		t.Fatalf("the block event does not name the missing path: %+v", event)
 	}
 	if _, blocked := h.blockRecord(); blocked {
@@ -91,7 +92,7 @@ func TestWatcherWhileOffReportsExternalDeletion(t *testing.T) {
 	if h.head() != baseline {
 		t.Fatal("the history moved while autosave was off")
 	}
-	if !contains(h.tracked(), "vanishes.md") {
+	if !slices.Contains(h.tracked(), "vanishes.md") {
 		t.Fatal("the deleted note is no longer in the history")
 	}
 }
@@ -172,7 +173,7 @@ func TestWatcherReenablingOpensAFreshBurst(t *testing.T) {
 	h.advance(DebounceQuiet + time.Second)
 	w.tick(ctx)
 	requireKind(t, rec, WatchEventCommitted)
-	if !contains(h.tracked(), "note.md") {
+	if !slices.Contains(h.tracked(), "note.md") {
 		t.Fatalf("the fresh burst never committed: %v", h.tracked())
 	}
 }
@@ -213,7 +214,7 @@ func TestWatcherReenablingKeepsTheFloorAnchor(t *testing.T) {
 	h.advance(DebounceQuiet + time.Second)
 	w.tick(ctx)
 	requireNoKind(t, rec, WatchEventCommitted)
-	if contains(h.tracked(), "second.md") {
+	if slices.Contains(h.tracked(), "second.md") {
 		t.Fatal("cycling the policy bought a commit inside the floor")
 	}
 

@@ -3,6 +3,7 @@ package cli
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -63,7 +64,7 @@ func TestSearch_NullStdin(t *testing.T) {
 		got[i] = filepath.ToSlash(rel)
 	}
 	want := []string{"Notes/Alpha.md", "Notes/Beta.md"}
-	if !equalStrings(got, want) {
+	if !slices.Equal(got, want) {
 		t.Fatalf("null-stdin search:\n got=%v\nwant=%v", got, want)
 	}
 }
@@ -79,7 +80,7 @@ func TestSearch_Context_Basic(t *testing.T) {
 	}
 	got := contextLines(stdout)
 	want := readGoldenLines(t, "search-context-basic.golden")
-	if !equalStrings(got, want) {
+	if !slices.Equal(got, want) {
 		t.Fatalf("context basic:\n got=%v\nwant=%v", got, want)
 	}
 }
@@ -137,7 +138,7 @@ func TestSearch_Context_MultiNote(t *testing.T) {
 	}
 	got := contextLines(stdout)
 	want := readGoldenLines(t, "search-context-multinote.golden")
-	if !equalStrings(got, want) {
+	if !slices.Equal(got, want) {
 		t.Fatalf("context multi-note:\n got=%v\nwant=%v", got, want)
 	}
 }

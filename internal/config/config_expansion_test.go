@@ -2,6 +2,7 @@ package config
 
 import (
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -56,7 +57,7 @@ func TestLoad_IgnoreNormalizesTrailingSlashAndDotSlash(t *testing.T) {
 	if archiveCount != 1 {
 		t.Fatalf("expected Archive to appear exactly once after normalization, got %d (%v)", archiveCount, cfg.Ignore)
 	}
-	if !contains(cfg.Ignore, "Drafts") {
+	if !slices.Contains(cfg.Ignore, "Drafts") {
 		t.Fatalf("expected Drafts (trailing slash stripped) in ignore: %v", cfg.Ignore)
 	}
 	for _, p := range cfg.Ignore {
@@ -79,7 +80,7 @@ func TestLoad_IgnoreDropsEmptyAndDotEntries(t *testing.T) {
 	}
 	// Defaults still present.
 	for _, want := range DefaultIgnore {
-		if !contains(cfg.Ignore, want) {
+		if !slices.Contains(cfg.Ignore, want) {
 			t.Errorf("default %q missing: %v", want, cfg.Ignore)
 		}
 	}

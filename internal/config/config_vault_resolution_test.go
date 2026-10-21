@@ -3,6 +3,7 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -124,7 +125,7 @@ func TestLoad_RuntimeFieldsPopulatedWithoutVaultKey(t *testing.T) {
 	if cfg.VaultOrigin != VaultOriginFlag {
 		t.Errorf("VaultOrigin: got %q, want %q", cfg.VaultOrigin, VaultOriginFlag)
 	}
-	if !contains(cfg.Ignore, "Drafts") {
+	if !slices.Contains(cfg.Ignore, "Drafts") {
 		t.Errorf("configured ignore entry was dropped: %v", cfg.Ignore)
 	}
 }

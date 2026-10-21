@@ -3,6 +3,7 @@ package cli
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -58,7 +59,7 @@ func TestIntegration_SearchBasic(t *testing.T) {
 	}
 	got := pathsToRels(t, root, stdout)
 	want := []string{"Notes/Chemistry.md", "Notes/Physics.md"}
-	if !equalStrings(got, want) {
+	if !slices.Equal(got, want) {
 		t.Fatalf("basic search:\n got=%v\nwant=%v", got, want)
 	}
 }
@@ -72,7 +73,7 @@ func TestIntegration_SearchWithFindFlags(t *testing.T) {
 	}
 	got := pathsToRels(t, root, stdout)
 	want := []string{"Notes/Chemistry.md"}
-	if !equalStrings(got, want) {
+	if !slices.Equal(got, want) {
 		t.Fatalf("search --tag science barrier:\n got=%v\nwant=%v", got, want)
 	}
 }

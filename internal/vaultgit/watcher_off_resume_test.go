@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 )
@@ -54,7 +55,7 @@ func TestWatcherResumesAnOffTransitionAfterARestart(t *testing.T) {
 	requireKind(t, second, WatchEventConfigChanged)
 	requirePolicy(t, h, "off")
 	requireWatchPolicy(t, h, "off")
-	if !contains(h.tracked(), "note.md") {
+	if !slices.Contains(h.tracked(), "note.md") {
 		t.Fatalf("the restarted guard skipped the final snapshot: %v", h.tracked())
 	}
 }
@@ -79,7 +80,7 @@ func TestWatcherResumesAnOffTransitionWithoutAPolicySource(t *testing.T) {
 
 	requireKind(t, rec, WatchEventCommitted)
 	requirePolicy(t, h, "off")
-	if !contains(h.tracked(), "note.md") {
+	if !slices.Contains(h.tracked(), "note.md") {
 		t.Fatalf("the restarted guard skipped the final snapshot: %v", h.tracked())
 	}
 }
@@ -121,7 +122,7 @@ func TestWatcherRestartingAnAlreadyOffVaultTakesNoSnapshot(t *testing.T) {
 	if h.head() != landed {
 		t.Fatalf("an already-off vault committed on restart: %v", h.subjects())
 	}
-	if contains(h.tracked(), "written-while-off.md") {
+	if slices.Contains(h.tracked(), "written-while-off.md") {
 		t.Fatal("the restart snapshotted a file written while autosave was off")
 	}
 }
@@ -188,7 +189,7 @@ func TestWatcherResumedOffTransitionRetriesAfterContention(t *testing.T) {
 	restarted.tick(ctx)
 	requireKind(t, rec, WatchEventCommitted)
 	requirePolicy(t, h, "off")
-	if !contains(h.tracked(), "note.md") {
+	if !slices.Contains(h.tracked(), "note.md") {
 		t.Fatalf("the retried final snapshot did not record the note: %v", h.tracked())
 	}
 }
@@ -227,7 +228,7 @@ func TestWatcherResumedOffTransitionStaysOnWhenTheSnapshotIsRefused(t *testing.T
 	if h.head() != baseline {
 		t.Fatal("the resumed transition committed on top of an ambiguous type change")
 	}
-	if !contains(h.tracked(), "vanishes.md") {
+	if !slices.Contains(h.tracked(), "vanishes.md") {
 		t.Fatal("the deleted note is no longer in the history")
 	}
 
@@ -265,7 +266,7 @@ func TestWatcherResumesOnACorruptPublishedPolicy(t *testing.T) {
 	requireKind(t, rec, WatchEventCommitted)
 	requirePolicy(t, h, "off")
 	requireWatchPolicy(t, h, "off")
-	if !contains(h.tracked(), "note.md") {
+	if !slices.Contains(h.tracked(), "note.md") {
 		t.Fatalf("a corrupt policy token discarded the owed snapshot: %v", h.tracked())
 	}
 }

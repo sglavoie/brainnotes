@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -263,7 +264,7 @@ func TestFindSort_Keys(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			got := runFindOrdered(t, root, append([]string{"find"}, tt.args...)...)
-			if !equalStrings(got, tt.want) {
+			if !slices.Equal(got, tt.want) {
 				t.Fatalf("find %v:\n got=%v\nwant=%v", tt.args, got, tt.want)
 			}
 		})

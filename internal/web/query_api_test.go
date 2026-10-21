@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 	"testing"
 
@@ -149,7 +150,7 @@ func TestQueryValidateAPI_ReportsUnknownFieldWithSuggestions(t *testing.T) {
 	if !strings.Contains(payload.Error.Message, "statuz") {
 		t.Errorf("message = %q, want it to name the unknown field", payload.Error.Message)
 	}
-	if !containsString(payload.Error.Suggestions, "status") {
+	if !slices.Contains(payload.Error.Suggestions, "status") {
 		t.Errorf("suggestions = %#v, want them to include status", payload.Error.Suggestions)
 	}
 	if !payload.Error.Positioned {
@@ -220,7 +221,7 @@ func TestQueryValidateAPI_RejectsUnresolvableGraphTarget(t *testing.T) {
 	if payload.Error == nil {
 		t.Fatal("error = nil, want a target error")
 	}
-	if !containsString(payload.Error.Suggestions, "Deep Work") {
+	if !slices.Contains(payload.Error.Suggestions, "Deep Work") {
 		t.Errorf("suggestions = %#v, want them to include the real title", payload.Error.Suggestions)
 	}
 }

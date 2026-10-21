@@ -2,6 +2,7 @@ package cli
 
 import (
 	"errors"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -16,7 +17,7 @@ func TestSearch_BasicMatch(t *testing.T) {
 	}
 	got := searchRels(t, root, stdout)
 	want := []string{"Notes/Gamma.md"}
-	if !equalStrings(got, want) {
+	if !slices.Equal(got, want) {
 		t.Fatalf("search relevant:\n got=%v\nwant=%v", got, want)
 	}
 }
@@ -46,7 +47,7 @@ func TestSearch_CaseFold(t *testing.T) {
 	}
 	got := searchRels(t, root, stdout)
 	want := []string{"Notes/Upper.md"}
-	if !equalStrings(got, want) {
+	if !slices.Equal(got, want) {
 		t.Fatalf("case-insensitive search for 'uppercase':\n got=%v\nwant=%v", got, want)
 	}
 }
@@ -92,7 +93,7 @@ func TestSearch_Regex(t *testing.T) {
 	}
 	got := searchRels(t, root, stdout)
 	want := []string{"Notes/Alpha.md", "Notes/Beta.md"}
-	if !equalStrings(got, want) {
+	if !slices.Equal(got, want) {
 		t.Fatalf("regex search:\n got=%v\nwant=%v", got, want)
 	}
 }
@@ -130,7 +131,7 @@ func TestSearch_MultipleMatchingNotes(t *testing.T) {
 	}
 	got := searchRels(t, root, stdout)
 	want := readGolden(t, "search-basic.golden")
-	if !equalStrings(got, want) {
+	if !slices.Equal(got, want) {
 		t.Fatalf("search keyword:\n got=%v\nwant=%v", got, want)
 	}
 }

@@ -3,6 +3,7 @@ package index
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 	"testing"
@@ -128,7 +129,7 @@ func TestLoadReturnsEveryWalkedNoteAndReportsColdChange(t *testing.T) {
 		t.Error("a cold index must report Changed: there is no earlier observation to claim equality with")
 	}
 	want := []string{"Archive/Gamma.md", "Notes/Alpha.md", "Notes/Beta.md", "Notes/Sub/Delta.md"}
-	if got := relPaths(t, v.Root, result.Notes); !equalStrings(got, want) {
+	if got := relPaths(t, v.Root, result.Notes); !slices.Equal(got, want) {
 		t.Errorf("notes = %v, want %v", got, want)
 	}
 	if len(result.Failed) != 0 {
@@ -262,14 +263,14 @@ func TestDeletedNoteIsDroppedFromTheIndex(t *testing.T) {
 	if !second.Changed {
 		t.Error("dropping an entry the walk did not visit must report Changed")
 	}
-	if got, want := relPaths(t, v.Root, second.Notes), []string{"Alpha.md"}; !equalStrings(got, want) {
+	if got, want := relPaths(t, v.Root, second.Notes), []string{"Alpha.md"}; !slices.Equal(got, want) {
 		t.Errorf("notes = %v, want %v", got, want)
 	}
 	// A second index over the same state file must not resurrect the dropped
 	// note, which is what proves the drop was persisted rather than only
 	// applied in memory.
 	fresh, _ := newTestIndex(t, v)
-	if got, want := relPaths(t, v.Root, mustLoad(t, fresh).Notes), []string{"Alpha.md"}; !equalStrings(got, want) {
+	if got, want := relPaths(t, v.Root, mustLoad(t, fresh).Notes), []string{"Alpha.md"}; !slices.Equal(got, want) {
 		t.Errorf("reloaded notes = %v, want %v", got, want)
 	}
 }
@@ -282,7 +283,7 @@ func TestUnparseableNoteIsClassifiedNotFatal(t *testing.T) {
 	ix, _ := newTestIndex(t, v)
 
 	result := mustLoad(t, ix)
-	if got, want := relPaths(t, v.Root, result.Notes), []string{"Good.md"}; !equalStrings(got, want) {
+	if got, want := relPaths(t, v.Root, result.Notes), []string{"Good.md"}; !slices.Equal(got, want) {
 		t.Errorf("notes = %v, want %v", got, want)
 	}
 	if len(result.Failed) != 1 || result.Failed[0].RelPath != "Bad.md" {
@@ -412,15 +413,3 @@ func (s stubInfo) Mode() os.FileMode  { return 0o644 }
 func (s stubInfo) ModTime() time.Time { return s.mod }
 func (s stubInfo) IsDir() bool        { return false }
 func (s stubInfo) Sys() any           { return nil }
-
-func equalStrings(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
-}

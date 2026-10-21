@@ -5,6 +5,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -56,7 +57,7 @@ func TestLinks_TitleInput(t *testing.T) {
 	}
 	got := relSlashLines(t, root, stdout)
 	want := []string{"Alpha.md", "Beta.md", "Gamma.md"}
-	if !equalStrings(got, want) {
+	if !slices.Equal(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
 	}
 }
@@ -71,7 +72,7 @@ func TestLinks_PathInput(t *testing.T) {
 	}
 	got := relSlashLines(t, root, stdout)
 	want := []string{"Alpha.md", "Beta.md", "Gamma.md"}
-	if !equalStrings(got, want) {
+	if !slices.Equal(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
 	}
 }
@@ -136,7 +137,7 @@ func TestLinks_VerboseBasic(t *testing.T) {
 	}
 	got := stripVaultLines(t, root, stdout)
 	want := readGoldenLines(t, "links_verbose_basic.golden")
-	if !equalStrings(got, want) {
+	if !slices.Equal(got, want) {
 		t.Fatalf("verbose output mismatch:\n got=%v\nwant=%v", got, want)
 	}
 }
@@ -162,7 +163,7 @@ func TestLinks_VerboseFrontmatter(t *testing.T) {
 	}
 	got := stripVaultLines(t, root, stdout)
 	want := readGoldenLines(t, "links_verbose_frontmatter.golden")
-	if !equalStrings(got, want) {
+	if !slices.Equal(got, want) {
 		t.Fatalf("verbose frontmatter mismatch:\n got=%v\nwant=%v", got, want)
 	}
 }
@@ -189,7 +190,7 @@ func TestUnquotedFrontmatterWikilinksAcrossCLIQueries(t *testing.T) {
 		if err != nil {
 			t.Fatalf("%v: %v", args, err)
 		}
-		if got := relSlashLines(t, root, stdout); !equalStrings(got, want) {
+		if got := relSlashLines(t, root, stdout); !slices.Equal(got, want) {
 			t.Fatalf("%v returned %v, want %v", args, got, want)
 		}
 	}
@@ -225,7 +226,7 @@ func TestLinks_VerboseIncludesFolderQualifiedLinks(t *testing.T) {
 	}
 	got := stripVaultLines(t, root, stdout)
 	want := []string{"Source.md:1\tSee [[Folder/Target|folder alias]]."}
-	if !equalStrings(got, want) {
+	if !slices.Equal(got, want) {
 		t.Fatalf("folder-qualified verbose mismatch:\n got=%v\nwant=%v", got, want)
 	}
 }
@@ -240,7 +241,7 @@ func TestLinks_SelfReferenceExcluded(t *testing.T) {
 	}
 	got := relSlashLines(t, root, stdout)
 	want := []string{"Alpha.md"}
-	if !equalStrings(got, want) {
+	if !slices.Equal(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
 	}
 }
@@ -255,7 +256,7 @@ func TestLinks_BrokenLinksExcluded(t *testing.T) {
 	}
 	got := relSlashLines(t, root, stdout)
 	want := []string{"Alpha.md"}
-	if !equalStrings(got, want) {
+	if !slices.Equal(got, want) {
 		t.Fatalf("got %v, want %v (broken links should be excluded)", got, want)
 	}
 }
@@ -276,7 +277,7 @@ func TestLinks_FzfPick(t *testing.T) {
 	}
 	got := relSlashLines(t, root, stdout)
 	want := []string{"Alpha.md", "Beta.md", "Gamma.md"}
-	if !equalStrings(got, want) {
+	if !slices.Equal(got, want) {
 		t.Fatalf("got %v, want %v", got, want)
 	}
 }

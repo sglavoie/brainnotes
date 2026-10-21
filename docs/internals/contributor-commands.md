@@ -86,7 +86,7 @@ source tree; their Go issue totals must agree and must not move merely because
 ## Lint and complexity gates
 
 - `just lint` — `_go-static` (fails on `gofmt -l` output outside `node_modules`,
-  then `go vet`), `just lint-new`, then `just web-check`.
+  then `go vet`), `just lint-new`, `just lint-static`, then `just web-check`.
 - `just lint-new` — the **function-complexity ratchet**:
   `go run ./scripts/lintratchet -base {{ratchet_base}}` over `.golangci.yml`
   (funlen 100/50, cyclop 10, gocognit 20, nestif 4). The unit of judgement is the
@@ -135,6 +135,13 @@ source tree; their Go issue totals must agree and must not move merely because
   dead-code measurements, compared against
   [refactor-baseline.md](refactor-baseline.md). A read-only report on stdout,
   absent from `just lint` and `just ci`.
+- `just lint-static` — staticcheck and `unused` through the same pinned
+  golangci-lint, over the whole tree and both sync build tags, with its own
+  config, `.golangci-staticcheck.yml`. It has no baseline: any finding fails. It
+  is a separate config because the ratchet, `lint-full` and `lint-phase-gate`
+  count every issue `.golangci.yml` reports as a complexity violation. A
+  deliberate use of a deprecated API (an equivalence test against it, say)
+  carries both `//lint:ignore` and `//nolint:staticcheck` with a reason.
 - `npm run lint:web` — the **TypeScript half of the same ratchet**:
   `eslint.config.js` (complexity 10, max-lines-per-function 100, max-depth 4,
   `@typescript-eslint/no-unused-vars`) over `internal/web/static_src/**/*.ts`.
@@ -161,18 +168,19 @@ be forgotten in the other.
 
 1. `_go-static`: the `gofmt -l` check and `go vet` over the filtered packages.
 2. `just lint-new`.
-3. `go test` over the filtered packages.
-4. `_web-static`: frontend typecheck, `npm run lint:web`, Vitest.
-5. `npm run check:web-bundles`: rebuilds every entry in
+3. `just lint-static`.
+4. `go test` over the filtered packages.
+5. `_web-static`: frontend typecheck, `npm run lint:web`, Vitest.
+6. `npm run check:web-bundles`: rebuilds every entry in
    `internal/cli/web-build-args.json` into a scratch directory and byte-compares
    each bundle against the committed file under `internal/web/static`. That
    compares the bundles against their own source rather than against `git`, so it
    passes on an uncommitted tree and fails only when a checked-in bundle is
    genuinely stale. Unlike `just lint`, it never rewrites the committed bundles.
-6. `npm run lint:e2e`.
-7. `python3 -B -m unittest discover -s scripts -p 'test_*.py'`: every Python
+7. `npm run lint:e2e`.
+8. `python3 -B -m unittest discover -s scripts -p 'test_*.py'`: every Python
    script test, not a hand-kept list.
-8. `go mod tidy -diff`: fails when `go.mod` or `go.sum` is not tidy.
+9. `go mod tidy -diff`: fails when `go.mod` or `go.sum` is not tidy.
 
 Run it before declaring work complete.
 `app.css` drift is checked by `go test` itself.

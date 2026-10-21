@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"testing"
 	"time"
 
@@ -176,7 +177,7 @@ func TestCorruptStateRebuildsSilently(t *testing.T) {
 			if err != nil {
 				t.Fatalf("a corrupt state file must never become a caller error: %v", err)
 			}
-			if got := relPaths(t, v.Root, result.Notes); !equalStrings(got, corruptionWant) {
+			if got := relPaths(t, v.Root, result.Notes); !slices.Equal(got, corruptionWant) {
 				t.Errorf("notes = %v, want %v", got, corruptionWant)
 			}
 			if !result.Changed {
@@ -198,7 +199,7 @@ func TestCorruptStateRebuildsSilently(t *testing.T) {
 			if healed.Changed {
 				t.Error("the load after a rebuild must start warm from the repaired state file")
 			}
-			if got := relPaths(t, v.Root, healed.Notes); !equalStrings(got, corruptionWant) {
+			if got := relPaths(t, v.Root, healed.Notes); !slices.Equal(got, corruptionWant) {
 				t.Errorf("healed notes = %v, want %v", got, corruptionWant)
 			}
 			if len(*nextLogs) != 0 {
@@ -241,7 +242,7 @@ func TestMissingStateIsNotAFailure(t *testing.T) {
 	ix, logs := newTestIndex(t, v)
 
 	result := mustLoad(t, ix)
-	if got := relPaths(t, v.Root, result.Notes); !equalStrings(got, corruptionWant) {
+	if got := relPaths(t, v.Root, result.Notes); !slices.Equal(got, corruptionWant) {
 		t.Errorf("notes = %v, want %v", got, corruptionWant)
 	}
 	if len(*logs) != 0 {
@@ -265,7 +266,7 @@ func TestStateDirectoryReplacedByAFileIsSurvivable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("an unusable state directory must not become a caller error: %v", err)
 	}
-	if got := relPaths(t, v.Root, result.Notes); !equalStrings(got, corruptionWant) {
+	if got := relPaths(t, v.Root, result.Notes); !slices.Equal(got, corruptionWant) {
 		t.Errorf("notes = %v, want %v", got, corruptionWant)
 	}
 }

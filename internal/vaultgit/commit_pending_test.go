@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -129,7 +130,7 @@ func TestExternalDeletionIsCommittedAndRecoverable(t *testing.T) {
 	h.remove("Inbox/precious.md")
 	h.write("Inbox/keep.md", "edited")
 	result := h.commitPending()
-	if !result.Committed || !contains(result.Deleted, "Inbox/precious.md") || h.trackedSet()["Inbox/precious.md"] {
+	if !result.Committed || !slices.Contains(result.Deleted, "Inbox/precious.md") || h.trackedSet()["Inbox/precious.md"] {
 		t.Fatalf("deletion not recorded: %+v", result)
 	}
 	if got := rawGit(t, h.root, "show", parent+":Inbox/precious.md"); got != "irreplaceable" {
@@ -160,7 +161,7 @@ func TestJournalRecordAuthorizesDeletion(t *testing.T) {
 	if !result.Committed {
 		t.Fatalf("an authorized deletion was not committed: %+v", result)
 	}
-	if !contains(result.Deleted, "Inbox/gone.md") {
+	if !slices.Contains(result.Deleted, "Inbox/gone.md") {
 		t.Fatalf("deleted = %v", result.Deleted)
 	}
 	tracked := h.trackedSet()
@@ -218,7 +219,7 @@ func TestRepeatedExternalDeletionNeedsNoNewJournal(t *testing.T) {
 	h.write("gone.md", "goodbye")
 	h.commitPending()
 	h.remove("gone.md")
-	if result := h.commitPending(); !result.Committed || !contains(result.Deleted, "gone.md") {
+	if result := h.commitPending(); !result.Committed || !slices.Contains(result.Deleted, "gone.md") {
 		t.Fatal(result)
 	}
 }
@@ -248,7 +249,7 @@ func TestExternalDeletionDoesNotRequireJournalProof(t *testing.T) {
 					t.Fatal(err)
 				}
 			}
-			if result := h.commitPending(); !result.Committed || !contains(result.Deleted, "gone.md") {
+			if result := h.commitPending(); !result.Committed || !slices.Contains(result.Deleted, "gone.md") {
 				t.Fatal(result)
 			}
 		})
@@ -317,7 +318,7 @@ func TestSkippedPathDefersProvenDeletions(t *testing.T) {
 	if len(result.Deleted) != 0 {
 		t.Fatalf("a deletion was committed while its counterpart was skipped: %+v", result.Deleted)
 	}
-	if !contains(result.DeferredDeletions, "Inbox/old name.md") {
+	if !slices.Contains(result.DeferredDeletions, "Inbox/old name.md") {
 		t.Fatalf("deferred deletions = %v", result.DeferredDeletions)
 	}
 	if !h.trackedSet()["Inbox/old name.md"] {
@@ -341,7 +342,7 @@ func TestSkippedPathDefersProvenDeletions(t *testing.T) {
 	}
 	h.advance(time.Minute)
 	final := h.commitPending()
-	if !contains(final.Deleted, "Inbox/old name.md") {
+	if !slices.Contains(final.Deleted, "Inbox/old name.md") {
 		t.Fatalf("the deferred deletion never landed: %+v", final)
 	}
 	tracked := h.trackedSet()
