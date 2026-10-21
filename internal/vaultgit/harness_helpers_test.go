@@ -268,8 +268,15 @@ func gitShim(t *testing.T, body string) string {
 	real := requireGit(t)
 	path := filepath.Join(t.TempDir(), "git-shim")
 	script := "#!/bin/sh\nREAL_GIT=" + shellQuote(real) + "\n" + body + "\nexec \"$REAL_GIT\" \"$@\"\n"
-	if err := os.WriteFile(path, []byte(script), 0o755); err != nil {
-		t.Fatalf("write shim: %v", err)
+	// A child shell writes the shim, not this process. These tests run in
+	// parallel, and a write descriptor held here would be inherited by any
+	// sibling's fork in that moment; exec of the shim then fails with "text
+	// file busy" until that child execs (golang/go#22315). The descriptor never
+	// exists in this process this way.
+	write := exec.Command("sh", "-c", `cat > "$1" && chmod 755 "$1"`, "sh", path)
+	write.Stdin = strings.NewReader(script)
+	if out, err := write.CombinedOutput(); err != nil {
+		t.Fatalf("write shim: %v\n%s", err, out)
 	}
 	return path
 }

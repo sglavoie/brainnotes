@@ -77,8 +77,8 @@ func transferTempOwnerIfMatching(recordPath string, staged map[string]struct{}) 
 		return err
 	}
 	defer release()
-	record, err := readTempOwnerRecord(recordPath)
-	if err != nil {
+	record, found, err := readHeldTempOwnerRecord(recordPath)
+	if err != nil || !found {
 		return err
 	}
 	if record.Transferred || !ownerHasStagedPath(record.Entries, staged) {
@@ -107,8 +107,8 @@ func recoverTempOwner(root, recordPath string) error {
 		return err
 	}
 	defer release()
-	record, err := readTempOwnerRecord(recordPath)
-	if err != nil {
+	record, found, err := readHeldTempOwnerRecord(recordPath)
+	if err != nil || !found {
 		return err
 	}
 	if !record.Transferred {
@@ -135,6 +135,19 @@ func openTempOwnerForRecovery(recordPath string) (*os.File, bool, func(), error)
 		return nil, false, func() {}, err
 	}
 	return file, held && sameOpenFile(file, lockPath), release, nil
+}
+
+// readHeldTempOwnerRecord reads a record whose lock the caller holds. A record
+// listed by a directory scan can vanish before its lock is taken: its owner
+// removes the record, unlocks, and only then removes the lock. Holding the lock
+// with no record therefore means the owner already finished, so the leftover
+// lock is housekeeping, not an error.
+func readHeldTempOwnerRecord(recordPath string) (txnTempOwnerRecord, bool, error) {
+	record, err := readTempOwnerRecord(recordPath)
+	if errors.Is(err, fs.ErrNotExist) {
+		return txnTempOwnerRecord{}, false, removeTempOwnerMetadata(recordPath)
+	}
+	return record, err == nil, err
 }
 
 func readTempOwnerRecord(recordPath string) (txnTempOwnerRecord, error) {

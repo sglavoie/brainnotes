@@ -176,7 +176,11 @@ positions are fixed for reproducible screenshots, while behavior tests use the
 real graph API.
 
 Measurements cover search, expression filtering, and typing into a long source
-note at 4× CPU throttling and 100 ms network latency. The reading page check also
+note at 4× CPU throttling and 100 ms network latency. Throttling scales the host's
+own speed, so CI (where `CI` is set) throttles these by 1.5× instead: a
+GitHub-hosted runner measured ~600 ms per typing sample at 4× and ~400 ms at 2×,
+against ~285 ms at 4× on the Mac the budgets were set on, so 1.5× there emulates
+the same device. The reading page check also
 records the HTML document, every resource transfer, total transfer, and first
 contentful paint. On 2026-10-19, local Chromium measured 100 ms to first paint
 without throttling and 1,928 ms with 4× CPU throttling and 100 ms latency. The

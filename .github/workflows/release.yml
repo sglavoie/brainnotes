@@ -1,7 +1,8 @@
 name: Release
 
 # Pushing a `v*` tag builds `bn`, `bn-vault-guard` and `bn-vault-sync` for every
-# supported platform and publishes them as a GitHub Release. A manual run builds
+# supported platform (macOS and Linux; see docs/internals/locking.md for why not
+# Windows) and publishes them as a GitHub Release. A manual run builds
 # the same archives and uploads them as a workflow artifact without publishing,
 # which is how to check a change to this file.
 #
@@ -44,23 +45,17 @@ jobs:
           set -euo pipefail
           dist="$RUNNER_TEMP/dist"
           mkdir -p "$dist"
-          for target in darwin/amd64 darwin/arm64 linux/amd64 linux/arm64 windows/amd64 windows/arm64; do
+          for target in darwin/amd64 darwin/arm64 linux/amd64 linux/arm64; do
             goos="${target%/*}"
             goarch="${target#*/}"
-            ext=""
-            [ "$goos" = windows ] && ext=".exe"
             name="brainnotes_${VERSION}_${goos}_${goarch}"
             stage="$dist/$name"
             mkdir -p "$stage"
             for cmd in bn bn-vault-guard bn-vault-sync; do
-              GOOS="$goos" GOARCH="$goarch" go build -trimpath -ldflags "-s -w" -o "$stage/$cmd$ext" "./cmd/$cmd"
+              GOOS="$goos" GOARCH="$goarch" go build -trimpath -ldflags "-s -w" -o "$stage/$cmd" "./cmd/$cmd"
             done
             cp LICENSE README.md THIRD_PARTY_NOTICES.md "$stage/"
-            if [ "$goos" = windows ]; then
-              (cd "$dist" && zip -qr "$name.zip" "$name")
-            else
-              tar -C "$dist" -czf "$dist/$name.tar.gz" "$name"
-            fi
+            tar -C "$dist" -czf "$dist/$name.tar.gz" "$name"
             rm -rf "$stage"
           done
           (cd "$dist" && sha256sum * > checksums.txt)

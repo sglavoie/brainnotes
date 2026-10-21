@@ -167,14 +167,17 @@ jobs:
   #
   # The Ubuntu job above stays authoritative for the repository as a whole. This
   # matrix adds nothing to it on Linux beyond a second run of one package; its
-  # reason to exist is macOS and Windows.
+  # reason to exist is macOS. Windows is not a supported platform: its
+  # ReplaceFileW leaves the destination absent part-way through, the prover
+  # rightly refuses it, and so every overwrite there is refused (see
+  # docs/internals/locking.md).
   vault-native:
     name: vault (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-latest, ubuntu-latest, windows-latest]
+        os: [macos-latest, ubuntu-latest]
     steps:
       - uses: actions/checkout@v7
 

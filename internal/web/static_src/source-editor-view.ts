@@ -173,8 +173,9 @@ type CompletionRefresh = { noMatchPrefix: string | null };
 //
 // Without `validFor` the result is invalidated on every keystroke, and
 // CodeMirror keeps the previous list on screen while the new query runs but
-// marks it disabled (CompletionDialog.build → setDisabled). A disabled dialog is
-// indistinguishable from a live one — same options, same DOM, no attribute — yet
+// marks it disabled (CompletionDialog.build → setDisabled). A disabled dialog
+// looks like a live one — same options, same DOM, only a
+// `cm-tooltip-autocomplete-disabled` class the public API does not expose — yet
 // acceptCompletion and moveCompletionSelection both decline, which in a keymap
 // means the key falls through: Enter to insertNewlineAndIndent, the arrows to
 // cursorLineUp/Down. So typing `[[Fieldwo` and pressing Enter without pausing

@@ -39,7 +39,7 @@ thing at the terminal and in the browser.
 
 Download the archive for your platform from the
 [latest release](https://github.com/sglavoie/brainnotes/releases/latest)
-(macOS, Linux and Windows, on x86-64 and ARM64), check it against
+(macOS and Linux, on x86-64 and ARM64), check it against
 `checksums.txt`, and put all three binaries (`bn`, `bn-vault-guard`,
 `bn-vault-sync`) in the same directory on your `PATH`. They must stay at the
 same version, so replace them together.
@@ -51,6 +51,10 @@ cp brainnotes_<version>_<os>_<arch>/bn* ~/.local/bin/
 
 The binaries are not code-signed. On macOS, clear the download quarantine with
 `xattr -d com.apple.quarantine ~/.local/bin/bn*` if Gatekeeper refuses to run them.
+
+Windows is not supported: Brain Notes refuses to overwrite a note unless the
+filesystem can replace it without the path ever going missing, and Windows'
+replace primitive cannot promise that.
 
 ### From source
 

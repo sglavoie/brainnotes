@@ -14,6 +14,23 @@ import { expect, manifest } from "./fixture.js";
 // the shipped bundle constructed an EditorView in it.
 export const SURFACE = "[data-source-surface] .cm-content";
 
+// CodeMirror's default `interactionDelay`: for this long after the completion
+// dialog opens or changes, acceptCompletion declines and Enter falls through.
+const COMPLETION_INTERACTION_DELAY_MS = 75;
+
+// expectLiveCompletion waits until a completion dialog will accept Enter with
+// `text` as its first option. Two things make a visible option the wrong signal
+// on a slow machine. While a newer query is pending CodeMirror keeps the previous
+// list on screen but disabled (`cm-tooltip-autocomplete-disabled`), and the
+// editor declines Enter there by design. And a list that has just arrived ignores
+// Enter for the interaction delay, so a key pressed the moment it renders becomes
+// a newline inside the link.
+export async function expectLiveCompletion(page, text) {
+  const live = page.locator(".cm-tooltip-autocomplete:not(.cm-tooltip-autocomplete-disabled) li");
+  await expect(live.first()).toContainText(text);
+  await page.waitForTimeout(COMPLETION_INTERACTION_DELAY_MS + 25);
+}
+
 // A phrase no other file on this machine contains, so finding it on disk
 // identifies this run's write rather than any pre-existing text.
 export function phraseFor(what) {
