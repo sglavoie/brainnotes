@@ -258,3 +258,30 @@ func TestSearch_Context_Zero(t *testing.T) {
 		}
 	}
 }
+
+// A CRLF note matches `$` at the visible line end, and no \r reaches the
+// context or JSON output.
+func TestSearch_CRLFNote(t *testing.T) {
+	isolateBnEnv(t)
+	root := buildVaultFromFiles(t, map[string]string{
+		"Notes/Win.md": "---\r\ntitle: Win\r\n---\r\nends with energy\r\nother\r\n",
+	})
+	stdout, err := runSearch(t, root, "--regex", "-C", "0", "energy$")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if strings.Contains(stdout, "\r") {
+		t.Fatalf("context output carries \\r: %q", stdout)
+	}
+	want := []string{"Notes/Win.md:4:ends with energy"}
+	if got := contextLines(stdout); !slices.Equal(got, want) {
+		t.Fatalf("CRLF context output:\n got=%v\nwant=%v", got, want)
+	}
+	jsonOut, err := runSearch(t, root, "--json", "energy")
+	if err != nil {
+		t.Fatalf("search --json: %v", err)
+	}
+	if strings.Contains(jsonOut, `\r`) {
+		t.Fatalf("JSON output carries \\r: %s", jsonOut)
+	}
+}

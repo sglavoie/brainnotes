@@ -160,6 +160,12 @@ func readBodyLines(path string) (lines []string, bodyStart int, err error) {
 		return nil, 0, err
 	}
 	lines = strings.Split(string(raw), "\n")
+	// A CRLF note would otherwise keep a trailing \r on every line: `$` would
+	// not match at the visible end of the line, and the context, --open and
+	// JSON output would carry the \r.
+	for i, line := range lines {
+		lines[i] = strings.TrimSuffix(line, "\r")
+	}
 	for len(lines) > 0 && lines[len(lines)-1] == "" {
 		lines = lines[:len(lines)-1]
 	}
