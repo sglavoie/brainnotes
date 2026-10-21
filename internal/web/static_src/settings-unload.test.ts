@@ -20,9 +20,9 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-const unload = (): Event => {
+const unload = (target: EventTarget = window): Event => {
   const event = new Event("beforeunload", { cancelable: true });
-  window.dispatchEvent(event);
+  target.dispatchEvent(event);
   return event;
 };
 
@@ -64,13 +64,16 @@ const PAGE_HTML = `
 
 describe("warnBeforeUnload", () => {
   it("arms the prompt only while there are unsaved edits, until removed", () => {
+    // Its own target: a settings page another test initialised keeps its
+    // listener on window, so window would answer for that page too.
+    const view = new EventTarget() as unknown as Window;
     let unsaved = false;
-    const remove = warnBeforeUnload(window, () => unsaved);
-    expect(unload().defaultPrevented).toBe(false);
+    const remove = warnBeforeUnload(view, () => unsaved);
+    expect(unload(view).defaultPrevented).toBe(false);
     unsaved = true;
-    expect(unload().defaultPrevented).toBe(true);
+    expect(unload(view).defaultPrevented).toBe(true);
     remove();
-    expect(unload().defaultPrevented).toBe(false);
+    expect(unload(view).defaultPrevented).toBe(false);
   });
 });
 
