@@ -61,6 +61,18 @@ func confirmTerminal(cmd *cobra.Command, name, question, refusal string) error {
 // can be one; a buffer a test supplies never is, and neither is /dev/null,
 // which a character-device check would accept.
 func isTerminal(r io.Reader) bool {
-	f, ok := r.(*os.File)
+	return fileIsTerminal(r)
+}
+
+// stdoutIsTerminal is isTerminal for an output stream: decoration meant for a
+// person (a header row) is printed only when w is a terminal, so a pipeline
+// reads records and nothing else. A variable so tests can force a terminal.
+var stdoutIsTerminal = func(w io.Writer) bool {
+	return fileIsTerminal(w)
+}
+
+// fileIsTerminal is the one terminal test both streams share.
+func fileIsTerminal(stream any) bool {
+	f, ok := stream.(*os.File)
 	return ok && term.IsTerminal(int(f.Fd()))
 }

@@ -45,6 +45,10 @@ already rewritten is put back, so the vault is left as it was found; only a
 put-back that is itself refused (a note edited meanwhile) leaves rewritten
 links behind, and the error names those notes. Reverse a completed move with
 'bn undo' (entry IDs: 'bn history').`,
+		Example: `  bn move References/Books/Dune.md References --dry-run
+  bn move Dune References/Books        # by bare title
+  bn move Old/Foo.md .                 # back to the vault root
+  bn move Archive                      # pick the note with fzf`,
 		Args:          cobra.RangeArgs(1, 2),
 		SilenceUsage:  true,
 		SilenceErrors: true,

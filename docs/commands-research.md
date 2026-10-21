@@ -42,7 +42,7 @@ selected fzf row instead.
 | Output mode | Flag | Description |
 | --- | --- | --- |
 | paths (default) | — | One absolute path per matching note, sorted. |
-| context | `--context N` / `-C N` | Each match with N lines of surrounding body context (grep-style). |
+| context | `--context N` / `-C N` | Each match with N lines of surrounding body context (grep-style); `-C 0` prints the matching lines alone. |
 | count | `--count` | Match count per note, sorted by count descending then path. |
 | open | `--open` | Open the first matching note at its first matching line, or the selected row with `-i`. |
 | JSON | `--json` | An array of `{path, abs_path, title, count, matches: [{line, text}]}`, in path order. |
@@ -88,7 +88,8 @@ inside fenced, indented, or inline code are not counted.
 
 With `--verbose`, each occurrence is printed on its own line as
 `<path>:<line>\t<snippet>` for body links, or `<path>:fm:<key>\t<value>` for
-frontmatter links. Output is tab-separated so it pipes cleanly into
+frontmatter links. `<line>` is the 1-based file line, frontmatter included, the
+same numbering `bn search --context` and an editor use. Output is tab-separated so it pipes cleanly into
 `awk -F'\t'`. Snippets are trimmed and truncated to 120 characters with an
 `…` ellipsis. `-v` is its short form; it cannot be combined with `-0`.
 

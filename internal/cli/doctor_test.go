@@ -36,9 +36,11 @@ func buildDoctorFixture(t *testing.T) (root, cfgPath string) {
 	return root, cfgPath
 }
 
+// findTaskByTitle matches case-insensitively: a broken-target title keeps the
+// link's own spelling ([[Ghost]]), which TestDoctor_HumanOutput pins exactly.
 func findTaskByTitle(tasks []cockpit.Task, title string) (cockpit.Task, bool) {
 	for _, task := range tasks {
-		if task.Title == title {
+		if strings.EqualFold(task.Title, title) {
 			return task, true
 		}
 	}
@@ -103,7 +105,7 @@ func TestDoctor_HumanOutput(t *testing.T) {
 	}
 
 	for _, want := range []string{
-		"broken_target: Broken target: ghost",
+		"broken_target: Broken target: Ghost", // the link's own spelling
 		"Projects/Alpha.md",
 		"actions: open, relink, create_stub, snooze, mark_done",
 		"active task",

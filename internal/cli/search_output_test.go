@@ -236,3 +236,52 @@ func TestReadBodyLinesAgreesWithFrontmatterParse(t *testing.T) {
 		})
 	}
 }
+
+// `-C 0` is grep's "match lines only": a context run, not the paths mode.
+func TestSearch_Context_Zero(t *testing.T) {
+	isolateBnEnv(t)
+	root := buildVaultFromFiles(t, map[string]string{
+		"Notes/Test.md": "---\ntitle: Test\n---\nenergy one\nquiet\nenergy two\n",
+	})
+	stdout, err := runSearch(t, root, "-C", "0", "energy")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	want := []string{"Notes/Test.md:4:energy one", "--", "Notes/Test.md:6:energy two"}
+	if got := contextLines(stdout); !slices.Equal(got, want) {
+		t.Fatalf("-C 0 output:\n got=%v\nwant=%v", got, want)
+	}
+	for _, combo := range [][]string{{"--count"}, {"--json"}, {"--null"}} {
+		args := append([]string{"-C", "0", "energy"}, combo...)
+		if _, err := runSearch(t, root, args...); err == nil || !strings.Contains(err.Error(), "cannot be combined") {
+			t.Fatalf("search %v: err = %v, want a combination refusal", args, err)
+		}
+	}
+}
+
+// A CRLF note matches `$` at the visible line end, and no \r reaches the
+// context or JSON output.
+func TestSearch_CRLFNote(t *testing.T) {
+	isolateBnEnv(t)
+	root := buildVaultFromFiles(t, map[string]string{
+		"Notes/Win.md": "---\r\ntitle: Win\r\n---\r\nends with energy\r\nother\r\n",
+	})
+	stdout, err := runSearch(t, root, "--regex", "-C", "0", "energy$")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if strings.Contains(stdout, "\r") {
+		t.Fatalf("context output carries \\r: %q", stdout)
+	}
+	want := []string{"Notes/Win.md:4:ends with energy"}
+	if got := contextLines(stdout); !slices.Equal(got, want) {
+		t.Fatalf("CRLF context output:\n got=%v\nwant=%v", got, want)
+	}
+	jsonOut, err := runSearch(t, root, "--json", "energy")
+	if err != nil {
+		t.Fatalf("search --json: %v", err)
+	}
+	if strings.Contains(jsonOut, `\r`) {
+		t.Fatalf("JSON output carries \\r: %s", jsonOut)
+	}
+}

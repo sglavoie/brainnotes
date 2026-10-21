@@ -2,6 +2,7 @@ package cli
 
 import (
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -22,9 +23,21 @@ func TestHistoryListsNewestFirst(t *testing.T) {
 	makeJournalEntry(t, root, notePath, "entry-old", time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC), "bn set note.md status=old", "old\n")
 	makeJournalEntry(t, root, notePath, "entry-new", time.Date(2026, 1, 2, 3, 4, 6, 0, time.UTC), "bn set note.md status=new", "new\n")
 
+	// A terminal gets the header row; a pipe (the test buffer) does not.
+	prev := stdoutIsTerminal
+	stdoutIsTerminal = func(io.Writer) bool { return true }
 	out, err := runCLI(t, "", "history")
+	stdoutIsTerminal = prev
 	if err != nil {
 		t.Fatalf("history: %v\n%s", err, out)
+	}
+
+	piped, err := runCLI(t, "", "history")
+	if err != nil {
+		t.Fatalf("history (piped): %v\n%s", err, piped)
+	}
+	if got := nonEmptyLines(piped); len(got) != 2 || got[0] != nonEmptyLines(out)[1] {
+		t.Fatalf("piped history must be entries only, got:\n%s", piped)
 	}
 
 	lines := nonEmptyLines(out)

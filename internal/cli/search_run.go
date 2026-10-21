@@ -21,9 +21,12 @@ type searchOptions struct {
 	nullSep       bool
 	interactive   bool
 	contextN      int
-	count         bool
-	openResult    bool
-	asJSON        bool
+	// contextSet records that --context was given at all, so `-C 0` (match
+	// lines only, grep-style) is a context run rather than the paths mode.
+	contextSet bool
+	count      bool
+	openResult bool
+	asJSON     bool
 	// limit caps how many matching notes are reported; 0 is no cap.
 	limit int
 	ff    *findFlags
@@ -67,7 +70,7 @@ func (o searchOptions) validateJSONCombos() error {
 		return errors.New("search: --json cannot be combined with --null")
 	case o.count:
 		return errors.New("search: --json cannot be combined with --count")
-	case o.contextN > 0:
+	case o.contextMode():
 		return errors.New("search: --json cannot be combined with --context")
 	}
 	return nil
@@ -88,13 +91,19 @@ func (o searchOptions) validateLimitCombos() error {
 	return nil
 }
 
+// contextMode reports whether --context selects the grep-style context output:
+// the flag was given, even as 0, or a positive count was set directly.
+func (o searchOptions) contextMode() bool {
+	return o.contextSet || o.contextN > 0
+}
+
 // validateContextCombos rejects a negative --context and the four modes
 // --context cannot share output with.
 func (o searchOptions) validateContextCombos() error {
 	if o.contextN < 0 {
 		return rangeValueError("search", "context", "0 or more", o.contextN)
 	}
-	if o.contextN == 0 {
+	if !o.contextMode() {
 		return nil
 	}
 	switch {
@@ -160,6 +169,7 @@ func runSearchCommand(cmd *cobra.Command, args []string, opts searchOptions) err
 		}
 	}
 
+	opts.contextSet = cmd.Flags().Changed("context")
 	if err := validateLimitFlag(cmd, "search", opts.limit); err != nil {
 		return err
 	}
@@ -196,7 +206,7 @@ func runSearchMode(r *searchRun) error {
 	switch {
 	case r.opts.interactive:
 		return runSearchInteractive(r)
-	case r.opts.contextN > 0:
+	case r.opts.contextMode():
 		return runSearchContext(r)
 	case r.opts.count:
 		return runSearchCount(r)

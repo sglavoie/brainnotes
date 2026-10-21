@@ -2,6 +2,7 @@ package template
 
 import (
 	"errors"
+	"io/fs"
 	"strings"
 	"testing"
 
@@ -99,6 +100,16 @@ func TestFindMissingTemplateDir(t *testing.T) {
 	}
 	if strings.Contains(err.Error(), "nil pointer") {
 		t.Fatalf("got nil pointer error; should be a clean read error: %v", err)
+	}
+	// The message says what is missing and how to fix it, and stays a
+	// not-exist error for callers that branch on it.
+	for _, want := range []string{"templates folder", "does not exist", "create it", "[templates].dir"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("error %q does not mention %q", err, want)
+		}
+	}
+	if !errors.Is(err, fs.ErrNotExist) {
+		t.Fatalf("error %v must wrap fs.ErrNotExist", err)
 	}
 }
 

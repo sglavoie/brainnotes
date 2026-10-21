@@ -133,20 +133,49 @@ func readTemplatesDir(cfg *config.Config) (string, []os.DirEntry, error) {
 		return "", nil, fmt.Errorf("template: read %q: %w", dir, err)
 	}
 
-	resolved, resolveErr := resolveDirCaseInsensitive(cfg.Vault, rel)
-	if resolveErr != nil {
-		return "", nil, resolveErr
+	return readFoldedTemplatesDir(cfg.Vault, rel, dir, err)
+}
+
+// readFoldedTemplatesDir is readTemplatesDir's fallback once the configured
+// spelling dir does not exist (readErr): it retries under a case-insensitive
+// match of rel, and reports a templates folder missing under any spelling as
+// such.
+func readFoldedTemplatesDir(root, rel, dir string, readErr error) (string, []os.DirEntry, error) {
+	resolved, err := resolveDirCaseInsensitive(root, rel)
+	if err != nil {
+		return "", nil, err
 	}
 	if resolved == dir {
-		return "", nil, fmt.Errorf("template: read %q: %w", dir, err)
+		return "", nil, &templatesDirMissingError{configured: rel, dir: dir, err: readErr}
 	}
 
-	entries, err = os.ReadDir(resolved)
+	entries, err := os.ReadDir(resolved)
+	if os.IsNotExist(err) {
+		return "", nil, &templatesDirMissingError{configured: rel, dir: resolved, err: err}
+	}
 	if err != nil {
 		return "", nil, fmt.Errorf("template: read %q: %w", resolved, err)
 	}
 	return resolved, entries, nil
 }
+
+// templatesDirMissingError says that the configured templates folder does not
+// exist and how to fix it, instead of a bare `read ...: no such file`. It
+// unwraps to the read error, so errors.Is(err, fs.ErrNotExist) still holds.
+type templatesDirMissingError struct {
+	configured string
+	dir        string
+	err        error
+}
+
+// Error leaves the underlying "no such file or directory" out: it would only
+// repeat, less clearly, what the sentence already says.
+func (e *templatesDirMissingError) Error() string {
+	return fmt.Sprintf("template: templates folder %q does not exist ([templates].dir = %q); create it, or set [templates].dir in %s to the folder that holds your templates",
+		e.dir, e.configured, config.FileName)
+}
+
+func (e *templatesDirMissingError) Unwrap() error { return e.err }
 
 func checkTemplatesDirNonDir(root, rel string, fold bool) error {
 	clean := path.Clean(strings.ReplaceAll(filepath.ToSlash(rel), `\`, `/`))

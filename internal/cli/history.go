@@ -19,7 +19,9 @@ func NewHistoryCmd() *cobra.Command {
 		Short: "List recent undo journal entries",
 		Long: `History lists journal entries newest-first from the vault-local undo
 journal (<vault>/.bnotes/journal). Output is tab-separated:
-TIMESTAMP<TAB>ID<TAB>COMMAND.
+TIMESTAMP<TAB>ID<TAB>COMMAND, one entry per line. The header row naming those
+columns is printed only when stdout is a terminal, so piped output is entries
+alone.
 
 Use this with the safety workflow: preview with --dry-run when available,
 apply, inspect with 'git diff', then run 'bn undo <id>' to roll back if
@@ -91,8 +93,13 @@ func writeHistoryText(out io.Writer, entries []journal.Entry) error {
 	if len(entries) == 0 {
 		return nil
 	}
-	if _, err := fmt.Fprintln(out, "TIMESTAMP\tID\tCOMMAND"); err != nil {
-		return err
+	// The header is for a person reading a terminal. In a pipeline it would be
+	// the first "record", so `bn history | head -n 10` would show nine entries
+	// and `bn history | cut -f2` would start with the word ID.
+	if stdoutIsTerminal(out) {
+		if _, err := fmt.Fprintln(out, "TIMESTAMP\tID\tCOMMAND"); err != nil {
+			return err
+		}
 	}
 	for _, e := range entries {
 		if _, err := fmt.Fprintf(

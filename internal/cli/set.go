@@ -46,6 +46,10 @@ and the unfinished entry cannot be undone. Use 'git diff' to recover.
 Use --dry-run to preview changes without writing. Each affected file is
 printed with a --- path header and frontmatter[key]: old -> new lines;
 unchanged files are omitted.`,
+		Example: `  bn set References/Books/Dune.md status=Reading rating=7
+  bn set note.md tags+=project --dry-run
+  bn set note.md created=2026-01-01 --value-type date
+  bn find --tag drafts | bn set - status=done`,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		Args:          cobra.MinimumNArgs(1),

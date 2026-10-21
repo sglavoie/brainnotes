@@ -220,38 +220,23 @@ func schemaViolationTasks(notes []loadedNote, cfg *config.Config) []Task {
 	return tasks
 }
 
+// brokenTargetGroup is every unresolved link to one target. The group key is
+// folded so differently cased links share one task, but a task titled
+// "Broken target: project alpha" for [[Project Alpha]] reads as a different
+// note, so display keeps a spelling as written: the lexically smallest one, as
+// duplicateTitleTasks picks, so the title does not depend on walk order. The
+// key stays the task's Detail and so its signature.
+type brokenTargetGroup struct {
+	count    int
+	display  string
+	affected []AffectedNote
+}
+
 func brokenTargetTasks(notes []loadedNote, graph *query.Graph) []Task {
 	if graph == nil {
 		return nil
 	}
-
-	type targetGroup struct {
-		count    int
-		affected []AffectedNote
-	}
-
-	groups := map[string]*targetGroup{}
-	for _, item := range notes {
-		if graph.KeyForNote(item.note) == "" {
-			continue
-		}
-		for _, issue := range query.UnresolvedLinks(item.note, graph) {
-			key := graph.UnresolvedTargetKey(issue.Link.Target)
-			if key == "" {
-				key = strings.ToLower(strings.TrimSpace(issue.Link.Target))
-			}
-			if key == "" {
-				continue
-			}
-			group := groups[key]
-			if group == nil {
-				group = &targetGroup{}
-				groups[key] = group
-			}
-			group.count++
-			group.affected = append(group.affected, affectedForNote(item, brokenLocation(issue.Line, issue.FrontmatterKey)))
-		}
-	}
+	groups := groupBrokenTargets(notes, graph)
 
 	keys := make([]string, 0, len(groups))
 	for key := range groups {
@@ -263,10 +248,14 @@ func brokenTargetTasks(notes []loadedNote, graph *query.Graph) []Task {
 	for _, key := range keys {
 		group := groups[key]
 		sortAffected(group.affected)
+		display := group.display
+		if display == "" {
+			display = key
+		}
 		task := newTask(
 			RuleBrokenTarget,
-			"Broken target: "+key,
-			countSummary(group.count, "unresolved link to "+key, "unresolved links to "+key),
+			"Broken target: "+display,
+			countSummary(group.count, "unresolved link to "+display, "unresolved links to "+display),
 			key,
 			group.affected,
 		)
@@ -274,6 +263,34 @@ func brokenTargetTasks(notes []loadedNote, graph *query.Graph) []Task {
 		tasks = append(tasks, task)
 	}
 	return tasks
+}
+
+// groupBrokenTargets collects the unresolved links of every graph note, keyed
+// by brokenTargetKey (fix_relink.go), the key the relink and stub fixes match.
+func groupBrokenTargets(notes []loadedNote, graph *query.Graph) map[string]*brokenTargetGroup {
+	groups := map[string]*brokenTargetGroup{}
+	for _, item := range notes {
+		if graph.KeyForNote(item.note) == "" {
+			continue
+		}
+		for _, issue := range query.UnresolvedLinks(item.note, graph) {
+			key := brokenTargetKey(graph, issue.Link.Target)
+			if key == "" {
+				continue
+			}
+			group := groups[key]
+			if group == nil {
+				group = &brokenTargetGroup{}
+				groups[key] = group
+			}
+			if spelled := strings.TrimSpace(issue.Link.Target); group.display == "" || spelled < group.display {
+				group.display = spelled
+			}
+			group.count++
+			group.affected = append(group.affected, affectedForNote(item, brokenLocation(issue.Line, issue.FrontmatterKey)))
+		}
+	}
+	return groups
 }
 
 func duplicateTitleTasks(notes []loadedNote, graph *query.Graph) []Task {

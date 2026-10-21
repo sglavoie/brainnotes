@@ -28,6 +28,9 @@ and the unfinished entry cannot be undone; use 'git diff' to recover. A complete
 run is one journal entry, so 'bn undo' reverts the whole run.
 
 Use --dry-run to preview changes without writing.`,
+		Example: `  bn rename-key area areas --dry-run
+  bn rename-key reviewed last_reviewed --tag project
+  bn rename-key kind type Areas/Alpha.md`,
 		Args:          cobra.MinimumNArgs(2),
 		SilenceUsage:  true,
 		SilenceErrors: true,

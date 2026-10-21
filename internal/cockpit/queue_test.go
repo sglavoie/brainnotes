@@ -80,6 +80,30 @@ func affectedRels(affected []AffectedNote) []string {
 	return out
 }
 
+// assertMissingBrokenTarget checks the [[Missing]] task the queue fixture
+// produces. The group key (Detail) is folded; the title keeps the link's
+// spelling.
+func assertMissingBrokenTarget(t *testing.T, got Queue) {
+	t.Helper()
+	broken := findTask(t, got, RuleBrokenTarget, "missing")
+	if broken.Count != 1 || broken.Title != "Broken target: Missing" {
+		t.Fatalf("broken target task = %#v", broken)
+	}
+	if len(broken.Affected) != 1 {
+		t.Fatalf("broken target affected = %#v, want one source", broken.Affected)
+	}
+	source := broken.Affected[0]
+	if source.RelPath != "Work/Source.md" || source.Folder != "Work" {
+		t.Fatalf("broken source metadata = %#v", source)
+	}
+	if source.Location != "line 5" {
+		t.Fatalf("broken source location = %q, want line 5", source.Location)
+	}
+	if source.FileHash == "" {
+		t.Fatalf("broken source file hash should be populated: %#v", source)
+	}
+}
+
 func TestBuildQueueGroupsOrdersAndMetadata(t *testing.T) {
 	v := newTestVault(t, map[string]string{
 		"Work/Source.md":    "---\nstatus: active\ntype: note\n---\n[[Target]] [[Missing]]\n",
@@ -108,23 +132,7 @@ func TestBuildQueueGroupsOrdersAndMetadata(t *testing.T) {
 		t.Fatalf("task order prefix = %#v, want %#v; details=%#v", kinds, wantPrefix, taskDetails(got.Tasks))
 	}
 
-	broken := findTask(t, got, RuleBrokenTarget, "missing")
-	if broken.Count != 1 || broken.Title != "Broken target: missing" {
-		t.Fatalf("broken target task = %#v", broken)
-	}
-	if len(broken.Affected) != 1 {
-		t.Fatalf("broken target affected = %#v, want one source", broken.Affected)
-	}
-	source := broken.Affected[0]
-	if source.RelPath != "Work/Source.md" || source.Folder != "Work" {
-		t.Fatalf("broken source metadata = %#v", source)
-	}
-	if source.Location != "line 5" {
-		t.Fatalf("broken source location = %q, want line 5", source.Location)
-	}
-	if source.FileHash == "" {
-		t.Fatalf("broken source file hash should be populated: %#v", source)
-	}
+	assertMissingBrokenTarget(t, got)
 
 	duplicate := findTask(t, got, RuleDuplicateTitle, "target")
 	if duplicate.Count != 2 {
@@ -383,5 +391,25 @@ func TestBuildQueueDeterministicAndStableSignatures(t *testing.T) {
 		if task.Signature == "" || task.ID != taskIDPrefix+task.Signature {
 			t.Fatalf("task id/signature mismatch: %#v", task)
 		}
+	}
+}
+
+// Differently cased links to one missing note share a task keyed on the folded
+// target, but the task names the target as a link spells it.
+func TestBrokenTargetTaskKeepsTheLinkSpelling(t *testing.T) {
+	v := newTestVault(t, map[string]string{
+		"A.md": "[[project alpha]]\n",
+		"B.md": "[[Project Alpha]]\n",
+	})
+	got, err := BuildQueue(v, &config.Config{})
+	if err != nil {
+		t.Fatalf("BuildQueue: %v", err)
+	}
+	broken := findTask(t, got, RuleBrokenTarget, "project alpha")
+	if broken.Count != 2 {
+		t.Fatalf("broken target count = %d, want both links in one task", broken.Count)
+	}
+	if broken.Title != "Broken target: Project Alpha" || broken.Summary != "2 unresolved links to Project Alpha" {
+		t.Fatalf("broken target title/summary = %q / %q", broken.Title, broken.Summary)
 	}
 }

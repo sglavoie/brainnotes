@@ -67,9 +67,23 @@ func (ff *findFlags) register(cmd *cobra.Command) {
 	f.IntVar(&ff.maxBacklinks, "max-backlinks", -1, "maximum inbound links from other notes")
 	f.IntVar(&ff.minLinks, "min-links", -1, "minimum outgoing links to other notes")
 	f.IntVar(&ff.maxLinks, "max-links", -1, "maximum outgoing links to other notes")
+	hideSentinelDefaults(cmd, "min-backlinks", "max-backlinks", "min-links", "max-links")
 	f.BoolVar(&ff.deadEnd, "dead-end", false, "notes with zero outgoing links (except dead_end: false)")
 	singleStringVarP(f, &ff.query, "query", "q", "filter with a query expression, e.g. 'tag:foo and not folder:Archive'")
 	singleStringVarP(f, &ff.view, "view", "", "filter with a saved view by name")
+}
+
+// hideSentinelDefaults keeps an "unset" sentinel out of --help. The link-count
+// flags default to -1, meaning "no bound", and pflag would print that as
+// "(default -1)", which reads as a real bound. pflag omits a default equal to
+// the type's zero value, so only the help's record of the default changes: the
+// bound variables still start at -1, and nothing reads DefValue back.
+func hideSentinelDefaults(cmd *cobra.Command, names ...string) {
+	for _, name := range names {
+		if flag := cmd.Flags().Lookup(name); flag != nil {
+			flag.DefValue = "0"
+		}
+	}
 }
 
 // needsGraph reports whether the link graph has to be built before the compiled
