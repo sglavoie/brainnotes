@@ -98,39 +98,19 @@ export const wikilinkTargetError = (text: string): string => {
 
 // scalarValueError reports why text cannot be stored as kind, or "" when it
 // can. The server revalidates every write; this only spares a round trip.
-export const scalarValueError = (kind: PropertyScalarKind, text: string): string => {
-  const value = text.trim();
-  switch (kind) {
-    case "string":
-      return value === "" ? "Enter a value." : "";
-    case "wikilink":
-      return wikilinkTargetError(text);
-    case "date":
-      return DATE_PATTERN.test(value) ? "" : "Enter a date as YYYY-MM-DD.";
-    case "datetime":
-      return RFC3339_PATTERN.test(datetimeLocalToRFC3339(value))
-        ? ""
-        : "Enter a date and time.";
-    case "int":
-      return INT_PATTERN.test(value) ? "" : "Enter a whole number.";
-    case "float":
-      return value !== "" && Number.isFinite(Number(value))
-        ? ""
-        : "Enter a number.";
-    case "bool":
-      return value === "true" || value === "false"
-        ? ""
-        : "Choose true or false.";
-  }
+const scalarValueErrors: Record<PropertyScalarKind, (value: string, text: string) => string> = {
+  string: (value) => (value === "" ? "Enter a value." : ""),
+  wikilink: (_value, text) => wikilinkTargetError(text),
+  date: (value) => (DATE_PATTERN.test(value) ? "" : "Enter a date as YYYY-MM-DD."),
+  datetime: (value) =>
+    RFC3339_PATTERN.test(datetimeLocalToRFC3339(value)) ? "" : "Enter a date and time.",
+  int: (value) => (INT_PATTERN.test(value) ? "" : "Enter a whole number."),
+  float: (value) => (value !== "" && Number.isFinite(Number(value)) ? "" : "Enter a number."),
+  bool: (value) => (value === "true" || value === "false" ? "" : "Choose true or false."),
 };
 
-export const emptyTypedValue = (
-  kind: PropertyKind,
-  items: PropertyScalarKind
-): PropertyTypedValue =>
-  kind === "list"
-    ? { kind: "list", text: "", items: [{ kind: items, text: "" }] }
-    : { kind, text: "" };
+export const scalarValueError = (kind: PropertyScalarKind, text: string): string =>
+  scalarValueErrors[kind](text.trim(), text);
 
 export type ScalarControl = {
   element: HTMLElement;

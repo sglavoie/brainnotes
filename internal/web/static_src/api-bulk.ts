@@ -227,9 +227,6 @@ const buildBulkRequestForm = (request: BulkNotesRequest): URLSearchParams => {
   return body;
 };
 
-export const buildBulkNotesForm = (request: BulkNotesRequest): URLSearchParams =>
-  buildBulkRequestForm(request);
-
 export const buildBulkPreviewForm = (request: BulkPreviewRequest): URLSearchParams =>
   buildBulkRequestForm(request);
 

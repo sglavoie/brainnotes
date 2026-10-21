@@ -2,7 +2,6 @@ import type {
   PropertyKind,
   PropertyMutationAction,
   PropertyMutationResult,
-  PropertyRow,
   PropertyScalarKind,
   PropertySummary,
   PropertyTypedValue,
@@ -60,9 +59,6 @@ export const typedValueFrom = (
   }
   return { kind, text: value.text };
 };
-
-export const rowIsEditable = (row: PropertyRow): boolean =>
-  !row.unsupported && row.hash !== "";
 
 export const actionTitle = (action: PropertyMutationAction, property: string): string => {
   switch (action) {

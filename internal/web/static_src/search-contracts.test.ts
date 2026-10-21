@@ -4,7 +4,6 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   buildBulkApplyForm,
-  buildBulkNotesForm,
   buildBulkPreviewForm,
   normalizeBulkFrontmatterChanges,
   normalizeBulkNoteKeys,
@@ -102,7 +101,7 @@ describe("bulk request bodies", () => {
       value: "done",
       previewID: " preview-123 ",
     });
-    const compatBody = buildBulkNotesForm({
+    const compatBody = buildBulkPreviewForm({
       action: "frontmatter_unset",
       keys: [" source ", "Source"],
       token: "csrf-token",

@@ -97,9 +97,6 @@ export const hideDraftOffer = (elements: DraftPanelElements): void => {
   setText(elements.recoverySource, "");
 };
 
-export const draftOfferKind = (elements: DraftPanelElements): string =>
-  elements.recovery?.getAttribute("data-source-recovery-kind") ?? "";
-
 const setText = (element: HTMLElement | null, value: string): void => {
   if (element) {
     element.textContent = value;

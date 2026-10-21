@@ -40,9 +40,6 @@ export const isAggregateNodeID = (id: string): boolean => id.startsWith(aggregat
 export const aggregateNodeIDForFolder = (folder: string): string =>
   `${aggregateNodeIDPrefix}${folder}`;
 
-export const folderForAggregateNodeID = (id: string): string =>
-  isAggregateNodeID(id) ? id.slice(aggregateNodeIDPrefix.length) : "";
-
 export const defaultGraphDisplayOptions = (): GraphDisplayOptions => ({
   isolateID: "",
   minDegree: 0,
