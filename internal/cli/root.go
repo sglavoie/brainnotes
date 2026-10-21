@@ -81,7 +81,9 @@ func executeRoot(ctx context.Context, root *cobra.Command) error {
 // A *queryexpr.ParseError is the one error worth more than a line: it carries
 // the query text and the span that failed, so it renders as a caret-annotated
 // block (plus any did-you-mean candidates) instead of the one-line Error form
-// that would drop the position the user needs.
+// that would drop the position the user needs. Every other error is printed
+// through describeError, which restores the cause a *noteops.Error keeps out
+// of its public message.
 func RenderError(w io.Writer, err error) {
 	if err == nil {
 		return
@@ -95,7 +97,7 @@ func RenderError(w io.Writer, err error) {
 		_, _ = fmt.Fprintln(w, "bn: "+prefix+parseErr.Render())
 		return
 	}
-	_, _ = fmt.Fprintln(w, "bn:", err)
+	_, _ = fmt.Fprintln(w, "bn:", describeError(err))
 }
 
 // NewRootCmd builds the root cobra command with persistent flags wired up.
