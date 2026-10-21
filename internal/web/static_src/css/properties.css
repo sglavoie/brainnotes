@@ -185,7 +185,7 @@
 }
 
 .properties-list {
-  grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(18rem, 100%), 1fr));
   align-items: stretch;
   gap: 0.7rem;
   margin-top: 0.9rem;
