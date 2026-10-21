@@ -25,8 +25,10 @@ shorthand: `-v` is the `--verbose` of `links`, `backlinks`, `values` and
 bn init [path]
 ```
 
-Writes a commented starter `brainnotes.toml` into `path` (the current directory
-when omitted). The directory must already exist. `bn init` refuses to overwrite
+Writes a commented starter `brainnotes.toml` into `path`. When `path` is
+omitted it is the `--vault` directory if that flag is given, otherwise the
+current directory; a `path` and a `--vault` that name different directories are
+refused. The directory must already exist. `bn init` refuses to overwrite
 an existing `brainnotes.toml` and refuses to write through a symlink, so it is
 safe to run against a vault you are not sure about.
 

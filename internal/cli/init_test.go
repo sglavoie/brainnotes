@@ -146,3 +146,45 @@ func TestInit_MakesTheDirectoryResolvableAsAVault(t *testing.T) {
 		t.Errorf("expected the new config path in output, got:\n%s", out)
 	}
 }
+
+// init skips config loading, so --vault has to be read by init itself or the
+// starter config lands in the current directory instead of the named vault.
+func TestInit_UsesVaultFlagWhenNoPathGiven(t *testing.T) {
+	resetConfigEnv(t)
+	root := t.TempDir()
+	cwd := t.TempDir()
+	t.Chdir(cwd)
+
+	if _, _, err := runConfig(t, "--vault", root, "init"); err != nil {
+		t.Fatalf("execute: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(root, config.FileName)); err != nil {
+		t.Fatalf("expected %s in the --vault directory: %v", config.FileName, err)
+	}
+	if _, err := os.Stat(filepath.Join(cwd, config.FileName)); !os.IsNotExist(err) {
+		t.Fatalf("init wrote into the current directory: stat err = %v", err)
+	}
+}
+
+func TestInit_RefusesDisagreeingPathAndVaultFlag(t *testing.T) {
+	resetConfigEnv(t)
+	flagRoot := t.TempDir()
+	argRoot := t.TempDir()
+
+	_, _, err := runConfig(t, "--vault", flagRoot, "init", argRoot)
+	if err == nil || !strings.Contains(err.Error(), "name different directories") {
+		t.Fatalf("err = %v, want a refusal naming both directories", err)
+	}
+	for _, dir := range []string{flagRoot, argRoot} {
+		if _, err := os.Stat(filepath.Join(dir, config.FileName)); !os.IsNotExist(err) {
+			t.Fatalf("%s: refusal must write nothing, stat err = %v", dir, err)
+		}
+	}
+
+	if _, _, err := runConfig(t, "--vault", argRoot+string(filepath.Separator), "init", argRoot); err != nil {
+		t.Fatalf("agreeing path and --vault must succeed: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(argRoot, config.FileName)); err != nil {
+		t.Fatalf("expected %s in the agreed directory: %v", config.FileName, err)
+	}
+}
