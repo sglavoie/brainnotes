@@ -92,3 +92,16 @@ it("hides Retry when the query is changed or cleared and offers it for network e
   expect(retry.hidden).toBe(true);
   expect(feedback.hidden).toBe(true);
 });
+
+it("shows a rejected query's reason instead of offering Retry", async () => {
+  const { fetcher, retry, feedback } = setup();
+  await vi.runAllTimersAsync();
+  fetcher.mockResolvedValueOnce(new Response(JSON.stringify({ error: { message: "unknown field: foo" } }), { status: 400 }));
+  const input = document.querySelector("input")!;
+  input.value = "foo:bar";
+  input.dispatchEvent(new Event("input"));
+  await vi.runAllTimersAsync();
+  expect(feedback.hidden).toBe(false);
+  expect(feedback.textContent).toContain("unknown field: foo. Edit the query to continue.");
+  expect(retry.hidden).toBe(true);
+});

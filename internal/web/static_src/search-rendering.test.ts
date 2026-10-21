@@ -425,3 +425,18 @@ it("clears a move preview when the form changes and requires a fresh preview", a
   expect(String(previewCalls[1]![1]!.body)).toContain("folder=Later");
   expect(moveButton!.textContent).toBe("Apply Move");
 });
+
+it("shows the server's reason for a rejected Library query and hides Retry search", async () => {
+  setURL("/library?q=foo:bar");
+  renderOverviewBulkFixture();
+  document.querySelector("section")!.insertAdjacentHTML("beforeend", "<button data-overview-search-retry hidden>Retry search</button>");
+  const fetcher = vi.fn(async () => new Response(
+    JSON.stringify({ error: { message: "unknown field: foo" } }),
+    { status: 400, headers: { "Content-Type": "application/json" } }
+  ));
+  initOverviewSearchResults({ fetch: fetcher });
+  const status = document.querySelector<HTMLElement>("[data-overview-search-status]")!;
+  await waitForExpect(() => expect(status.textContent).toBe("unknown field: foo. Edit the query to continue."));
+  expect(status.classList.contains("is-error")).toBe(true);
+  expect(document.querySelector<HTMLButtonElement>("[data-overview-search-retry]")!.hidden).toBe(true);
+});

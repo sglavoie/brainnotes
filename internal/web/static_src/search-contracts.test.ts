@@ -16,6 +16,12 @@ import {
   searchResultPath,
 } from "./api";
 import { buildSearchAPIURL } from "./filters";
+import {
+  errorEnvelopeMessage,
+  queryRejectionMessage,
+  readQueryRejection,
+  responseFailure,
+} from "./request-outcome";
 import { setURL } from "./search-test-helpers";
 
 afterEach(() => {
@@ -338,5 +344,30 @@ describe("bulk apply contracts", () => {
     expect(normalizeManagementErrorMessage(503, { code: "preview_stale" })).toBe(
       "Request failed (503)."
     );
+  });
+});
+
+describe("query rejection contract", () => {
+  // writeFilterError (internal/web/filter_expr.go) answers a rejected search or
+  // graph query with a 400 whose reason is nested under error.message.
+  const rejection = { error: { message: "unknown field: foo", param: "q", query: "foo:bar" } };
+
+  it("reads both the flat and the nested refusal envelope", () => {
+    expect(errorEnvelopeMessage({ code: "invalid", message: "flat reason" })).toBe("flat reason");
+    expect(errorEnvelopeMessage(rejection)).toBe("unknown field: foo");
+    expect(errorEnvelopeMessage({ error: "plain" })).toBe("");
+    expect(responseFailure({ ok: false, status: 400 }, rejection, "read")).toEqual({
+      ok: false,
+      message: "unknown field: foo",
+    });
+  });
+
+  it("treats only a 400 carrying a reason as a query rejection", async () => {
+    const json = (status: number, body: unknown) => new Response(JSON.stringify(body), { status });
+    await expect(readQueryRejection(json(400, rejection))).resolves.toBe("unknown field: foo");
+    await expect(readQueryRejection(json(500, rejection))).resolves.toBe("");
+    await expect(readQueryRejection(new Response("<html>", { status: 400 }))).resolves.toBe("");
+    expect(queryRejectionMessage("unknown field: foo")).toBe("unknown field: foo. Edit the query to continue.");
+    expect(queryRejectionMessage("Bad sort.")).toBe("Bad sort. Edit the query to continue.");
   });
 });

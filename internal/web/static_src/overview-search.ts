@@ -1,4 +1,9 @@
-import { loadFailureMessage } from "./request-outcome";
+import {
+  loadFailureMessage,
+  QueryRejectedError,
+  queryRejectionMessage,
+  throwUnlessOK,
+} from "./request-outcome";
 import {
   managementMutationEventName,
   normalizeBulkNoteKeys,
@@ -51,7 +56,7 @@ class OverviewSearch extends OverviewSearchBulk {
   private requestToken = 0;
   private loadingToken = 0;
   private activeRequest: AbortController | null = null;
-  private settledStatus: { message: string; kind: StatusKind } | null = null;
+  private settledStatus: { message: string; kind: StatusKind; retryable: boolean } | null = null;
   private readonly selectionStore: LibrarySelectionStore;
   private readonly resultOrder = new Map<string, number>();
 
@@ -86,22 +91,31 @@ class OverviewSearch extends OverviewSearchBulk {
     this.pagination.busy(false);
     this.updateBulkControls();
     if (this.els.statusEl.classList.contains("is-loading") && this.settledStatus) {
-      this.setStatus(this.settledStatus.message, this.settledStatus.kind);
+      const { message, kind, retryable } = this.settledStatus;
+      this.setStatus(message, kind, retryable);
     }
   };
 
-  private setStatus = (message: string, kind: StatusKind = ""): void => {
-    if (kind !== "is-loading") this.settledStatus = { message, kind };
+  // A rejected query is not retryable: the same request would be refused again,
+  // so the status says to edit the query and Retry search stays hidden.
+  private setStatus = (message: string, kind: StatusKind = "", retryable = true): void => {
+    if (kind !== "is-loading") this.settledStatus = { message, kind, retryable };
     const emptyHelp = this.els.root.querySelector<HTMLElement>("[data-overview-empty-help]");
     if (emptyHelp) emptyHelp.hidden = true;
     setStatusText(this.els.statusEl, message, kind, ["is-loading", "is-empty", "is-error"]);
+    this.syncRetry(kind, retryable);
+  };
+
+  // Retry search shows after a retryable failure and stays up, disabled, while
+  // that retry loads.
+  private syncRetry = (kind: StatusKind, retryable: boolean): void => {
     const retry = queryElement(this.els.root, "[data-overview-search-retry]", HTMLButtonElement);
-    if (retry) {
-      retry.disabled = kind === "is-loading";
-      retry.hidden = kind !== "is-error" && !(kind === "is-loading" && !retry.hidden);
-      if (retry.hidden && document.activeElement === retry) {
-        this.els.input?.focus();
-      }
+    if (!retry) return;
+    retry.disabled = kind === "is-loading";
+    const offered = kind === "is-error" || (kind === "is-loading" && !retry.hidden);
+    retry.hidden = !retryable || !offered;
+    if (retry.hidden && document.activeElement === retry) {
+      this.els.input?.focus();
     }
   };
 
@@ -153,11 +167,22 @@ class OverviewSearch extends OverviewSearchBulk {
     for (const [key, target] of ordered) this.selectedKeys.set(key, target);
   };
 
-  private clearResults = (message: string, kind: StatusKind): void => {
+  private clearResults = (message: string, kind: StatusKind, retryable = true): void => {
     this.els.listEl.textContent = "";
     this.els.listEl.hidden = true;
     this.clearPreviewState({ clearStatus: true });
-    this.setStatus(message, kind);
+    this.setStatus(message, kind, retryable);
+  };
+
+  private showSearchFailure = (error: unknown): void => {
+    window.clearTimeout(this.loadingToken);
+    delete this.els.listEl.dataset.updating;
+    this.pagination.failed();
+    if (error instanceof QueryRejectedError) {
+      this.clearResults(queryRejectionMessage(error.message), "is-error", false);
+      return;
+    }
+    this.clearResults(loadFailureMessage("matching notes", "Retry search"), "is-error");
   };
 
   private renderResults = (payload: unknown, query: string, counts: SearchCounts | null): void => {
@@ -225,13 +250,10 @@ class OverviewSearch extends OverviewSearchBulk {
     ), 350);
     this.debounceToken = window.setTimeout(async () => {
       try {
-        const resp = await this.fetcher(request.url, {
+        const resp = await throwUnlessOK(await this.fetcher(request.url, {
           headers: { Accept: "application/json" },
           signal: controller.signal,
-        });
-        if (!resp.ok) {
-          throw new Error("search request failed");
-        }
+        }), "search request failed");
         const payload = await resp.json();
         if (localToken !== this.requestToken) return;
         const restored = await this.selectionStore.restore(this.fetcher, controller.signal);
@@ -245,13 +267,8 @@ class OverviewSearch extends OverviewSearchBulk {
         }
         this.selectionStore.restored();
         this.renderResults(payload, query, readSearchCounts(resp));
-      } catch {
-        if (localToken === this.requestToken) {
-          window.clearTimeout(this.loadingToken);
-          delete this.els.listEl.dataset.updating;
-          this.pagination.failed();
-          this.clearResults(loadFailureMessage("matching notes", "Retry search"), "is-error");
-        }
+      } catch (error) {
+        if (localToken === this.requestToken) this.showSearchFailure(error);
       } finally {
         if (localToken === this.requestToken) {
           window.clearTimeout(this.loadingToken);
