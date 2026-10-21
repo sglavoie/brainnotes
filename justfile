@@ -155,12 +155,13 @@ vault-sandbox *ARGS:
 test-e2e:
     npm run test:e2e
 
-# The README recordings. Both drive a throwaway copy of `scripts/demo/vault`
+# The README animations. Both drive a throwaway copy of `scripts/demo/vault`
 # under the system temp directory: Playwright tours `bn serve` (started through
-# `scripts/vault_sandbox.py`) and VHS replays `scripts/demo/cli.tape`. Needs
-# ffmpeg and vhs on PATH, and Chromium from `npm run test:e2e:install`.
+# `scripts/vault_sandbox.py`) and screenshots each step, and the terminal steps
+# run for real and render through `scripts/demo/render_terminal_svg.py`. Needs
+# uv and jq on PATH, and Chromium from `npm run test:e2e:install`.
 
-# Re-record docs/assets/demo-web.gif and demo-cli.gif (TARGET: all, web or cli)
+# Re-record docs/assets/demo-web.svg and demo-cli.svg (TARGET: all, web or cli)
 demo TARGET="all":
     node scripts/demo/record.mjs {{ TARGET }}
 

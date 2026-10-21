@@ -87,15 +87,20 @@ qualification workflow exercises Chromium, Firefox, and WebKit at both widths.
 
 ## README demos
 
-`just demo` re-records `docs/assets/demo-web.gif` and `docs/assets/demo-cli.gif`
+`just demo` re-records `docs/assets/demo-web.svg` and `docs/assets/demo-cli.svg`
 from the sample vault in `scripts/demo/vault`; `just demo web` or `just demo cli`
-records one. It needs [ffmpeg](https://ffmpeg.org/),
-[VHS](https://github.com/charmbracelet/vhs), and the Chromium from
-`npm run test:e2e:install`. The web tour is `scripts/demo/record.mjs` and the
-terminal session is `scripts/demo/cli.tape`. Both run against a throwaway copy of
-the vault under the system temporary directory, never against `$BNOTES_VAULT`.
-Re-record after a visible UI change, look at the result, and commit the GIFs.
-A tour step that cannot find its element fails the run and saves a screenshot.
+records one. Both are animated SVGs: each frame is stacked in one image and CSS
+shows one at a time, so the README plays them with no script and the terminal
+stays crisp text. The browser frames are JPEG screenshots inside a drawn window
+(`scripts/demo/svg_slideshow.mjs`); the terminal frames are real `bn` output
+rendered by `scripts/demo/render_terminal_svg.py`, which needs
+[uv](https://docs.astral.sh/uv/). The terminal steps also use
+[jq](https://jqlang.org/), and the tour needs the Chromium from
+`npm run test:e2e:install`. The tour and the terminal steps live in
+`scripts/demo/record.mjs` and run against a throwaway copy of the vault under
+the system temporary directory, never against `$BNOTES_VAULT`. Re-record after
+a visible UI change, look at the result, and commit the SVGs. A tour step that
+cannot find its element fails the run and saves a screenshot.
 
 ## Before submitting a change
 

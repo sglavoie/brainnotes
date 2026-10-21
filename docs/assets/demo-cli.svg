@@ -1,0 +1,2635 @@
+<svg class="rich-terminal" viewBox="0 0 1190 391.59999999999997" xmlns="http://www.w3.org/2000/svg">
+    <!-- Generated with Rich https://www.textualize.io -->
+    <style>
+
+    
+    
+
+    .bn-matrix {
+        font-family: Fira Code, monospace;
+        font-size: 20px;
+        line-height: 24.4px;
+        font-variant-east-asian: full-width;
+    }
+
+    .bn-title {
+        font-size: 18px;
+        font-weight: bold;
+        font-family: arial;
+    }
+
+    .bn-r1 { fill: #7dcfff;font-weight: bold }
+.bn-r2 { fill: #c0caf5 }
+.bn-r3 { fill: #7d84a2 }
+.bn-r4 { fill: #1a1b26 }
+    .bn-frame { visibility: hidden; animation: 24720ms step-end infinite; }
+.bn-caption { font: bold 16px ui-monospace, Menlo, monospace; fill: #7aa2f7; }
+.bn-f0 { animation-name: bn-k0; } @keyframes bn-k0 { 0% { visibility: hidden; } 0.000% { visibility: visible; } 2.427% { visibility: hidden; } }
+.bn-f1 { animation-name: bn-k1; } @keyframes bn-k1 { 0% { visibility: hidden; } 2.427% { visibility: visible; } 2.994% { visibility: hidden; } }
+.bn-f2 { animation-name: bn-k2; } @keyframes bn-k2 { 0% { visibility: hidden; } 2.994% { visibility: visible; } 3.560% { visibility: hidden; } }
+.bn-f3 { animation-name: bn-k3; } @keyframes bn-k3 { 0% { visibility: hidden; } 3.560% { visibility: visible; } 4.126% { visibility: hidden; } }
+.bn-f4 { animation-name: bn-k4; } @keyframes bn-k4 { 0% { visibility: hidden; } 4.126% { visibility: visible; } 6.149% { visibility: hidden; } }
+.bn-f5 { animation-name: bn-k5; } @keyframes bn-k5 { 0% { visibility: hidden; } 6.149% { visibility: visible; } 16.667% { visibility: hidden; } }
+.bn-f6 { animation-name: bn-k6; } @keyframes bn-k6 { 0% { visibility: hidden; } 16.667% { visibility: visible; } 19.094% { visibility: hidden; } }
+.bn-f7 { animation-name: bn-k7; } @keyframes bn-k7 { 0% { visibility: hidden; } 19.094% { visibility: visible; } 19.660% { visibility: hidden; } }
+.bn-f8 { animation-name: bn-k8; } @keyframes bn-k8 { 0% { visibility: hidden; } 19.660% { visibility: visible; } 20.227% { visibility: hidden; } }
+.bn-f9 { animation-name: bn-k9; } @keyframes bn-k9 { 0% { visibility: hidden; } 20.227% { visibility: visible; } 20.793% { visibility: hidden; } }
+.bn-f10 { animation-name: bn-k10; } @keyframes bn-k10 { 0% { visibility: hidden; } 20.793% { visibility: visible; } 22.816% { visibility: hidden; } }
+.bn-f11 { animation-name: bn-k11; } @keyframes bn-k11 { 0% { visibility: hidden; } 22.816% { visibility: visible; } 33.333% { visibility: hidden; } }
+.bn-f12 { animation-name: bn-k12; } @keyframes bn-k12 { 0% { visibility: hidden; } 33.333% { visibility: visible; } 35.761% { visibility: hidden; } }
+.bn-f13 { animation-name: bn-k13; } @keyframes bn-k13 { 0% { visibility: hidden; } 35.761% { visibility: visible; } 36.327% { visibility: hidden; } }
+.bn-f14 { animation-name: bn-k14; } @keyframes bn-k14 { 0% { visibility: hidden; } 36.327% { visibility: visible; } 36.893% { visibility: hidden; } }
+.bn-f15 { animation-name: bn-k15; } @keyframes bn-k15 { 0% { visibility: hidden; } 36.893% { visibility: visible; } 37.460% { visibility: hidden; } }
+.bn-f16 { animation-name: bn-k16; } @keyframes bn-k16 { 0% { visibility: hidden; } 37.460% { visibility: visible; } 39.482% { visibility: hidden; } }
+.bn-f17 { animation-name: bn-k17; } @keyframes bn-k17 { 0% { visibility: hidden; } 39.482% { visibility: visible; } 50.000% { visibility: hidden; } }
+.bn-f18 { animation-name: bn-k18; } @keyframes bn-k18 { 0% { visibility: hidden; } 50.000% { visibility: visible; } 52.427% { visibility: hidden; } }
+.bn-f19 { animation-name: bn-k19; } @keyframes bn-k19 { 0% { visibility: hidden; } 52.427% { visibility: visible; } 52.994% { visibility: hidden; } }
+.bn-f20 { animation-name: bn-k20; } @keyframes bn-k20 { 0% { visibility: hidden; } 52.994% { visibility: visible; } 53.560% { visibility: hidden; } }
+.bn-f21 { animation-name: bn-k21; } @keyframes bn-k21 { 0% { visibility: hidden; } 53.560% { visibility: visible; } 54.126% { visibility: hidden; } }
+.bn-f22 { animation-name: bn-k22; } @keyframes bn-k22 { 0% { visibility: hidden; } 54.126% { visibility: visible; } 56.149% { visibility: hidden; } }
+.bn-f23 { animation-name: bn-k23; } @keyframes bn-k23 { 0% { visibility: hidden; } 56.149% { visibility: visible; } 66.667% { visibility: hidden; } }
+.bn-f24 { animation-name: bn-k24; } @keyframes bn-k24 { 0% { visibility: hidden; } 66.667% { visibility: visible; } 69.094% { visibility: hidden; } }
+.bn-f25 { animation-name: bn-k25; } @keyframes bn-k25 { 0% { visibility: hidden; } 69.094% { visibility: visible; } 69.660% { visibility: hidden; } }
+.bn-f26 { animation-name: bn-k26; } @keyframes bn-k26 { 0% { visibility: hidden; } 69.660% { visibility: visible; } 70.227% { visibility: hidden; } }
+.bn-f27 { animation-name: bn-k27; } @keyframes bn-k27 { 0% { visibility: hidden; } 70.227% { visibility: visible; } 70.793% { visibility: hidden; } }
+.bn-f28 { animation-name: bn-k28; } @keyframes bn-k28 { 0% { visibility: hidden; } 70.793% { visibility: visible; } 72.816% { visibility: hidden; } }
+.bn-f29 { animation-name: bn-k29; } @keyframes bn-k29 { 0% { visibility: hidden; } 72.816% { visibility: visible; } 83.333% { visibility: hidden; } }
+.bn-f30 { animation-name: bn-k30; } @keyframes bn-k30 { 0% { visibility: hidden; } 83.333% { visibility: visible; } 85.761% { visibility: hidden; } }
+.bn-f31 { animation-name: bn-k31; } @keyframes bn-k31 { 0% { visibility: hidden; } 85.761% { visibility: visible; } 86.327% { visibility: hidden; } }
+.bn-f32 { animation-name: bn-k32; } @keyframes bn-k32 { 0% { visibility: hidden; } 86.327% { visibility: visible; } 86.893% { visibility: hidden; } }
+.bn-f33 { animation-name: bn-k33; } @keyframes bn-k33 { 0% { visibility: hidden; } 86.893% { visibility: visible; } 87.460% { visibility: hidden; } }
+.bn-f34 { animation-name: bn-k34; } @keyframes bn-k34 { 0% { visibility: hidden; } 87.460% { visibility: visible; } 89.482% { visibility: hidden; } }
+.bn-f35 { animation-name: bn-k35; } @keyframes bn-k35 { 0% { visibility: hidden; } 89.482% { visibility: visible; } 100.000% { visibility: visible; } }
+@media (prefers-reduced-motion: reduce) { .bn-frame { animation: none; } .bn-f35 { visibility: visible; } }
+    </style>
+
+    <defs>
+    <clipPath id="bn-clip-terminal">
+      <rect x="0" y="0" width="1170.1999999999998" height="340.59999999999997" />
+    </clipPath>
+    <clipPath id="bn-line-0">
+    <rect x="0" y="1.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn-line-1">
+    <rect x="0" y="25.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn-line-2">
+    <rect x="0" y="50.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn-line-3">
+    <rect x="0" y="74.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn-line-4">
+    <rect x="0" y="99.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn-line-5">
+    <rect x="0" y="123.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn-line-6">
+    <rect x="0" y="147.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn-line-7">
+    <rect x="0" y="172.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn-line-8">
+    <rect x="0" y="196.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn-line-9">
+    <rect x="0" y="221.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn-line-10">
+    <rect x="0" y="245.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn-line-11">
+    <rect x="0" y="269.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn-line-12">
+    <rect x="0" y="294.3" width="1171.2" height="24.65"/>
+            </clipPath>
+    </defs>
+
+    <rect fill="#1a1b26" stroke="rgba(255,255,255,0.35)" stroke-width="1" x="1" y="1" width="1188" height="389.6" rx="8"/><text class="bn-title" fill="#c0caf5" text-anchor="middle" x="594" y="27">bn&#160;—&#160;Brain&#160;Notes</text>
+            <g transform="translate(26,22)">
+            <circle cx="0" cy="0" r="7" fill="#ff5f57"/>
+            <circle cx="22" cy="0" r="7" fill="#febc2e"/>
+            <circle cx="44" cy="0" r="7" fill="#28c840"/>
+            </g>
+        
+<style>
+.bn0-matrix { font-family: Fira Code, monospace; font-size: 20px; line-height: 24.4px; font-variant-east-asian: full-width; }
+.bn0-r1 { fill: #7dcfff;font-weight: bold }
+.bn0-r2 { fill: #c0caf5 }
+.bn0-r3 { fill: #7d84a2 }
+.bn0-r4 { fill: #1a1b26 }
+</style>
+<defs><clipPath id="bn0-line-0">
+    <rect x="0" y="1.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn0-line-1">
+    <rect x="0" y="25.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn0-line-2">
+    <rect x="0" y="50.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn0-line-3">
+    <rect x="0" y="74.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn0-line-4">
+    <rect x="0" y="99.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn0-line-5">
+    <rect x="0" y="123.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn0-line-6">
+    <rect x="0" y="147.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn0-line-7">
+    <rect x="0" y="172.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn0-line-8">
+    <rect x="0" y="196.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn0-line-9">
+    <rect x="0" y="221.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn0-line-10">
+    <rect x="0" y="245.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn0-line-11">
+    <rect x="0" y="269.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn0-line-12">
+    <rect x="0" y="294.3" width="1171.2" height="24.65"/>
+            </clipPath></defs>
+<g class="bn-frame bn-f0">
+<text class="bn-caption" text-anchor="end" x="1166" y="27">saved&#160;views&#160;are&#160;named&#160;queries</text>
+    <g transform="translate(9, 41)" clip-path="url(#bn-clip-terminal)">
+    <rect fill="#c0caf5" x="97.6" y="1.5" width="12.2" height="24.65" shape-rendering="crispEdges"/>
+    <g class="bn0-matrix">
+    <text class="bn0-r1" x="0" y="20" textLength="61" clip-path="url(#bn0-line-0)">vault</text><text class="bn0-r3" x="73.2" y="20" textLength="12.2" clip-path="url(#bn0-line-0)">$</text><text class="bn0-r2" x="1171.2" y="20" textLength="12.2" clip-path="url(#bn0-line-0)">
+</text><text class="bn0-r2" x="1171.2" y="44.4" textLength="12.2" clip-path="url(#bn0-line-1)">
+</text><text class="bn0-r2" x="1171.2" y="68.8" textLength="12.2" clip-path="url(#bn0-line-2)">
+</text><text class="bn0-r2" x="1171.2" y="93.2" textLength="12.2" clip-path="url(#bn0-line-3)">
+</text><text class="bn0-r2" x="1171.2" y="117.6" textLength="12.2" clip-path="url(#bn0-line-4)">
+</text><text class="bn0-r2" x="1171.2" y="142" textLength="12.2" clip-path="url(#bn0-line-5)">
+</text><text class="bn0-r2" x="1171.2" y="166.4" textLength="12.2" clip-path="url(#bn0-line-6)">
+</text><text class="bn0-r2" x="1171.2" y="190.8" textLength="12.2" clip-path="url(#bn0-line-7)">
+</text><text class="bn0-r2" x="1171.2" y="215.2" textLength="12.2" clip-path="url(#bn0-line-8)">
+</text><text class="bn0-r2" x="1171.2" y="239.6" textLength="12.2" clip-path="url(#bn0-line-9)">
+</text><text class="bn0-r2" x="1171.2" y="264" textLength="12.2" clip-path="url(#bn0-line-10)">
+</text><text class="bn0-r2" x="1171.2" y="288.4" textLength="12.2" clip-path="url(#bn0-line-11)">
+</text><text class="bn0-r2" x="1171.2" y="312.8" textLength="12.2" clip-path="url(#bn0-line-12)">
+</text><text class="bn0-r2" x="1171.2" y="337.2" textLength="12.2" clip-path="url(#bn0-line-13)">
+</text>
+    </g>
+    </g>
+</g>
+<style>
+.bn1-matrix { font-family: Fira Code, monospace; font-size: 20px; line-height: 24.4px; font-variant-east-asian: full-width; }
+.bn1-r1 { fill: #7dcfff;font-weight: bold }
+.bn1-r2 { fill: #c0caf5 }
+.bn1-r3 { fill: #7d84a2 }
+.bn1-r4 { fill: #c0caf5;font-weight: bold }
+.bn1-r5 { fill: #1a1b26 }
+</style>
+<defs><clipPath id="bn1-line-0">
+    <rect x="0" y="1.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn1-line-1">
+    <rect x="0" y="25.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn1-line-2">
+    <rect x="0" y="50.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn1-line-3">
+    <rect x="0" y="74.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn1-line-4">
+    <rect x="0" y="99.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn1-line-5">
+    <rect x="0" y="123.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn1-line-6">
+    <rect x="0" y="147.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn1-line-7">
+    <rect x="0" y="172.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn1-line-8">
+    <rect x="0" y="196.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn1-line-9">
+    <rect x="0" y="221.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn1-line-10">
+    <rect x="0" y="245.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn1-line-11">
+    <rect x="0" y="269.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn1-line-12">
+    <rect x="0" y="294.3" width="1171.2" height="24.65"/>
+            </clipPath></defs>
+<g class="bn-frame bn-f1">
+<text class="bn-caption" text-anchor="end" x="1166" y="27">saved&#160;views&#160;are&#160;named&#160;queries</text>
+    <g transform="translate(9, 41)" clip-path="url(#bn-clip-terminal)">
+    <rect fill="#c0caf5" x="122" y="1.5" width="12.2" height="24.65" shape-rendering="crispEdges"/>
+    <g class="bn1-matrix">
+    <text class="bn1-r1" x="0" y="20" textLength="61" clip-path="url(#bn1-line-0)">vault</text><text class="bn1-r3" x="73.2" y="20" textLength="12.2" clip-path="url(#bn1-line-0)">$</text><text class="bn1-r4" x="97.6" y="20" textLength="24.4" clip-path="url(#bn1-line-0)">bn</text><text class="bn1-r2" x="1171.2" y="20" textLength="12.2" clip-path="url(#bn1-line-0)">
+</text><text class="bn1-r2" x="1171.2" y="44.4" textLength="12.2" clip-path="url(#bn1-line-1)">
+</text><text class="bn1-r2" x="1171.2" y="68.8" textLength="12.2" clip-path="url(#bn1-line-2)">
+</text><text class="bn1-r2" x="1171.2" y="93.2" textLength="12.2" clip-path="url(#bn1-line-3)">
+</text><text class="bn1-r2" x="1171.2" y="117.6" textLength="12.2" clip-path="url(#bn1-line-4)">
+</text><text class="bn1-r2" x="1171.2" y="142" textLength="12.2" clip-path="url(#bn1-line-5)">
+</text><text class="bn1-r2" x="1171.2" y="166.4" textLength="12.2" clip-path="url(#bn1-line-6)">
+</text><text class="bn1-r2" x="1171.2" y="190.8" textLength="12.2" clip-path="url(#bn1-line-7)">
+</text><text class="bn1-r2" x="1171.2" y="215.2" textLength="12.2" clip-path="url(#bn1-line-8)">
+</text><text class="bn1-r2" x="1171.2" y="239.6" textLength="12.2" clip-path="url(#bn1-line-9)">
+</text><text class="bn1-r2" x="1171.2" y="264" textLength="12.2" clip-path="url(#bn1-line-10)">
+</text><text class="bn1-r2" x="1171.2" y="288.4" textLength="12.2" clip-path="url(#bn1-line-11)">
+</text><text class="bn1-r2" x="1171.2" y="312.8" textLength="12.2" clip-path="url(#bn1-line-12)">
+</text><text class="bn1-r2" x="1171.2" y="337.2" textLength="12.2" clip-path="url(#bn1-line-13)">
+</text>
+    </g>
+    </g>
+</g>
+<style>
+.bn2-matrix { font-family: Fira Code, monospace; font-size: 20px; line-height: 24.4px; font-variant-east-asian: full-width; }
+.bn2-r1 { fill: #7dcfff;font-weight: bold }
+.bn2-r2 { fill: #c0caf5 }
+.bn2-r3 { fill: #7d84a2 }
+.bn2-r4 { fill: #c0caf5;font-weight: bold }
+.bn2-r5 { fill: #1a1b26 }
+</style>
+<defs><clipPath id="bn2-line-0">
+    <rect x="0" y="1.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn2-line-1">
+    <rect x="0" y="25.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn2-line-2">
+    <rect x="0" y="50.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn2-line-3">
+    <rect x="0" y="74.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn2-line-4">
+    <rect x="0" y="99.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn2-line-5">
+    <rect x="0" y="123.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn2-line-6">
+    <rect x="0" y="147.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn2-line-7">
+    <rect x="0" y="172.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn2-line-8">
+    <rect x="0" y="196.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn2-line-9">
+    <rect x="0" y="221.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn2-line-10">
+    <rect x="0" y="245.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn2-line-11">
+    <rect x="0" y="269.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn2-line-12">
+    <rect x="0" y="294.3" width="1171.2" height="24.65"/>
+            </clipPath></defs>
+<g class="bn-frame bn-f2">
+<text class="bn-caption" text-anchor="end" x="1166" y="27">saved&#160;views&#160;are&#160;named&#160;queries</text>
+    <g transform="translate(9, 41)" clip-path="url(#bn-clip-terminal)">
+    <rect fill="#c0caf5" x="158.6" y="1.5" width="12.2" height="24.65" shape-rendering="crispEdges"/>
+    <g class="bn2-matrix">
+    <text class="bn2-r1" x="0" y="20" textLength="61" clip-path="url(#bn2-line-0)">vault</text><text class="bn2-r3" x="73.2" y="20" textLength="12.2" clip-path="url(#bn2-line-0)">$</text><text class="bn2-r4" x="97.6" y="20" textLength="61" clip-path="url(#bn2-line-0)">bn&#160;vi</text><text class="bn2-r2" x="1171.2" y="20" textLength="12.2" clip-path="url(#bn2-line-0)">
+</text><text class="bn2-r2" x="1171.2" y="44.4" textLength="12.2" clip-path="url(#bn2-line-1)">
+</text><text class="bn2-r2" x="1171.2" y="68.8" textLength="12.2" clip-path="url(#bn2-line-2)">
+</text><text class="bn2-r2" x="1171.2" y="93.2" textLength="12.2" clip-path="url(#bn2-line-3)">
+</text><text class="bn2-r2" x="1171.2" y="117.6" textLength="12.2" clip-path="url(#bn2-line-4)">
+</text><text class="bn2-r2" x="1171.2" y="142" textLength="12.2" clip-path="url(#bn2-line-5)">
+</text><text class="bn2-r2" x="1171.2" y="166.4" textLength="12.2" clip-path="url(#bn2-line-6)">
+</text><text class="bn2-r2" x="1171.2" y="190.8" textLength="12.2" clip-path="url(#bn2-line-7)">
+</text><text class="bn2-r2" x="1171.2" y="215.2" textLength="12.2" clip-path="url(#bn2-line-8)">
+</text><text class="bn2-r2" x="1171.2" y="239.6" textLength="12.2" clip-path="url(#bn2-line-9)">
+</text><text class="bn2-r2" x="1171.2" y="264" textLength="12.2" clip-path="url(#bn2-line-10)">
+</text><text class="bn2-r2" x="1171.2" y="288.4" textLength="12.2" clip-path="url(#bn2-line-11)">
+</text><text class="bn2-r2" x="1171.2" y="312.8" textLength="12.2" clip-path="url(#bn2-line-12)">
+</text><text class="bn2-r2" x="1171.2" y="337.2" textLength="12.2" clip-path="url(#bn2-line-13)">
+</text>
+    </g>
+    </g>
+</g>
+<style>
+.bn3-matrix { font-family: Fira Code, monospace; font-size: 20px; line-height: 24.4px; font-variant-east-asian: full-width; }
+.bn3-r1 { fill: #7dcfff;font-weight: bold }
+.bn3-r2 { fill: #c0caf5 }
+.bn3-r3 { fill: #7d84a2 }
+.bn3-r4 { fill: #c0caf5;font-weight: bold }
+.bn3-r5 { fill: #1a1b26 }
+</style>
+<defs><clipPath id="bn3-line-0">
+    <rect x="0" y="1.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn3-line-1">
+    <rect x="0" y="25.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn3-line-2">
+    <rect x="0" y="50.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn3-line-3">
+    <rect x="0" y="74.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn3-line-4">
+    <rect x="0" y="99.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn3-line-5">
+    <rect x="0" y="123.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn3-line-6">
+    <rect x="0" y="147.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn3-line-7">
+    <rect x="0" y="172.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn3-line-8">
+    <rect x="0" y="196.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn3-line-9">
+    <rect x="0" y="221.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn3-line-10">
+    <rect x="0" y="245.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn3-line-11">
+    <rect x="0" y="269.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn3-line-12">
+    <rect x="0" y="294.3" width="1171.2" height="24.65"/>
+            </clipPath></defs>
+<g class="bn-frame bn-f3">
+<text class="bn-caption" text-anchor="end" x="1166" y="27">saved&#160;views&#160;are&#160;named&#160;queries</text>
+    <g transform="translate(9, 41)" clip-path="url(#bn-clip-terminal)">
+    <rect fill="#c0caf5" x="183" y="1.5" width="12.2" height="24.65" shape-rendering="crispEdges"/>
+    <g class="bn3-matrix">
+    <text class="bn3-r1" x="0" y="20" textLength="61" clip-path="url(#bn3-line-0)">vault</text><text class="bn3-r3" x="73.2" y="20" textLength="12.2" clip-path="url(#bn3-line-0)">$</text><text class="bn3-r4" x="97.6" y="20" textLength="85.4" clip-path="url(#bn3-line-0)">bn&#160;view</text><text class="bn3-r2" x="1171.2" y="20" textLength="12.2" clip-path="url(#bn3-line-0)">
+</text><text class="bn3-r2" x="1171.2" y="44.4" textLength="12.2" clip-path="url(#bn3-line-1)">
+</text><text class="bn3-r2" x="1171.2" y="68.8" textLength="12.2" clip-path="url(#bn3-line-2)">
+</text><text class="bn3-r2" x="1171.2" y="93.2" textLength="12.2" clip-path="url(#bn3-line-3)">
+</text><text class="bn3-r2" x="1171.2" y="117.6" textLength="12.2" clip-path="url(#bn3-line-4)">
+</text><text class="bn3-r2" x="1171.2" y="142" textLength="12.2" clip-path="url(#bn3-line-5)">
+</text><text class="bn3-r2" x="1171.2" y="166.4" textLength="12.2" clip-path="url(#bn3-line-6)">
+</text><text class="bn3-r2" x="1171.2" y="190.8" textLength="12.2" clip-path="url(#bn3-line-7)">
+</text><text class="bn3-r2" x="1171.2" y="215.2" textLength="12.2" clip-path="url(#bn3-line-8)">
+</text><text class="bn3-r2" x="1171.2" y="239.6" textLength="12.2" clip-path="url(#bn3-line-9)">
+</text><text class="bn3-r2" x="1171.2" y="264" textLength="12.2" clip-path="url(#bn3-line-10)">
+</text><text class="bn3-r2" x="1171.2" y="288.4" textLength="12.2" clip-path="url(#bn3-line-11)">
+</text><text class="bn3-r2" x="1171.2" y="312.8" textLength="12.2" clip-path="url(#bn3-line-12)">
+</text><text class="bn3-r2" x="1171.2" y="337.2" textLength="12.2" clip-path="url(#bn3-line-13)">
+</text>
+    </g>
+    </g>
+</g>
+<style>
+.bn4-matrix { font-family: Fira Code, monospace; font-size: 20px; line-height: 24.4px; font-variant-east-asian: full-width; }
+.bn4-r1 { fill: #7dcfff;font-weight: bold }
+.bn4-r2 { fill: #c0caf5 }
+.bn4-r3 { fill: #7d84a2 }
+.bn4-r4 { fill: #c0caf5;font-weight: bold }
+.bn4-r5 { fill: #1a1b26 }
+</style>
+<defs><clipPath id="bn4-line-0">
+    <rect x="0" y="1.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn4-line-1">
+    <rect x="0" y="25.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn4-line-2">
+    <rect x="0" y="50.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn4-line-3">
+    <rect x="0" y="74.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn4-line-4">
+    <rect x="0" y="99.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn4-line-5">
+    <rect x="0" y="123.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn4-line-6">
+    <rect x="0" y="147.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn4-line-7">
+    <rect x="0" y="172.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn4-line-8">
+    <rect x="0" y="196.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn4-line-9">
+    <rect x="0" y="221.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn4-line-10">
+    <rect x="0" y="245.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn4-line-11">
+    <rect x="0" y="269.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn4-line-12">
+    <rect x="0" y="294.3" width="1171.2" height="24.65"/>
+            </clipPath></defs>
+<g class="bn-frame bn-f4">
+<text class="bn-caption" text-anchor="end" x="1166" y="27">saved&#160;views&#160;are&#160;named&#160;queries</text>
+    <g transform="translate(9, 41)" clip-path="url(#bn-clip-terminal)">
+    <rect fill="#c0caf5" x="195.2" y="1.5" width="12.2" height="24.65" shape-rendering="crispEdges"/>
+    <g class="bn4-matrix">
+    <text class="bn4-r1" x="0" y="20" textLength="61" clip-path="url(#bn4-line-0)">vault</text><text class="bn4-r3" x="73.2" y="20" textLength="12.2" clip-path="url(#bn4-line-0)">$</text><text class="bn4-r4" x="97.6" y="20" textLength="97.6" clip-path="url(#bn4-line-0)">bn&#160;views</text><text class="bn4-r2" x="1171.2" y="20" textLength="12.2" clip-path="url(#bn4-line-0)">
+</text><text class="bn4-r2" x="1171.2" y="44.4" textLength="12.2" clip-path="url(#bn4-line-1)">
+</text><text class="bn4-r2" x="1171.2" y="68.8" textLength="12.2" clip-path="url(#bn4-line-2)">
+</text><text class="bn4-r2" x="1171.2" y="93.2" textLength="12.2" clip-path="url(#bn4-line-3)">
+</text><text class="bn4-r2" x="1171.2" y="117.6" textLength="12.2" clip-path="url(#bn4-line-4)">
+</text><text class="bn4-r2" x="1171.2" y="142" textLength="12.2" clip-path="url(#bn4-line-5)">
+</text><text class="bn4-r2" x="1171.2" y="166.4" textLength="12.2" clip-path="url(#bn4-line-6)">
+</text><text class="bn4-r2" x="1171.2" y="190.8" textLength="12.2" clip-path="url(#bn4-line-7)">
+</text><text class="bn4-r2" x="1171.2" y="215.2" textLength="12.2" clip-path="url(#bn4-line-8)">
+</text><text class="bn4-r2" x="1171.2" y="239.6" textLength="12.2" clip-path="url(#bn4-line-9)">
+</text><text class="bn4-r2" x="1171.2" y="264" textLength="12.2" clip-path="url(#bn4-line-10)">
+</text><text class="bn4-r2" x="1171.2" y="288.4" textLength="12.2" clip-path="url(#bn4-line-11)">
+</text><text class="bn4-r2" x="1171.2" y="312.8" textLength="12.2" clip-path="url(#bn4-line-12)">
+</text><text class="bn4-r2" x="1171.2" y="337.2" textLength="12.2" clip-path="url(#bn4-line-13)">
+</text>
+    </g>
+    </g>
+</g>
+<style>
+.bn5-matrix { font-family: Fira Code, monospace; font-size: 20px; line-height: 24.4px; font-variant-east-asian: full-width; }
+.bn5-r1 { fill: #7dcfff;font-weight: bold }
+.bn5-r2 { fill: #c0caf5 }
+.bn5-r3 { fill: #7d84a2 }
+.bn5-r4 { fill: #c0caf5;font-weight: bold }
+.bn5-r5 { fill: #1a1b26 }
+</style>
+<defs><clipPath id="bn5-line-0">
+    <rect x="0" y="1.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn5-line-1">
+    <rect x="0" y="25.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn5-line-2">
+    <rect x="0" y="50.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn5-line-3">
+    <rect x="0" y="74.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn5-line-4">
+    <rect x="0" y="99.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn5-line-5">
+    <rect x="0" y="123.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn5-line-6">
+    <rect x="0" y="147.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn5-line-7">
+    <rect x="0" y="172.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn5-line-8">
+    <rect x="0" y="196.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn5-line-9">
+    <rect x="0" y="221.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn5-line-10">
+    <rect x="0" y="245.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn5-line-11">
+    <rect x="0" y="269.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn5-line-12">
+    <rect x="0" y="294.3" width="1171.2" height="24.65"/>
+            </clipPath></defs>
+<g class="bn-frame bn-f5">
+<text class="bn-caption" text-anchor="end" x="1166" y="27">saved&#160;views&#160;are&#160;named&#160;queries</text>
+    <g transform="translate(9, 41)" clip-path="url(#bn-clip-terminal)">
+    <rect fill="#c0caf5" x="97.6" y="99.1" width="12.2" height="24.65" shape-rendering="crispEdges"/>
+    <g class="bn5-matrix">
+    <text class="bn5-r1" x="0" y="20" textLength="61" clip-path="url(#bn5-line-0)">vault</text><text class="bn5-r3" x="73.2" y="20" textLength="12.2" clip-path="url(#bn5-line-0)">$</text><text class="bn5-r4" x="97.6" y="20" textLength="97.6" clip-path="url(#bn5-line-0)">bn&#160;views</text><text class="bn5-r2" x="1171.2" y="20" textLength="12.2" clip-path="url(#bn5-line-0)">
+</text><text class="bn5-r2" x="0" y="44.4" textLength="1049.2" clip-path="url(#bn5-line-1)">NAME&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;DESCRIPTION&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;QUERY&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;STATUS</text><text class="bn5-r2" x="1171.2" y="44.4" textLength="12.2" clip-path="url(#bn5-line-1)">
+</text><text class="bn5-r2" x="0" y="68.8" textLength="1000.4" clip-path="url(#bn5-line-2)">Reading&#160;list&#160;&#160;Books&#160;waiting&#160;on&#160;the&#160;shelf&#160;&#160;&#160;&#160;&#160;category:Books&#160;and&#160;status:to-read&#160;&#160;ok</text><text class="bn5-r2" x="1171.2" y="68.8" textLength="12.2" clip-path="url(#bn5-line-2)">
+</text><text class="bn5-r2" x="0" y="93.2" textLength="1000.4" clip-path="url(#bn5-line-3)">Active&#160;work&#160;&#160;&#160;What&#160;I&#160;am&#160;actually&#160;working&#160;on&#160;&#160;status:wip&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;ok</text><text class="bn5-r2" x="1171.2" y="93.2" textLength="12.2" clip-path="url(#bn5-line-3)">
+</text><text class="bn5-r1" x="0" y="117.6" textLength="61" clip-path="url(#bn5-line-4)">vault</text><text class="bn5-r3" x="73.2" y="117.6" textLength="12.2" clip-path="url(#bn5-line-4)">$</text><text class="bn5-r2" x="1171.2" y="117.6" textLength="12.2" clip-path="url(#bn5-line-4)">
+</text><text class="bn5-r2" x="1171.2" y="142" textLength="12.2" clip-path="url(#bn5-line-5)">
+</text><text class="bn5-r2" x="1171.2" y="166.4" textLength="12.2" clip-path="url(#bn5-line-6)">
+</text><text class="bn5-r2" x="1171.2" y="190.8" textLength="12.2" clip-path="url(#bn5-line-7)">
+</text><text class="bn5-r2" x="1171.2" y="215.2" textLength="12.2" clip-path="url(#bn5-line-8)">
+</text><text class="bn5-r2" x="1171.2" y="239.6" textLength="12.2" clip-path="url(#bn5-line-9)">
+</text><text class="bn5-r2" x="1171.2" y="264" textLength="12.2" clip-path="url(#bn5-line-10)">
+</text><text class="bn5-r2" x="1171.2" y="288.4" textLength="12.2" clip-path="url(#bn5-line-11)">
+</text><text class="bn5-r2" x="1171.2" y="312.8" textLength="12.2" clip-path="url(#bn5-line-12)">
+</text><text class="bn5-r2" x="1171.2" y="337.2" textLength="12.2" clip-path="url(#bn5-line-13)">
+</text>
+    </g>
+    </g>
+</g>
+<style>
+.bn6-matrix { font-family: Fira Code, monospace; font-size: 20px; line-height: 24.4px; font-variant-east-asian: full-width; }
+.bn6-r1 { fill: #7dcfff;font-weight: bold }
+.bn6-r2 { fill: #c0caf5 }
+.bn6-r3 { fill: #7d84a2 }
+.bn6-r4 { fill: #c0caf5;font-weight: bold }
+.bn6-r5 { fill: #1a1b26 }
+</style>
+<defs><clipPath id="bn6-line-0">
+    <rect x="0" y="1.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn6-line-1">
+    <rect x="0" y="25.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn6-line-2">
+    <rect x="0" y="50.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn6-line-3">
+    <rect x="0" y="74.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn6-line-4">
+    <rect x="0" y="99.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn6-line-5">
+    <rect x="0" y="123.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn6-line-6">
+    <rect x="0" y="147.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn6-line-7">
+    <rect x="0" y="172.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn6-line-8">
+    <rect x="0" y="196.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn6-line-9">
+    <rect x="0" y="221.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn6-line-10">
+    <rect x="0" y="245.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn6-line-11">
+    <rect x="0" y="269.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn6-line-12">
+    <rect x="0" y="294.3" width="1171.2" height="24.65"/>
+            </clipPath></defs>
+<g class="bn-frame bn-f6">
+<text class="bn-caption" text-anchor="end" x="1166" y="27">one&#160;query&#160;language</text>
+    <g transform="translate(9, 41)" clip-path="url(#bn-clip-terminal)">
+    <rect fill="#c0caf5" x="97.6" y="99.1" width="12.2" height="24.65" shape-rendering="crispEdges"/>
+    <g class="bn6-matrix">
+    <text class="bn6-r1" x="0" y="20" textLength="61" clip-path="url(#bn6-line-0)">vault</text><text class="bn6-r3" x="73.2" y="20" textLength="12.2" clip-path="url(#bn6-line-0)">$</text><text class="bn6-r4" x="97.6" y="20" textLength="97.6" clip-path="url(#bn6-line-0)">bn&#160;views</text><text class="bn6-r2" x="1171.2" y="20" textLength="12.2" clip-path="url(#bn6-line-0)">
+</text><text class="bn6-r2" x="0" y="44.4" textLength="1049.2" clip-path="url(#bn6-line-1)">NAME&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;DESCRIPTION&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;QUERY&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;STATUS</text><text class="bn6-r2" x="1171.2" y="44.4" textLength="12.2" clip-path="url(#bn6-line-1)">
+</text><text class="bn6-r2" x="0" y="68.8" textLength="1000.4" clip-path="url(#bn6-line-2)">Reading&#160;list&#160;&#160;Books&#160;waiting&#160;on&#160;the&#160;shelf&#160;&#160;&#160;&#160;&#160;category:Books&#160;and&#160;status:to-read&#160;&#160;ok</text><text class="bn6-r2" x="1171.2" y="68.8" textLength="12.2" clip-path="url(#bn6-line-2)">
+</text><text class="bn6-r2" x="0" y="93.2" textLength="1000.4" clip-path="url(#bn6-line-3)">Active&#160;work&#160;&#160;&#160;What&#160;I&#160;am&#160;actually&#160;working&#160;on&#160;&#160;status:wip&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;ok</text><text class="bn6-r2" x="1171.2" y="93.2" textLength="12.2" clip-path="url(#bn6-line-3)">
+</text><text class="bn6-r1" x="0" y="117.6" textLength="61" clip-path="url(#bn6-line-4)">vault</text><text class="bn6-r3" x="73.2" y="117.6" textLength="12.2" clip-path="url(#bn6-line-4)">$</text><text class="bn6-r2" x="1171.2" y="117.6" textLength="12.2" clip-path="url(#bn6-line-4)">
+</text><text class="bn6-r2" x="1171.2" y="142" textLength="12.2" clip-path="url(#bn6-line-5)">
+</text><text class="bn6-r2" x="1171.2" y="166.4" textLength="12.2" clip-path="url(#bn6-line-6)">
+</text><text class="bn6-r2" x="1171.2" y="190.8" textLength="12.2" clip-path="url(#bn6-line-7)">
+</text><text class="bn6-r2" x="1171.2" y="215.2" textLength="12.2" clip-path="url(#bn6-line-8)">
+</text><text class="bn6-r2" x="1171.2" y="239.6" textLength="12.2" clip-path="url(#bn6-line-9)">
+</text><text class="bn6-r2" x="1171.2" y="264" textLength="12.2" clip-path="url(#bn6-line-10)">
+</text><text class="bn6-r2" x="1171.2" y="288.4" textLength="12.2" clip-path="url(#bn6-line-11)">
+</text><text class="bn6-r2" x="1171.2" y="312.8" textLength="12.2" clip-path="url(#bn6-line-12)">
+</text><text class="bn6-r2" x="1171.2" y="337.2" textLength="12.2" clip-path="url(#bn6-line-13)">
+</text>
+    </g>
+    </g>
+</g>
+<style>
+.bn7-matrix { font-family: Fira Code, monospace; font-size: 20px; line-height: 24.4px; font-variant-east-asian: full-width; }
+.bn7-r1 { fill: #7dcfff;font-weight: bold }
+.bn7-r2 { fill: #c0caf5 }
+.bn7-r3 { fill: #7d84a2 }
+.bn7-r4 { fill: #c0caf5;font-weight: bold }
+.bn7-r5 { fill: #1a1b26 }
+</style>
+<defs><clipPath id="bn7-line-0">
+    <rect x="0" y="1.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn7-line-1">
+    <rect x="0" y="25.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn7-line-2">
+    <rect x="0" y="50.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn7-line-3">
+    <rect x="0" y="74.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn7-line-4">
+    <rect x="0" y="99.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn7-line-5">
+    <rect x="0" y="123.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn7-line-6">
+    <rect x="0" y="147.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn7-line-7">
+    <rect x="0" y="172.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn7-line-8">
+    <rect x="0" y="196.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn7-line-9">
+    <rect x="0" y="221.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn7-line-10">
+    <rect x="0" y="245.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn7-line-11">
+    <rect x="0" y="269.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn7-line-12">
+    <rect x="0" y="294.3" width="1171.2" height="24.65"/>
+            </clipPath></defs>
+<g class="bn-frame bn-f7">
+<text class="bn-caption" text-anchor="end" x="1166" y="27">one&#160;query&#160;language</text>
+    <g transform="translate(9, 41)" clip-path="url(#bn-clip-terminal)">
+    <rect fill="#c0caf5" x="366" y="99.1" width="12.2" height="24.65" shape-rendering="crispEdges"/>
+    <g class="bn7-matrix">
+    <text class="bn7-r1" x="0" y="20" textLength="61" clip-path="url(#bn7-line-0)">vault</text><text class="bn7-r3" x="73.2" y="20" textLength="12.2" clip-path="url(#bn7-line-0)">$</text><text class="bn7-r4" x="97.6" y="20" textLength="97.6" clip-path="url(#bn7-line-0)">bn&#160;views</text><text class="bn7-r2" x="1171.2" y="20" textLength="12.2" clip-path="url(#bn7-line-0)">
+</text><text class="bn7-r2" x="0" y="44.4" textLength="1049.2" clip-path="url(#bn7-line-1)">NAME&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;DESCRIPTION&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;QUERY&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;STATUS</text><text class="bn7-r2" x="1171.2" y="44.4" textLength="12.2" clip-path="url(#bn7-line-1)">
+</text><text class="bn7-r2" x="0" y="68.8" textLength="1000.4" clip-path="url(#bn7-line-2)">Reading&#160;list&#160;&#160;Books&#160;waiting&#160;on&#160;the&#160;shelf&#160;&#160;&#160;&#160;&#160;category:Books&#160;and&#160;status:to-read&#160;&#160;ok</text><text class="bn7-r2" x="1171.2" y="68.8" textLength="12.2" clip-path="url(#bn7-line-2)">
+</text><text class="bn7-r2" x="0" y="93.2" textLength="1000.4" clip-path="url(#bn7-line-3)">Active&#160;work&#160;&#160;&#160;What&#160;I&#160;am&#160;actually&#160;working&#160;on&#160;&#160;status:wip&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;ok</text><text class="bn7-r2" x="1171.2" y="93.2" textLength="12.2" clip-path="url(#bn7-line-3)">
+</text><text class="bn7-r1" x="0" y="117.6" textLength="61" clip-path="url(#bn7-line-4)">vault</text><text class="bn7-r3" x="73.2" y="117.6" textLength="12.2" clip-path="url(#bn7-line-4)">$</text><text class="bn7-r4" x="97.6" y="117.6" textLength="268.4" clip-path="url(#bn7-line-4)">bn&#160;find&#160;-q&#160;&#x27;category:B</text><text class="bn7-r2" x="1171.2" y="117.6" textLength="12.2" clip-path="url(#bn7-line-4)">
+</text><text class="bn7-r2" x="1171.2" y="142" textLength="12.2" clip-path="url(#bn7-line-5)">
+</text><text class="bn7-r2" x="1171.2" y="166.4" textLength="12.2" clip-path="url(#bn7-line-6)">
+</text><text class="bn7-r2" x="1171.2" y="190.8" textLength="12.2" clip-path="url(#bn7-line-7)">
+</text><text class="bn7-r2" x="1171.2" y="215.2" textLength="12.2" clip-path="url(#bn7-line-8)">
+</text><text class="bn7-r2" x="1171.2" y="239.6" textLength="12.2" clip-path="url(#bn7-line-9)">
+</text><text class="bn7-r2" x="1171.2" y="264" textLength="12.2" clip-path="url(#bn7-line-10)">
+</text><text class="bn7-r2" x="1171.2" y="288.4" textLength="12.2" clip-path="url(#bn7-line-11)">
+</text><text class="bn7-r2" x="1171.2" y="312.8" textLength="12.2" clip-path="url(#bn7-line-12)">
+</text><text class="bn7-r2" x="1171.2" y="337.2" textLength="12.2" clip-path="url(#bn7-line-13)">
+</text>
+    </g>
+    </g>
+</g>
+<style>
+.bn8-matrix { font-family: Fira Code, monospace; font-size: 20px; line-height: 24.4px; font-variant-east-asian: full-width; }
+.bn8-r1 { fill: #7dcfff;font-weight: bold }
+.bn8-r2 { fill: #c0caf5 }
+.bn8-r3 { fill: #7d84a2 }
+.bn8-r4 { fill: #c0caf5;font-weight: bold }
+.bn8-r5 { fill: #1a1b26 }
+</style>
+<defs><clipPath id="bn8-line-0">
+    <rect x="0" y="1.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn8-line-1">
+    <rect x="0" y="25.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn8-line-2">
+    <rect x="0" y="50.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn8-line-3">
+    <rect x="0" y="74.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn8-line-4">
+    <rect x="0" y="99.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn8-line-5">
+    <rect x="0" y="123.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn8-line-6">
+    <rect x="0" y="147.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn8-line-7">
+    <rect x="0" y="172.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn8-line-8">
+    <rect x="0" y="196.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn8-line-9">
+    <rect x="0" y="221.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn8-line-10">
+    <rect x="0" y="245.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn8-line-11">
+    <rect x="0" y="269.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn8-line-12">
+    <rect x="0" y="294.3" width="1171.2" height="24.65"/>
+            </clipPath></defs>
+<g class="bn-frame bn-f8">
+<text class="bn-caption" text-anchor="end" x="1166" y="27">one&#160;query&#160;language</text>
+    <g transform="translate(9, 41)" clip-path="url(#bn-clip-terminal)">
+    <rect fill="#c0caf5" x="634.4" y="99.1" width="12.2" height="24.65" shape-rendering="crispEdges"/>
+    <g class="bn8-matrix">
+    <text class="bn8-r1" x="0" y="20" textLength="61" clip-path="url(#bn8-line-0)">vault</text><text class="bn8-r3" x="73.2" y="20" textLength="12.2" clip-path="url(#bn8-line-0)">$</text><text class="bn8-r4" x="97.6" y="20" textLength="97.6" clip-path="url(#bn8-line-0)">bn&#160;views</text><text class="bn8-r2" x="1171.2" y="20" textLength="12.2" clip-path="url(#bn8-line-0)">
+</text><text class="bn8-r2" x="0" y="44.4" textLength="1049.2" clip-path="url(#bn8-line-1)">NAME&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;DESCRIPTION&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;QUERY&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;STATUS</text><text class="bn8-r2" x="1171.2" y="44.4" textLength="12.2" clip-path="url(#bn8-line-1)">
+</text><text class="bn8-r2" x="0" y="68.8" textLength="1000.4" clip-path="url(#bn8-line-2)">Reading&#160;list&#160;&#160;Books&#160;waiting&#160;on&#160;the&#160;shelf&#160;&#160;&#160;&#160;&#160;category:Books&#160;and&#160;status:to-read&#160;&#160;ok</text><text class="bn8-r2" x="1171.2" y="68.8" textLength="12.2" clip-path="url(#bn8-line-2)">
+</text><text class="bn8-r2" x="0" y="93.2" textLength="1000.4" clip-path="url(#bn8-line-3)">Active&#160;work&#160;&#160;&#160;What&#160;I&#160;am&#160;actually&#160;working&#160;on&#160;&#160;status:wip&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;ok</text><text class="bn8-r2" x="1171.2" y="93.2" textLength="12.2" clip-path="url(#bn8-line-3)">
+</text><text class="bn8-r1" x="0" y="117.6" textLength="61" clip-path="url(#bn8-line-4)">vault</text><text class="bn8-r3" x="73.2" y="117.6" textLength="12.2" clip-path="url(#bn8-line-4)">$</text><text class="bn8-r4" x="97.6" y="117.6" textLength="536.8" clip-path="url(#bn8-line-4)">bn&#160;find&#160;-q&#160;&#x27;category:Books&#160;and&#160;prop:rating&gt;=</text><text class="bn8-r2" x="1171.2" y="117.6" textLength="12.2" clip-path="url(#bn8-line-4)">
+</text><text class="bn8-r2" x="1171.2" y="142" textLength="12.2" clip-path="url(#bn8-line-5)">
+</text><text class="bn8-r2" x="1171.2" y="166.4" textLength="12.2" clip-path="url(#bn8-line-6)">
+</text><text class="bn8-r2" x="1171.2" y="190.8" textLength="12.2" clip-path="url(#bn8-line-7)">
+</text><text class="bn8-r2" x="1171.2" y="215.2" textLength="12.2" clip-path="url(#bn8-line-8)">
+</text><text class="bn8-r2" x="1171.2" y="239.6" textLength="12.2" clip-path="url(#bn8-line-9)">
+</text><text class="bn8-r2" x="1171.2" y="264" textLength="12.2" clip-path="url(#bn8-line-10)">
+</text><text class="bn8-r2" x="1171.2" y="288.4" textLength="12.2" clip-path="url(#bn8-line-11)">
+</text><text class="bn8-r2" x="1171.2" y="312.8" textLength="12.2" clip-path="url(#bn8-line-12)">
+</text><text class="bn8-r2" x="1171.2" y="337.2" textLength="12.2" clip-path="url(#bn8-line-13)">
+</text>
+    </g>
+    </g>
+</g>
+<style>
+.bn9-matrix { font-family: Fira Code, monospace; font-size: 20px; line-height: 24.4px; font-variant-east-asian: full-width; }
+.bn9-r1 { fill: #7dcfff;font-weight: bold }
+.bn9-r2 { fill: #c0caf5 }
+.bn9-r3 { fill: #7d84a2 }
+.bn9-r4 { fill: #c0caf5;font-weight: bold }
+.bn9-r5 { fill: #1a1b26 }
+</style>
+<defs><clipPath id="bn9-line-0">
+    <rect x="0" y="1.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn9-line-1">
+    <rect x="0" y="25.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn9-line-2">
+    <rect x="0" y="50.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn9-line-3">
+    <rect x="0" y="74.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn9-line-4">
+    <rect x="0" y="99.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn9-line-5">
+    <rect x="0" y="123.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn9-line-6">
+    <rect x="0" y="147.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn9-line-7">
+    <rect x="0" y="172.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn9-line-8">
+    <rect x="0" y="196.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn9-line-9">
+    <rect x="0" y="221.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn9-line-10">
+    <rect x="0" y="245.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn9-line-11">
+    <rect x="0" y="269.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn9-line-12">
+    <rect x="0" y="294.3" width="1171.2" height="24.65"/>
+            </clipPath></defs>
+<g class="bn-frame bn-f9">
+<text class="bn-caption" text-anchor="end" x="1166" y="27">one&#160;query&#160;language</text>
+    <g transform="translate(9, 41)" clip-path="url(#bn-clip-terminal)">
+    <rect fill="#c0caf5" x="854" y="99.1" width="12.2" height="24.65" shape-rendering="crispEdges"/>
+    <g class="bn9-matrix">
+    <text class="bn9-r1" x="0" y="20" textLength="61" clip-path="url(#bn9-line-0)">vault</text><text class="bn9-r3" x="73.2" y="20" textLength="12.2" clip-path="url(#bn9-line-0)">$</text><text class="bn9-r4" x="97.6" y="20" textLength="97.6" clip-path="url(#bn9-line-0)">bn&#160;views</text><text class="bn9-r2" x="1171.2" y="20" textLength="12.2" clip-path="url(#bn9-line-0)">
+</text><text class="bn9-r2" x="0" y="44.4" textLength="1049.2" clip-path="url(#bn9-line-1)">NAME&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;DESCRIPTION&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;QUERY&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;STATUS</text><text class="bn9-r2" x="1171.2" y="44.4" textLength="12.2" clip-path="url(#bn9-line-1)">
+</text><text class="bn9-r2" x="0" y="68.8" textLength="1000.4" clip-path="url(#bn9-line-2)">Reading&#160;list&#160;&#160;Books&#160;waiting&#160;on&#160;the&#160;shelf&#160;&#160;&#160;&#160;&#160;category:Books&#160;and&#160;status:to-read&#160;&#160;ok</text><text class="bn9-r2" x="1171.2" y="68.8" textLength="12.2" clip-path="url(#bn9-line-2)">
+</text><text class="bn9-r2" x="0" y="93.2" textLength="1000.4" clip-path="url(#bn9-line-3)">Active&#160;work&#160;&#160;&#160;What&#160;I&#160;am&#160;actually&#160;working&#160;on&#160;&#160;status:wip&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;ok</text><text class="bn9-r2" x="1171.2" y="93.2" textLength="12.2" clip-path="url(#bn9-line-3)">
+</text><text class="bn9-r1" x="0" y="117.6" textLength="61" clip-path="url(#bn9-line-4)">vault</text><text class="bn9-r3" x="73.2" y="117.6" textLength="12.2" clip-path="url(#bn9-line-4)">$</text><text class="bn9-r4" x="97.6" y="117.6" textLength="756.4" clip-path="url(#bn9-line-4)">bn&#160;find&#160;-q&#160;&#x27;category:Books&#160;and&#160;prop:rating&gt;=5&#x27;&#160;--json&#160;|&#160;jq&#160;-r&#160;</text><text class="bn9-r2" x="1171.2" y="117.6" textLength="12.2" clip-path="url(#bn9-line-4)">
+</text><text class="bn9-r2" x="1171.2" y="142" textLength="12.2" clip-path="url(#bn9-line-5)">
+</text><text class="bn9-r2" x="1171.2" y="166.4" textLength="12.2" clip-path="url(#bn9-line-6)">
+</text><text class="bn9-r2" x="1171.2" y="190.8" textLength="12.2" clip-path="url(#bn9-line-7)">
+</text><text class="bn9-r2" x="1171.2" y="215.2" textLength="12.2" clip-path="url(#bn9-line-8)">
+</text><text class="bn9-r2" x="1171.2" y="239.6" textLength="12.2" clip-path="url(#bn9-line-9)">
+</text><text class="bn9-r2" x="1171.2" y="264" textLength="12.2" clip-path="url(#bn9-line-10)">
+</text><text class="bn9-r2" x="1171.2" y="288.4" textLength="12.2" clip-path="url(#bn9-line-11)">
+</text><text class="bn9-r2" x="1171.2" y="312.8" textLength="12.2" clip-path="url(#bn9-line-12)">
+</text><text class="bn9-r2" x="1171.2" y="337.2" textLength="12.2" clip-path="url(#bn9-line-13)">
+</text>
+    </g>
+    </g>
+</g>
+<style>
+.bn10-matrix { font-family: Fira Code, monospace; font-size: 20px; line-height: 24.4px; font-variant-east-asian: full-width; }
+.bn10-r1 { fill: #7dcfff;font-weight: bold }
+.bn10-r2 { fill: #c0caf5 }
+.bn10-r3 { fill: #7d84a2 }
+.bn10-r4 { fill: #c0caf5;font-weight: bold }
+.bn10-r5 { fill: #1a1b26 }
+</style>
+<defs><clipPath id="bn10-line-0">
+    <rect x="0" y="1.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn10-line-1">
+    <rect x="0" y="25.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn10-line-2">
+    <rect x="0" y="50.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn10-line-3">
+    <rect x="0" y="74.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn10-line-4">
+    <rect x="0" y="99.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn10-line-5">
+    <rect x="0" y="123.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn10-line-6">
+    <rect x="0" y="147.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn10-line-7">
+    <rect x="0" y="172.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn10-line-8">
+    <rect x="0" y="196.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn10-line-9">
+    <rect x="0" y="221.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn10-line-10">
+    <rect x="0" y="245.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn10-line-11">
+    <rect x="0" y="269.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn10-line-12">
+    <rect x="0" y="294.3" width="1171.2" height="24.65"/>
+            </clipPath></defs>
+<g class="bn-frame bn-f10">
+<text class="bn-caption" text-anchor="end" x="1166" y="27">one&#160;query&#160;language</text>
+    <g transform="translate(9, 41)" clip-path="url(#bn-clip-terminal)">
+    <rect fill="#c0caf5" x="988.2" y="99.1" width="12.2" height="24.65" shape-rendering="crispEdges"/>
+    <g class="bn10-matrix">
+    <text class="bn10-r1" x="0" y="20" textLength="61" clip-path="url(#bn10-line-0)">vault</text><text class="bn10-r3" x="73.2" y="20" textLength="12.2" clip-path="url(#bn10-line-0)">$</text><text class="bn10-r4" x="97.6" y="20" textLength="97.6" clip-path="url(#bn10-line-0)">bn&#160;views</text><text class="bn10-r2" x="1171.2" y="20" textLength="12.2" clip-path="url(#bn10-line-0)">
+</text><text class="bn10-r2" x="0" y="44.4" textLength="1049.2" clip-path="url(#bn10-line-1)">NAME&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;DESCRIPTION&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;QUERY&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;STATUS</text><text class="bn10-r2" x="1171.2" y="44.4" textLength="12.2" clip-path="url(#bn10-line-1)">
+</text><text class="bn10-r2" x="0" y="68.8" textLength="1000.4" clip-path="url(#bn10-line-2)">Reading&#160;list&#160;&#160;Books&#160;waiting&#160;on&#160;the&#160;shelf&#160;&#160;&#160;&#160;&#160;category:Books&#160;and&#160;status:to-read&#160;&#160;ok</text><text class="bn10-r2" x="1171.2" y="68.8" textLength="12.2" clip-path="url(#bn10-line-2)">
+</text><text class="bn10-r2" x="0" y="93.2" textLength="1000.4" clip-path="url(#bn10-line-3)">Active&#160;work&#160;&#160;&#160;What&#160;I&#160;am&#160;actually&#160;working&#160;on&#160;&#160;status:wip&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;ok</text><text class="bn10-r2" x="1171.2" y="93.2" textLength="12.2" clip-path="url(#bn10-line-3)">
+</text><text class="bn10-r1" x="0" y="117.6" textLength="61" clip-path="url(#bn10-line-4)">vault</text><text class="bn10-r3" x="73.2" y="117.6" textLength="12.2" clip-path="url(#bn10-line-4)">$</text><text class="bn10-r4" x="97.6" y="117.6" textLength="890.6" clip-path="url(#bn10-line-4)">bn&#160;find&#160;-q&#160;&#x27;category:Books&#160;and&#160;prop:rating&gt;=5&#x27;&#160;--json&#160;|&#160;jq&#160;-r&#160;&#x27;.[].title&#x27;</text><text class="bn10-r2" x="1171.2" y="117.6" textLength="12.2" clip-path="url(#bn10-line-4)">
+</text><text class="bn10-r2" x="1171.2" y="142" textLength="12.2" clip-path="url(#bn10-line-5)">
+</text><text class="bn10-r2" x="1171.2" y="166.4" textLength="12.2" clip-path="url(#bn10-line-6)">
+</text><text class="bn10-r2" x="1171.2" y="190.8" textLength="12.2" clip-path="url(#bn10-line-7)">
+</text><text class="bn10-r2" x="1171.2" y="215.2" textLength="12.2" clip-path="url(#bn10-line-8)">
+</text><text class="bn10-r2" x="1171.2" y="239.6" textLength="12.2" clip-path="url(#bn10-line-9)">
+</text><text class="bn10-r2" x="1171.2" y="264" textLength="12.2" clip-path="url(#bn10-line-10)">
+</text><text class="bn10-r2" x="1171.2" y="288.4" textLength="12.2" clip-path="url(#bn10-line-11)">
+</text><text class="bn10-r2" x="1171.2" y="312.8" textLength="12.2" clip-path="url(#bn10-line-12)">
+</text><text class="bn10-r2" x="1171.2" y="337.2" textLength="12.2" clip-path="url(#bn10-line-13)">
+</text>
+    </g>
+    </g>
+</g>
+<style>
+.bn11-matrix { font-family: Fira Code, monospace; font-size: 20px; line-height: 24.4px; font-variant-east-asian: full-width; }
+.bn11-r1 { fill: #7dcfff;font-weight: bold }
+.bn11-r2 { fill: #c0caf5 }
+.bn11-r3 { fill: #7d84a2 }
+.bn11-r4 { fill: #c0caf5;font-weight: bold }
+.bn11-r5 { fill: #1a1b26 }
+</style>
+<defs><clipPath id="bn11-line-0">
+    <rect x="0" y="1.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn11-line-1">
+    <rect x="0" y="25.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn11-line-2">
+    <rect x="0" y="50.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn11-line-3">
+    <rect x="0" y="74.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn11-line-4">
+    <rect x="0" y="99.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn11-line-5">
+    <rect x="0" y="123.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn11-line-6">
+    <rect x="0" y="147.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn11-line-7">
+    <rect x="0" y="172.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn11-line-8">
+    <rect x="0" y="196.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn11-line-9">
+    <rect x="0" y="221.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn11-line-10">
+    <rect x="0" y="245.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn11-line-11">
+    <rect x="0" y="269.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn11-line-12">
+    <rect x="0" y="294.3" width="1171.2" height="24.65"/>
+            </clipPath></defs>
+<g class="bn-frame bn-f11">
+<text class="bn-caption" text-anchor="end" x="1166" y="27">one&#160;query&#160;language</text>
+    <g transform="translate(9, 41)" clip-path="url(#bn-clip-terminal)">
+    <rect fill="#c0caf5" x="97.6" y="172.3" width="12.2" height="24.65" shape-rendering="crispEdges"/>
+    <g class="bn11-matrix">
+    <text class="bn11-r1" x="0" y="20" textLength="61" clip-path="url(#bn11-line-0)">vault</text><text class="bn11-r3" x="73.2" y="20" textLength="12.2" clip-path="url(#bn11-line-0)">$</text><text class="bn11-r4" x="97.6" y="20" textLength="97.6" clip-path="url(#bn11-line-0)">bn&#160;views</text><text class="bn11-r2" x="1171.2" y="20" textLength="12.2" clip-path="url(#bn11-line-0)">
+</text><text class="bn11-r2" x="0" y="44.4" textLength="1049.2" clip-path="url(#bn11-line-1)">NAME&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;DESCRIPTION&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;QUERY&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;STATUS</text><text class="bn11-r2" x="1171.2" y="44.4" textLength="12.2" clip-path="url(#bn11-line-1)">
+</text><text class="bn11-r2" x="0" y="68.8" textLength="1000.4" clip-path="url(#bn11-line-2)">Reading&#160;list&#160;&#160;Books&#160;waiting&#160;on&#160;the&#160;shelf&#160;&#160;&#160;&#160;&#160;category:Books&#160;and&#160;status:to-read&#160;&#160;ok</text><text class="bn11-r2" x="1171.2" y="68.8" textLength="12.2" clip-path="url(#bn11-line-2)">
+</text><text class="bn11-r2" x="0" y="93.2" textLength="1000.4" clip-path="url(#bn11-line-3)">Active&#160;work&#160;&#160;&#160;What&#160;I&#160;am&#160;actually&#160;working&#160;on&#160;&#160;status:wip&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;ok</text><text class="bn11-r2" x="1171.2" y="93.2" textLength="12.2" clip-path="url(#bn11-line-3)">
+</text><text class="bn11-r1" x="0" y="117.6" textLength="61" clip-path="url(#bn11-line-4)">vault</text><text class="bn11-r3" x="73.2" y="117.6" textLength="12.2" clip-path="url(#bn11-line-4)">$</text><text class="bn11-r4" x="97.6" y="117.6" textLength="890.6" clip-path="url(#bn11-line-4)">bn&#160;find&#160;-q&#160;&#x27;category:Books&#160;and&#160;prop:rating&gt;=5&#x27;&#160;--json&#160;|&#160;jq&#160;-r&#160;&#x27;.[].title&#x27;</text><text class="bn11-r2" x="1171.2" y="117.6" textLength="12.2" clip-path="url(#bn11-line-4)">
+</text><text class="bn11-r2" x="0" y="142" textLength="109.8" clip-path="url(#bn11-line-5)">Deep&#160;Work</text><text class="bn11-r2" x="1171.2" y="142" textLength="12.2" clip-path="url(#bn11-line-5)">
+</text><text class="bn11-r2" x="0" y="166.4" textLength="280.6" clip-path="url(#bn11-line-6)">How&#160;to&#160;Take&#160;Smart&#160;Notes</text><text class="bn11-r2" x="1171.2" y="166.4" textLength="12.2" clip-path="url(#bn11-line-6)">
+</text><text class="bn11-r1" x="0" y="190.8" textLength="61" clip-path="url(#bn11-line-7)">vault</text><text class="bn11-r3" x="73.2" y="190.8" textLength="12.2" clip-path="url(#bn11-line-7)">$</text><text class="bn11-r2" x="1171.2" y="190.8" textLength="12.2" clip-path="url(#bn11-line-7)">
+</text><text class="bn11-r2" x="1171.2" y="215.2" textLength="12.2" clip-path="url(#bn11-line-8)">
+</text><text class="bn11-r2" x="1171.2" y="239.6" textLength="12.2" clip-path="url(#bn11-line-9)">
+</text><text class="bn11-r2" x="1171.2" y="264" textLength="12.2" clip-path="url(#bn11-line-10)">
+</text><text class="bn11-r2" x="1171.2" y="288.4" textLength="12.2" clip-path="url(#bn11-line-11)">
+</text><text class="bn11-r2" x="1171.2" y="312.8" textLength="12.2" clip-path="url(#bn11-line-12)">
+</text><text class="bn11-r2" x="1171.2" y="337.2" textLength="12.2" clip-path="url(#bn11-line-13)">
+</text>
+    </g>
+    </g>
+</g>
+<style>
+.bn12-matrix { font-family: Fira Code, monospace; font-size: 20px; line-height: 24.4px; font-variant-east-asian: full-width; }
+.bn12-r1 { fill: #7dcfff;font-weight: bold }
+.bn12-r2 { fill: #c0caf5 }
+.bn12-r3 { fill: #7d84a2 }
+.bn12-r4 { fill: #c0caf5;font-weight: bold }
+.bn12-r5 { fill: #1a1b26 }
+</style>
+<defs><clipPath id="bn12-line-0">
+    <rect x="0" y="1.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn12-line-1">
+    <rect x="0" y="25.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn12-line-2">
+    <rect x="0" y="50.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn12-line-3">
+    <rect x="0" y="74.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn12-line-4">
+    <rect x="0" y="99.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn12-line-5">
+    <rect x="0" y="123.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn12-line-6">
+    <rect x="0" y="147.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn12-line-7">
+    <rect x="0" y="172.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn12-line-8">
+    <rect x="0" y="196.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn12-line-9">
+    <rect x="0" y="221.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn12-line-10">
+    <rect x="0" y="245.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn12-line-11">
+    <rect x="0" y="269.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn12-line-12">
+    <rect x="0" y="294.3" width="1171.2" height="24.65"/>
+            </clipPath></defs>
+<g class="bn-frame bn-f12">
+<text class="bn-caption" text-anchor="end" x="1166" y="27">link-graph&#160;operators</text>
+    <g transform="translate(9, 41)" clip-path="url(#bn-clip-terminal)">
+    <rect fill="#c0caf5" x="97.6" y="172.3" width="12.2" height="24.65" shape-rendering="crispEdges"/>
+    <g class="bn12-matrix">
+    <text class="bn12-r1" x="0" y="20" textLength="61" clip-path="url(#bn12-line-0)">vault</text><text class="bn12-r3" x="73.2" y="20" textLength="12.2" clip-path="url(#bn12-line-0)">$</text><text class="bn12-r4" x="97.6" y="20" textLength="97.6" clip-path="url(#bn12-line-0)">bn&#160;views</text><text class="bn12-r2" x="1171.2" y="20" textLength="12.2" clip-path="url(#bn12-line-0)">
+</text><text class="bn12-r2" x="0" y="44.4" textLength="1049.2" clip-path="url(#bn12-line-1)">NAME&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;DESCRIPTION&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;QUERY&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;STATUS</text><text class="bn12-r2" x="1171.2" y="44.4" textLength="12.2" clip-path="url(#bn12-line-1)">
+</text><text class="bn12-r2" x="0" y="68.8" textLength="1000.4" clip-path="url(#bn12-line-2)">Reading&#160;list&#160;&#160;Books&#160;waiting&#160;on&#160;the&#160;shelf&#160;&#160;&#160;&#160;&#160;category:Books&#160;and&#160;status:to-read&#160;&#160;ok</text><text class="bn12-r2" x="1171.2" y="68.8" textLength="12.2" clip-path="url(#bn12-line-2)">
+</text><text class="bn12-r2" x="0" y="93.2" textLength="1000.4" clip-path="url(#bn12-line-3)">Active&#160;work&#160;&#160;&#160;What&#160;I&#160;am&#160;actually&#160;working&#160;on&#160;&#160;status:wip&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;ok</text><text class="bn12-r2" x="1171.2" y="93.2" textLength="12.2" clip-path="url(#bn12-line-3)">
+</text><text class="bn12-r1" x="0" y="117.6" textLength="61" clip-path="url(#bn12-line-4)">vault</text><text class="bn12-r3" x="73.2" y="117.6" textLength="12.2" clip-path="url(#bn12-line-4)">$</text><text class="bn12-r4" x="97.6" y="117.6" textLength="890.6" clip-path="url(#bn12-line-4)">bn&#160;find&#160;-q&#160;&#x27;category:Books&#160;and&#160;prop:rating&gt;=5&#x27;&#160;--json&#160;|&#160;jq&#160;-r&#160;&#x27;.[].title&#x27;</text><text class="bn12-r2" x="1171.2" y="117.6" textLength="12.2" clip-path="url(#bn12-line-4)">
+</text><text class="bn12-r2" x="0" y="142" textLength="109.8" clip-path="url(#bn12-line-5)">Deep&#160;Work</text><text class="bn12-r2" x="1171.2" y="142" textLength="12.2" clip-path="url(#bn12-line-5)">
+</text><text class="bn12-r2" x="0" y="166.4" textLength="280.6" clip-path="url(#bn12-line-6)">How&#160;to&#160;Take&#160;Smart&#160;Notes</text><text class="bn12-r2" x="1171.2" y="166.4" textLength="12.2" clip-path="url(#bn12-line-6)">
+</text><text class="bn12-r1" x="0" y="190.8" textLength="61" clip-path="url(#bn12-line-7)">vault</text><text class="bn12-r3" x="73.2" y="190.8" textLength="12.2" clip-path="url(#bn12-line-7)">$</text><text class="bn12-r2" x="1171.2" y="190.8" textLength="12.2" clip-path="url(#bn12-line-7)">
+</text><text class="bn12-r2" x="1171.2" y="215.2" textLength="12.2" clip-path="url(#bn12-line-8)">
+</text><text class="bn12-r2" x="1171.2" y="239.6" textLength="12.2" clip-path="url(#bn12-line-9)">
+</text><text class="bn12-r2" x="1171.2" y="264" textLength="12.2" clip-path="url(#bn12-line-10)">
+</text><text class="bn12-r2" x="1171.2" y="288.4" textLength="12.2" clip-path="url(#bn12-line-11)">
+</text><text class="bn12-r2" x="1171.2" y="312.8" textLength="12.2" clip-path="url(#bn12-line-12)">
+</text><text class="bn12-r2" x="1171.2" y="337.2" textLength="12.2" clip-path="url(#bn12-line-13)">
+</text>
+    </g>
+    </g>
+</g>
+<style>
+.bn13-matrix { font-family: Fira Code, monospace; font-size: 20px; line-height: 24.4px; font-variant-east-asian: full-width; }
+.bn13-r1 { fill: #7dcfff;font-weight: bold }
+.bn13-r2 { fill: #c0caf5 }
+.bn13-r3 { fill: #7d84a2 }
+.bn13-r4 { fill: #c0caf5;font-weight: bold }
+.bn13-r5 { fill: #1a1b26 }
+</style>
+<defs><clipPath id="bn13-line-0">
+    <rect x="0" y="1.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn13-line-1">
+    <rect x="0" y="25.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn13-line-2">
+    <rect x="0" y="50.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn13-line-3">
+    <rect x="0" y="74.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn13-line-4">
+    <rect x="0" y="99.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn13-line-5">
+    <rect x="0" y="123.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn13-line-6">
+    <rect x="0" y="147.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn13-line-7">
+    <rect x="0" y="172.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn13-line-8">
+    <rect x="0" y="196.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn13-line-9">
+    <rect x="0" y="221.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn13-line-10">
+    <rect x="0" y="245.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn13-line-11">
+    <rect x="0" y="269.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn13-line-12">
+    <rect x="0" y="294.3" width="1171.2" height="24.65"/>
+            </clipPath></defs>
+<g class="bn-frame bn-f13">
+<text class="bn-caption" text-anchor="end" x="1166" y="27">link-graph&#160;operators</text>
+    <g transform="translate(9, 41)" clip-path="url(#bn-clip-terminal)">
+    <rect fill="#c0caf5" x="378.2" y="172.3" width="12.2" height="24.65" shape-rendering="crispEdges"/>
+    <g class="bn13-matrix">
+    <text class="bn13-r1" x="0" y="20" textLength="61" clip-path="url(#bn13-line-0)">vault</text><text class="bn13-r3" x="73.2" y="20" textLength="12.2" clip-path="url(#bn13-line-0)">$</text><text class="bn13-r4" x="97.6" y="20" textLength="97.6" clip-path="url(#bn13-line-0)">bn&#160;views</text><text class="bn13-r2" x="1171.2" y="20" textLength="12.2" clip-path="url(#bn13-line-0)">
+</text><text class="bn13-r2" x="0" y="44.4" textLength="1049.2" clip-path="url(#bn13-line-1)">NAME&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;DESCRIPTION&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;QUERY&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;STATUS</text><text class="bn13-r2" x="1171.2" y="44.4" textLength="12.2" clip-path="url(#bn13-line-1)">
+</text><text class="bn13-r2" x="0" y="68.8" textLength="1000.4" clip-path="url(#bn13-line-2)">Reading&#160;list&#160;&#160;Books&#160;waiting&#160;on&#160;the&#160;shelf&#160;&#160;&#160;&#160;&#160;category:Books&#160;and&#160;status:to-read&#160;&#160;ok</text><text class="bn13-r2" x="1171.2" y="68.8" textLength="12.2" clip-path="url(#bn13-line-2)">
+</text><text class="bn13-r2" x="0" y="93.2" textLength="1000.4" clip-path="url(#bn13-line-3)">Active&#160;work&#160;&#160;&#160;What&#160;I&#160;am&#160;actually&#160;working&#160;on&#160;&#160;status:wip&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;ok</text><text class="bn13-r2" x="1171.2" y="93.2" textLength="12.2" clip-path="url(#bn13-line-3)">
+</text><text class="bn13-r1" x="0" y="117.6" textLength="61" clip-path="url(#bn13-line-4)">vault</text><text class="bn13-r3" x="73.2" y="117.6" textLength="12.2" clip-path="url(#bn13-line-4)">$</text><text class="bn13-r4" x="97.6" y="117.6" textLength="890.6" clip-path="url(#bn13-line-4)">bn&#160;find&#160;-q&#160;&#x27;category:Books&#160;and&#160;prop:rating&gt;=5&#x27;&#160;--json&#160;|&#160;jq&#160;-r&#160;&#x27;.[].title&#x27;</text><text class="bn13-r2" x="1171.2" y="117.6" textLength="12.2" clip-path="url(#bn13-line-4)">
+</text><text class="bn13-r2" x="0" y="142" textLength="109.8" clip-path="url(#bn13-line-5)">Deep&#160;Work</text><text class="bn13-r2" x="1171.2" y="142" textLength="12.2" clip-path="url(#bn13-line-5)">
+</text><text class="bn13-r2" x="0" y="166.4" textLength="280.6" clip-path="url(#bn13-line-6)">How&#160;to&#160;Take&#160;Smart&#160;Notes</text><text class="bn13-r2" x="1171.2" y="166.4" textLength="12.2" clip-path="url(#bn13-line-6)">
+</text><text class="bn13-r1" x="0" y="190.8" textLength="61" clip-path="url(#bn13-line-7)">vault</text><text class="bn13-r3" x="73.2" y="190.8" textLength="12.2" clip-path="url(#bn13-line-7)">$</text><text class="bn13-r4" x="97.6" y="190.8" textLength="280.6" clip-path="url(#bn13-line-7)">bn&#160;find&#160;-q&#160;&#x27;near:[[Deep</text><text class="bn13-r2" x="1171.2" y="190.8" textLength="12.2" clip-path="url(#bn13-line-7)">
+</text><text class="bn13-r2" x="1171.2" y="215.2" textLength="12.2" clip-path="url(#bn13-line-8)">
+</text><text class="bn13-r2" x="1171.2" y="239.6" textLength="12.2" clip-path="url(#bn13-line-9)">
+</text><text class="bn13-r2" x="1171.2" y="264" textLength="12.2" clip-path="url(#bn13-line-10)">
+</text><text class="bn13-r2" x="1171.2" y="288.4" textLength="12.2" clip-path="url(#bn13-line-11)">
+</text><text class="bn13-r2" x="1171.2" y="312.8" textLength="12.2" clip-path="url(#bn13-line-12)">
+</text><text class="bn13-r2" x="1171.2" y="337.2" textLength="12.2" clip-path="url(#bn13-line-13)">
+</text>
+    </g>
+    </g>
+</g>
+<style>
+.bn14-matrix { font-family: Fira Code, monospace; font-size: 20px; line-height: 24.4px; font-variant-east-asian: full-width; }
+.bn14-r1 { fill: #7dcfff;font-weight: bold }
+.bn14-r2 { fill: #c0caf5 }
+.bn14-r3 { fill: #7d84a2 }
+.bn14-r4 { fill: #c0caf5;font-weight: bold }
+.bn14-r5 { fill: #1a1b26 }
+</style>
+<defs><clipPath id="bn14-line-0">
+    <rect x="0" y="1.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn14-line-1">
+    <rect x="0" y="25.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn14-line-2">
+    <rect x="0" y="50.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn14-line-3">
+    <rect x="0" y="74.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn14-line-4">
+    <rect x="0" y="99.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn14-line-5">
+    <rect x="0" y="123.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn14-line-6">
+    <rect x="0" y="147.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn14-line-7">
+    <rect x="0" y="172.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn14-line-8">
+    <rect x="0" y="196.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn14-line-9">
+    <rect x="0" y="221.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn14-line-10">
+    <rect x="0" y="245.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn14-line-11">
+    <rect x="0" y="269.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn14-line-12">
+    <rect x="0" y="294.3" width="1171.2" height="24.65"/>
+            </clipPath></defs>
+<g class="bn-frame bn-f14">
+<text class="bn-caption" text-anchor="end" x="1166" y="27">link-graph&#160;operators</text>
+    <g transform="translate(9, 41)" clip-path="url(#bn-clip-terminal)">
+    <rect fill="#c0caf5" x="658.8" y="172.3" width="12.2" height="24.65" shape-rendering="crispEdges"/>
+    <g class="bn14-matrix">
+    <text class="bn14-r1" x="0" y="20" textLength="61" clip-path="url(#bn14-line-0)">vault</text><text class="bn14-r3" x="73.2" y="20" textLength="12.2" clip-path="url(#bn14-line-0)">$</text><text class="bn14-r4" x="97.6" y="20" textLength="97.6" clip-path="url(#bn14-line-0)">bn&#160;views</text><text class="bn14-r2" x="1171.2" y="20" textLength="12.2" clip-path="url(#bn14-line-0)">
+</text><text class="bn14-r2" x="0" y="44.4" textLength="1049.2" clip-path="url(#bn14-line-1)">NAME&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;DESCRIPTION&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;QUERY&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;STATUS</text><text class="bn14-r2" x="1171.2" y="44.4" textLength="12.2" clip-path="url(#bn14-line-1)">
+</text><text class="bn14-r2" x="0" y="68.8" textLength="1000.4" clip-path="url(#bn14-line-2)">Reading&#160;list&#160;&#160;Books&#160;waiting&#160;on&#160;the&#160;shelf&#160;&#160;&#160;&#160;&#160;category:Books&#160;and&#160;status:to-read&#160;&#160;ok</text><text class="bn14-r2" x="1171.2" y="68.8" textLength="12.2" clip-path="url(#bn14-line-2)">
+</text><text class="bn14-r2" x="0" y="93.2" textLength="1000.4" clip-path="url(#bn14-line-3)">Active&#160;work&#160;&#160;&#160;What&#160;I&#160;am&#160;actually&#160;working&#160;on&#160;&#160;status:wip&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;ok</text><text class="bn14-r2" x="1171.2" y="93.2" textLength="12.2" clip-path="url(#bn14-line-3)">
+</text><text class="bn14-r1" x="0" y="117.6" textLength="61" clip-path="url(#bn14-line-4)">vault</text><text class="bn14-r3" x="73.2" y="117.6" textLength="12.2" clip-path="url(#bn14-line-4)">$</text><text class="bn14-r4" x="97.6" y="117.6" textLength="890.6" clip-path="url(#bn14-line-4)">bn&#160;find&#160;-q&#160;&#x27;category:Books&#160;and&#160;prop:rating&gt;=5&#x27;&#160;--json&#160;|&#160;jq&#160;-r&#160;&#x27;.[].title&#x27;</text><text class="bn14-r2" x="1171.2" y="117.6" textLength="12.2" clip-path="url(#bn14-line-4)">
+</text><text class="bn14-r2" x="0" y="142" textLength="109.8" clip-path="url(#bn14-line-5)">Deep&#160;Work</text><text class="bn14-r2" x="1171.2" y="142" textLength="12.2" clip-path="url(#bn14-line-5)">
+</text><text class="bn14-r2" x="0" y="166.4" textLength="280.6" clip-path="url(#bn14-line-6)">How&#160;to&#160;Take&#160;Smart&#160;Notes</text><text class="bn14-r2" x="1171.2" y="166.4" textLength="12.2" clip-path="url(#bn14-line-6)">
+</text><text class="bn14-r1" x="0" y="190.8" textLength="61" clip-path="url(#bn14-line-7)">vault</text><text class="bn14-r3" x="73.2" y="190.8" textLength="12.2" clip-path="url(#bn14-line-7)">$</text><text class="bn14-r4" x="97.6" y="190.8" textLength="561.2" clip-path="url(#bn14-line-7)">bn&#160;find&#160;-q&#160;&#x27;near:[[Deep&#160;Work]]&lt;=2&#160;and&#160;status:w</text><text class="bn14-r2" x="1171.2" y="190.8" textLength="12.2" clip-path="url(#bn14-line-7)">
+</text><text class="bn14-r2" x="1171.2" y="215.2" textLength="12.2" clip-path="url(#bn14-line-8)">
+</text><text class="bn14-r2" x="1171.2" y="239.6" textLength="12.2" clip-path="url(#bn14-line-9)">
+</text><text class="bn14-r2" x="1171.2" y="264" textLength="12.2" clip-path="url(#bn14-line-10)">
+</text><text class="bn14-r2" x="1171.2" y="288.4" textLength="12.2" clip-path="url(#bn14-line-11)">
+</text><text class="bn14-r2" x="1171.2" y="312.8" textLength="12.2" clip-path="url(#bn14-line-12)">
+</text><text class="bn14-r2" x="1171.2" y="337.2" textLength="12.2" clip-path="url(#bn14-line-13)">
+</text>
+    </g>
+    </g>
+</g>
+<style>
+.bn15-matrix { font-family: Fira Code, monospace; font-size: 20px; line-height: 24.4px; font-variant-east-asian: full-width; }
+.bn15-r1 { fill: #7dcfff;font-weight: bold }
+.bn15-r2 { fill: #c0caf5 }
+.bn15-r3 { fill: #7d84a2 }
+.bn15-r4 { fill: #c0caf5;font-weight: bold }
+.bn15-r5 { fill: #1a1b26 }
+</style>
+<defs><clipPath id="bn15-line-0">
+    <rect x="0" y="1.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn15-line-1">
+    <rect x="0" y="25.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn15-line-2">
+    <rect x="0" y="50.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn15-line-3">
+    <rect x="0" y="74.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn15-line-4">
+    <rect x="0" y="99.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn15-line-5">
+    <rect x="0" y="123.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn15-line-6">
+    <rect x="0" y="147.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn15-line-7">
+    <rect x="0" y="172.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn15-line-8">
+    <rect x="0" y="196.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn15-line-9">
+    <rect x="0" y="221.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn15-line-10">
+    <rect x="0" y="245.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn15-line-11">
+    <rect x="0" y="269.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn15-line-12">
+    <rect x="0" y="294.3" width="1171.2" height="24.65"/>
+            </clipPath></defs>
+<g class="bn-frame bn-f15">
+<text class="bn-caption" text-anchor="end" x="1166" y="27">link-graph&#160;operators</text>
+    <g transform="translate(9, 41)" clip-path="url(#bn-clip-terminal)">
+    <rect fill="#c0caf5" x="890.6" y="172.3" width="12.2" height="24.65" shape-rendering="crispEdges"/>
+    <g class="bn15-matrix">
+    <text class="bn15-r1" x="0" y="20" textLength="61" clip-path="url(#bn15-line-0)">vault</text><text class="bn15-r3" x="73.2" y="20" textLength="12.2" clip-path="url(#bn15-line-0)">$</text><text class="bn15-r4" x="97.6" y="20" textLength="97.6" clip-path="url(#bn15-line-0)">bn&#160;views</text><text class="bn15-r2" x="1171.2" y="20" textLength="12.2" clip-path="url(#bn15-line-0)">
+</text><text class="bn15-r2" x="0" y="44.4" textLength="1049.2" clip-path="url(#bn15-line-1)">NAME&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;DESCRIPTION&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;QUERY&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;STATUS</text><text class="bn15-r2" x="1171.2" y="44.4" textLength="12.2" clip-path="url(#bn15-line-1)">
+</text><text class="bn15-r2" x="0" y="68.8" textLength="1000.4" clip-path="url(#bn15-line-2)">Reading&#160;list&#160;&#160;Books&#160;waiting&#160;on&#160;the&#160;shelf&#160;&#160;&#160;&#160;&#160;category:Books&#160;and&#160;status:to-read&#160;&#160;ok</text><text class="bn15-r2" x="1171.2" y="68.8" textLength="12.2" clip-path="url(#bn15-line-2)">
+</text><text class="bn15-r2" x="0" y="93.2" textLength="1000.4" clip-path="url(#bn15-line-3)">Active&#160;work&#160;&#160;&#160;What&#160;I&#160;am&#160;actually&#160;working&#160;on&#160;&#160;status:wip&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;ok</text><text class="bn15-r2" x="1171.2" y="93.2" textLength="12.2" clip-path="url(#bn15-line-3)">
+</text><text class="bn15-r1" x="0" y="117.6" textLength="61" clip-path="url(#bn15-line-4)">vault</text><text class="bn15-r3" x="73.2" y="117.6" textLength="12.2" clip-path="url(#bn15-line-4)">$</text><text class="bn15-r4" x="97.6" y="117.6" textLength="890.6" clip-path="url(#bn15-line-4)">bn&#160;find&#160;-q&#160;&#x27;category:Books&#160;and&#160;prop:rating&gt;=5&#x27;&#160;--json&#160;|&#160;jq&#160;-r&#160;&#x27;.[].title&#x27;</text><text class="bn15-r2" x="1171.2" y="117.6" textLength="12.2" clip-path="url(#bn15-line-4)">
+</text><text class="bn15-r2" x="0" y="142" textLength="109.8" clip-path="url(#bn15-line-5)">Deep&#160;Work</text><text class="bn15-r2" x="1171.2" y="142" textLength="12.2" clip-path="url(#bn15-line-5)">
+</text><text class="bn15-r2" x="0" y="166.4" textLength="280.6" clip-path="url(#bn15-line-6)">How&#160;to&#160;Take&#160;Smart&#160;Notes</text><text class="bn15-r2" x="1171.2" y="166.4" textLength="12.2" clip-path="url(#bn15-line-6)">
+</text><text class="bn15-r1" x="0" y="190.8" textLength="61" clip-path="url(#bn15-line-7)">vault</text><text class="bn15-r3" x="73.2" y="190.8" textLength="12.2" clip-path="url(#bn15-line-7)">$</text><text class="bn15-r4" x="97.6" y="190.8" textLength="793" clip-path="url(#bn15-line-7)">bn&#160;find&#160;-q&#160;&#x27;near:[[Deep&#160;Work]]&lt;=2&#160;and&#160;status:wip&#x27;&#160;--json&#160;|&#160;jq&#160;-r&#160;</text><text class="bn15-r2" x="1171.2" y="190.8" textLength="12.2" clip-path="url(#bn15-line-7)">
+</text><text class="bn15-r2" x="1171.2" y="215.2" textLength="12.2" clip-path="url(#bn15-line-8)">
+</text><text class="bn15-r2" x="1171.2" y="239.6" textLength="12.2" clip-path="url(#bn15-line-9)">
+</text><text class="bn15-r2" x="1171.2" y="264" textLength="12.2" clip-path="url(#bn15-line-10)">
+</text><text class="bn15-r2" x="1171.2" y="288.4" textLength="12.2" clip-path="url(#bn15-line-11)">
+</text><text class="bn15-r2" x="1171.2" y="312.8" textLength="12.2" clip-path="url(#bn15-line-12)">
+</text><text class="bn15-r2" x="1171.2" y="337.2" textLength="12.2" clip-path="url(#bn15-line-13)">
+</text>
+    </g>
+    </g>
+</g>
+<style>
+.bn16-matrix { font-family: Fira Code, monospace; font-size: 20px; line-height: 24.4px; font-variant-east-asian: full-width; }
+.bn16-r1 { fill: #7dcfff;font-weight: bold }
+.bn16-r2 { fill: #c0caf5 }
+.bn16-r3 { fill: #7d84a2 }
+.bn16-r4 { fill: #c0caf5;font-weight: bold }
+.bn16-r5 { fill: #1a1b26 }
+</style>
+<defs><clipPath id="bn16-line-0">
+    <rect x="0" y="1.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn16-line-1">
+    <rect x="0" y="25.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn16-line-2">
+    <rect x="0" y="50.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn16-line-3">
+    <rect x="0" y="74.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn16-line-4">
+    <rect x="0" y="99.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn16-line-5">
+    <rect x="0" y="123.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn16-line-6">
+    <rect x="0" y="147.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn16-line-7">
+    <rect x="0" y="172.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn16-line-8">
+    <rect x="0" y="196.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn16-line-9">
+    <rect x="0" y="221.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn16-line-10">
+    <rect x="0" y="245.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn16-line-11">
+    <rect x="0" y="269.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn16-line-12">
+    <rect x="0" y="294.3" width="1171.2" height="24.65"/>
+            </clipPath></defs>
+<g class="bn-frame bn-f16">
+<text class="bn-caption" text-anchor="end" x="1166" y="27">link-graph&#160;operators</text>
+    <g transform="translate(9, 41)" clip-path="url(#bn-clip-terminal)">
+    <rect fill="#c0caf5" x="1024.8" y="172.3" width="12.2" height="24.65" shape-rendering="crispEdges"/>
+    <g class="bn16-matrix">
+    <text class="bn16-r1" x="0" y="20" textLength="61" clip-path="url(#bn16-line-0)">vault</text><text class="bn16-r3" x="73.2" y="20" textLength="12.2" clip-path="url(#bn16-line-0)">$</text><text class="bn16-r4" x="97.6" y="20" textLength="97.6" clip-path="url(#bn16-line-0)">bn&#160;views</text><text class="bn16-r2" x="1171.2" y="20" textLength="12.2" clip-path="url(#bn16-line-0)">
+</text><text class="bn16-r2" x="0" y="44.4" textLength="1049.2" clip-path="url(#bn16-line-1)">NAME&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;DESCRIPTION&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;QUERY&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;STATUS</text><text class="bn16-r2" x="1171.2" y="44.4" textLength="12.2" clip-path="url(#bn16-line-1)">
+</text><text class="bn16-r2" x="0" y="68.8" textLength="1000.4" clip-path="url(#bn16-line-2)">Reading&#160;list&#160;&#160;Books&#160;waiting&#160;on&#160;the&#160;shelf&#160;&#160;&#160;&#160;&#160;category:Books&#160;and&#160;status:to-read&#160;&#160;ok</text><text class="bn16-r2" x="1171.2" y="68.8" textLength="12.2" clip-path="url(#bn16-line-2)">
+</text><text class="bn16-r2" x="0" y="93.2" textLength="1000.4" clip-path="url(#bn16-line-3)">Active&#160;work&#160;&#160;&#160;What&#160;I&#160;am&#160;actually&#160;working&#160;on&#160;&#160;status:wip&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;ok</text><text class="bn16-r2" x="1171.2" y="93.2" textLength="12.2" clip-path="url(#bn16-line-3)">
+</text><text class="bn16-r1" x="0" y="117.6" textLength="61" clip-path="url(#bn16-line-4)">vault</text><text class="bn16-r3" x="73.2" y="117.6" textLength="12.2" clip-path="url(#bn16-line-4)">$</text><text class="bn16-r4" x="97.6" y="117.6" textLength="890.6" clip-path="url(#bn16-line-4)">bn&#160;find&#160;-q&#160;&#x27;category:Books&#160;and&#160;prop:rating&gt;=5&#x27;&#160;--json&#160;|&#160;jq&#160;-r&#160;&#x27;.[].title&#x27;</text><text class="bn16-r2" x="1171.2" y="117.6" textLength="12.2" clip-path="url(#bn16-line-4)">
+</text><text class="bn16-r2" x="0" y="142" textLength="109.8" clip-path="url(#bn16-line-5)">Deep&#160;Work</text><text class="bn16-r2" x="1171.2" y="142" textLength="12.2" clip-path="url(#bn16-line-5)">
+</text><text class="bn16-r2" x="0" y="166.4" textLength="280.6" clip-path="url(#bn16-line-6)">How&#160;to&#160;Take&#160;Smart&#160;Notes</text><text class="bn16-r2" x="1171.2" y="166.4" textLength="12.2" clip-path="url(#bn16-line-6)">
+</text><text class="bn16-r1" x="0" y="190.8" textLength="61" clip-path="url(#bn16-line-7)">vault</text><text class="bn16-r3" x="73.2" y="190.8" textLength="12.2" clip-path="url(#bn16-line-7)">$</text><text class="bn16-r4" x="97.6" y="190.8" textLength="927.2" clip-path="url(#bn16-line-7)">bn&#160;find&#160;-q&#160;&#x27;near:[[Deep&#160;Work]]&lt;=2&#160;and&#160;status:wip&#x27;&#160;--json&#160;|&#160;jq&#160;-r&#160;&#x27;.[].title&#x27;</text><text class="bn16-r2" x="1171.2" y="190.8" textLength="12.2" clip-path="url(#bn16-line-7)">
+</text><text class="bn16-r2" x="1171.2" y="215.2" textLength="12.2" clip-path="url(#bn16-line-8)">
+</text><text class="bn16-r2" x="1171.2" y="239.6" textLength="12.2" clip-path="url(#bn16-line-9)">
+</text><text class="bn16-r2" x="1171.2" y="264" textLength="12.2" clip-path="url(#bn16-line-10)">
+</text><text class="bn16-r2" x="1171.2" y="288.4" textLength="12.2" clip-path="url(#bn16-line-11)">
+</text><text class="bn16-r2" x="1171.2" y="312.8" textLength="12.2" clip-path="url(#bn16-line-12)">
+</text><text class="bn16-r2" x="1171.2" y="337.2" textLength="12.2" clip-path="url(#bn16-line-13)">
+</text>
+    </g>
+    </g>
+</g>
+<style>
+.bn17-matrix { font-family: Fira Code, monospace; font-size: 20px; line-height: 24.4px; font-variant-east-asian: full-width; }
+.bn17-r1 { fill: #7dcfff;font-weight: bold }
+.bn17-r2 { fill: #c0caf5 }
+.bn17-r3 { fill: #7d84a2 }
+.bn17-r4 { fill: #c0caf5;font-weight: bold }
+.bn17-r5 { fill: #1a1b26 }
+</style>
+<defs><clipPath id="bn17-line-0">
+    <rect x="0" y="1.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn17-line-1">
+    <rect x="0" y="25.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn17-line-2">
+    <rect x="0" y="50.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn17-line-3">
+    <rect x="0" y="74.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn17-line-4">
+    <rect x="0" y="99.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn17-line-5">
+    <rect x="0" y="123.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn17-line-6">
+    <rect x="0" y="147.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn17-line-7">
+    <rect x="0" y="172.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn17-line-8">
+    <rect x="0" y="196.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn17-line-9">
+    <rect x="0" y="221.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn17-line-10">
+    <rect x="0" y="245.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn17-line-11">
+    <rect x="0" y="269.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn17-line-12">
+    <rect x="0" y="294.3" width="1171.2" height="24.65"/>
+            </clipPath></defs>
+<g class="bn-frame bn-f17">
+<text class="bn-caption" text-anchor="end" x="1166" y="27">link-graph&#160;operators</text>
+    <g transform="translate(9, 41)" clip-path="url(#bn-clip-terminal)">
+    <rect fill="#c0caf5" x="97.6" y="245.5" width="12.2" height="24.65" shape-rendering="crispEdges"/>
+    <g class="bn17-matrix">
+    <text class="bn17-r1" x="0" y="20" textLength="61" clip-path="url(#bn17-line-0)">vault</text><text class="bn17-r3" x="73.2" y="20" textLength="12.2" clip-path="url(#bn17-line-0)">$</text><text class="bn17-r4" x="97.6" y="20" textLength="97.6" clip-path="url(#bn17-line-0)">bn&#160;views</text><text class="bn17-r2" x="1171.2" y="20" textLength="12.2" clip-path="url(#bn17-line-0)">
+</text><text class="bn17-r2" x="0" y="44.4" textLength="1049.2" clip-path="url(#bn17-line-1)">NAME&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;DESCRIPTION&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;QUERY&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;STATUS</text><text class="bn17-r2" x="1171.2" y="44.4" textLength="12.2" clip-path="url(#bn17-line-1)">
+</text><text class="bn17-r2" x="0" y="68.8" textLength="1000.4" clip-path="url(#bn17-line-2)">Reading&#160;list&#160;&#160;Books&#160;waiting&#160;on&#160;the&#160;shelf&#160;&#160;&#160;&#160;&#160;category:Books&#160;and&#160;status:to-read&#160;&#160;ok</text><text class="bn17-r2" x="1171.2" y="68.8" textLength="12.2" clip-path="url(#bn17-line-2)">
+</text><text class="bn17-r2" x="0" y="93.2" textLength="1000.4" clip-path="url(#bn17-line-3)">Active&#160;work&#160;&#160;&#160;What&#160;I&#160;am&#160;actually&#160;working&#160;on&#160;&#160;status:wip&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;&#160;ok</text><text class="bn17-r2" x="1171.2" y="93.2" textLength="12.2" clip-path="url(#bn17-line-3)">
+</text><text class="bn17-r1" x="0" y="117.6" textLength="61" clip-path="url(#bn17-line-4)">vault</text><text class="bn17-r3" x="73.2" y="117.6" textLength="12.2" clip-path="url(#bn17-line-4)">$</text><text class="bn17-r4" x="97.6" y="117.6" textLength="890.6" clip-path="url(#bn17-line-4)">bn&#160;find&#160;-q&#160;&#x27;category:Books&#160;and&#160;prop:rating&gt;=5&#x27;&#160;--json&#160;|&#160;jq&#160;-r&#160;&#x27;.[].title&#x27;</text><text class="bn17-r2" x="1171.2" y="117.6" textLength="12.2" clip-path="url(#bn17-line-4)">
+</text><text class="bn17-r2" x="0" y="142" textLength="109.8" clip-path="url(#bn17-line-5)">Deep&#160;Work</text><text class="bn17-r2" x="1171.2" y="142" textLength="12.2" clip-path="url(#bn17-line-5)">
+</text><text class="bn17-r2" x="0" y="166.4" textLength="280.6" clip-path="url(#bn17-line-6)">How&#160;to&#160;Take&#160;Smart&#160;Notes</text><text class="bn17-r2" x="1171.2" y="166.4" textLength="12.2" clip-path="url(#bn17-line-6)">
+</text><text class="bn17-r1" x="0" y="190.8" textLength="61" clip-path="url(#bn17-line-7)">vault</text><text class="bn17-r3" x="73.2" y="190.8" textLength="12.2" clip-path="url(#bn17-line-7)">$</text><text class="bn17-r4" x="97.6" y="190.8" textLength="927.2" clip-path="url(#bn17-line-7)">bn&#160;find&#160;-q&#160;&#x27;near:[[Deep&#160;Work]]&lt;=2&#160;and&#160;status:wip&#x27;&#160;--json&#160;|&#160;jq&#160;-r&#160;&#x27;.[].title&#x27;</text><text class="bn17-r2" x="1171.2" y="190.8" textLength="12.2" clip-path="url(#bn17-line-7)">
+</text><text class="bn17-r2" x="0" y="215.2" textLength="170.8" clip-path="url(#bn17-line-8)">Garden&#160;Planner</text><text class="bn17-r2" x="1171.2" y="215.2" textLength="12.2" clip-path="url(#bn17-line-8)">
+</text><text class="bn17-r2" x="0" y="239.6" textLength="122" clip-path="url(#bn17-line-9)">Learn&#160;Rust</text><text class="bn17-r2" x="1171.2" y="239.6" textLength="12.2" clip-path="url(#bn17-line-9)">
+</text><text class="bn17-r1" x="0" y="264" textLength="61" clip-path="url(#bn17-line-10)">vault</text><text class="bn17-r3" x="73.2" y="264" textLength="12.2" clip-path="url(#bn17-line-10)">$</text><text class="bn17-r2" x="1171.2" y="264" textLength="12.2" clip-path="url(#bn17-line-10)">
+</text><text class="bn17-r2" x="1171.2" y="288.4" textLength="12.2" clip-path="url(#bn17-line-11)">
+</text><text class="bn17-r2" x="1171.2" y="312.8" textLength="12.2" clip-path="url(#bn17-line-12)">
+</text><text class="bn17-r2" x="1171.2" y="337.2" textLength="12.2" clip-path="url(#bn17-line-13)">
+</text>
+    </g>
+    </g>
+</g>
+<style>
+.bn18-matrix { font-family: Fira Code, monospace; font-size: 20px; line-height: 24.4px; font-variant-east-asian: full-width; }
+.bn18-r1 { fill: #7dcfff;font-weight: bold }
+.bn18-r2 { fill: #c0caf5 }
+.bn18-r3 { fill: #7d84a2 }
+.bn18-r4 { fill: #1a1b26 }
+</style>
+<defs><clipPath id="bn18-line-0">
+    <rect x="0" y="1.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn18-line-1">
+    <rect x="0" y="25.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn18-line-2">
+    <rect x="0" y="50.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn18-line-3">
+    <rect x="0" y="74.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn18-line-4">
+    <rect x="0" y="99.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn18-line-5">
+    <rect x="0" y="123.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn18-line-6">
+    <rect x="0" y="147.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn18-line-7">
+    <rect x="0" y="172.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn18-line-8">
+    <rect x="0" y="196.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn18-line-9">
+    <rect x="0" y="221.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn18-line-10">
+    <rect x="0" y="245.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn18-line-11">
+    <rect x="0" y="269.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn18-line-12">
+    <rect x="0" y="294.3" width="1171.2" height="24.65"/>
+            </clipPath></defs>
+<g class="bn-frame bn-f18">
+<text class="bn-caption" text-anchor="end" x="1166" y="27">related&#160;notes,&#160;with&#160;reasons</text>
+    <g transform="translate(9, 41)" clip-path="url(#bn-clip-terminal)">
+    <rect fill="#c0caf5" x="97.6" y="1.5" width="12.2" height="24.65" shape-rendering="crispEdges"/>
+    <g class="bn18-matrix">
+    <text class="bn18-r1" x="0" y="20" textLength="61" clip-path="url(#bn18-line-0)">vault</text><text class="bn18-r3" x="73.2" y="20" textLength="12.2" clip-path="url(#bn18-line-0)">$</text><text class="bn18-r2" x="1171.2" y="20" textLength="12.2" clip-path="url(#bn18-line-0)">
+</text><text class="bn18-r2" x="1171.2" y="44.4" textLength="12.2" clip-path="url(#bn18-line-1)">
+</text><text class="bn18-r2" x="1171.2" y="68.8" textLength="12.2" clip-path="url(#bn18-line-2)">
+</text><text class="bn18-r2" x="1171.2" y="93.2" textLength="12.2" clip-path="url(#bn18-line-3)">
+</text><text class="bn18-r2" x="1171.2" y="117.6" textLength="12.2" clip-path="url(#bn18-line-4)">
+</text><text class="bn18-r2" x="1171.2" y="142" textLength="12.2" clip-path="url(#bn18-line-5)">
+</text><text class="bn18-r2" x="1171.2" y="166.4" textLength="12.2" clip-path="url(#bn18-line-6)">
+</text><text class="bn18-r2" x="1171.2" y="190.8" textLength="12.2" clip-path="url(#bn18-line-7)">
+</text><text class="bn18-r2" x="1171.2" y="215.2" textLength="12.2" clip-path="url(#bn18-line-8)">
+</text><text class="bn18-r2" x="1171.2" y="239.6" textLength="12.2" clip-path="url(#bn18-line-9)">
+</text><text class="bn18-r2" x="1171.2" y="264" textLength="12.2" clip-path="url(#bn18-line-10)">
+</text><text class="bn18-r2" x="1171.2" y="288.4" textLength="12.2" clip-path="url(#bn18-line-11)">
+</text><text class="bn18-r2" x="1171.2" y="312.8" textLength="12.2" clip-path="url(#bn18-line-12)">
+</text><text class="bn18-r2" x="1171.2" y="337.2" textLength="12.2" clip-path="url(#bn18-line-13)">
+</text>
+    </g>
+    </g>
+</g>
+<style>
+.bn19-matrix { font-family: Fira Code, monospace; font-size: 20px; line-height: 24.4px; font-variant-east-asian: full-width; }
+.bn19-r1 { fill: #7dcfff;font-weight: bold }
+.bn19-r2 { fill: #c0caf5 }
+.bn19-r3 { fill: #7d84a2 }
+.bn19-r4 { fill: #c0caf5;font-weight: bold }
+.bn19-r5 { fill: #1a1b26 }
+</style>
+<defs><clipPath id="bn19-line-0">
+    <rect x="0" y="1.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn19-line-1">
+    <rect x="0" y="25.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn19-line-2">
+    <rect x="0" y="50.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn19-line-3">
+    <rect x="0" y="74.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn19-line-4">
+    <rect x="0" y="99.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn19-line-5">
+    <rect x="0" y="123.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn19-line-6">
+    <rect x="0" y="147.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn19-line-7">
+    <rect x="0" y="172.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn19-line-8">
+    <rect x="0" y="196.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn19-line-9">
+    <rect x="0" y="221.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn19-line-10">
+    <rect x="0" y="245.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn19-line-11">
+    <rect x="0" y="269.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn19-line-12">
+    <rect x="0" y="294.3" width="1171.2" height="24.65"/>
+            </clipPath></defs>
+<g class="bn-frame bn-f19">
+<text class="bn-caption" text-anchor="end" x="1166" y="27">related&#160;notes,&#160;with&#160;reasons</text>
+    <g transform="translate(9, 41)" clip-path="url(#bn-clip-terminal)">
+    <rect fill="#c0caf5" x="256.2" y="1.5" width="12.2" height="24.65" shape-rendering="crispEdges"/>
+    <g class="bn19-matrix">
+    <text class="bn19-r1" x="0" y="20" textLength="61" clip-path="url(#bn19-line-0)">vault</text><text class="bn19-r3" x="73.2" y="20" textLength="12.2" clip-path="url(#bn19-line-0)">$</text><text class="bn19-r4" x="97.6" y="20" textLength="158.6" clip-path="url(#bn19-line-0)">bn&#160;related&#160;&#x27;B</text><text class="bn19-r2" x="1171.2" y="20" textLength="12.2" clip-path="url(#bn19-line-0)">
+</text><text class="bn19-r2" x="1171.2" y="44.4" textLength="12.2" clip-path="url(#bn19-line-1)">
+</text><text class="bn19-r2" x="1171.2" y="68.8" textLength="12.2" clip-path="url(#bn19-line-2)">
+</text><text class="bn19-r2" x="1171.2" y="93.2" textLength="12.2" clip-path="url(#bn19-line-3)">
+</text><text class="bn19-r2" x="1171.2" y="117.6" textLength="12.2" clip-path="url(#bn19-line-4)">
+</text><text class="bn19-r2" x="1171.2" y="142" textLength="12.2" clip-path="url(#bn19-line-5)">
+</text><text class="bn19-r2" x="1171.2" y="166.4" textLength="12.2" clip-path="url(#bn19-line-6)">
+</text><text class="bn19-r2" x="1171.2" y="190.8" textLength="12.2" clip-path="url(#bn19-line-7)">
+</text><text class="bn19-r2" x="1171.2" y="215.2" textLength="12.2" clip-path="url(#bn19-line-8)">
+</text><text class="bn19-r2" x="1171.2" y="239.6" textLength="12.2" clip-path="url(#bn19-line-9)">
+</text><text class="bn19-r2" x="1171.2" y="264" textLength="12.2" clip-path="url(#bn19-line-10)">
+</text><text class="bn19-r2" x="1171.2" y="288.4" textLength="12.2" clip-path="url(#bn19-line-11)">
+</text><text class="bn19-r2" x="1171.2" y="312.8" textLength="12.2" clip-path="url(#bn19-line-12)">
+</text><text class="bn19-r2" x="1171.2" y="337.2" textLength="12.2" clip-path="url(#bn19-line-13)">
+</text>
+    </g>
+    </g>
+</g>
+<style>
+.bn20-matrix { font-family: Fira Code, monospace; font-size: 20px; line-height: 24.4px; font-variant-east-asian: full-width; }
+.bn20-r1 { fill: #7dcfff;font-weight: bold }
+.bn20-r2 { fill: #c0caf5 }
+.bn20-r3 { fill: #7d84a2 }
+.bn20-r4 { fill: #c0caf5;font-weight: bold }
+.bn20-r5 { fill: #1a1b26 }
+</style>
+<defs><clipPath id="bn20-line-0">
+    <rect x="0" y="1.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn20-line-1">
+    <rect x="0" y="25.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn20-line-2">
+    <rect x="0" y="50.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn20-line-3">
+    <rect x="0" y="74.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn20-line-4">
+    <rect x="0" y="99.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn20-line-5">
+    <rect x="0" y="123.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn20-line-6">
+    <rect x="0" y="147.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn20-line-7">
+    <rect x="0" y="172.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn20-line-8">
+    <rect x="0" y="196.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn20-line-9">
+    <rect x="0" y="221.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn20-line-10">
+    <rect x="0" y="245.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn20-line-11">
+    <rect x="0" y="269.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn20-line-12">
+    <rect x="0" y="294.3" width="1171.2" height="24.65"/>
+            </clipPath></defs>
+<g class="bn-frame bn-f20">
+<text class="bn-caption" text-anchor="end" x="1166" y="27">related&#160;notes,&#160;with&#160;reasons</text>
+    <g transform="translate(9, 41)" clip-path="url(#bn-clip-terminal)">
+    <rect fill="#c0caf5" x="402.6" y="1.5" width="12.2" height="24.65" shape-rendering="crispEdges"/>
+    <g class="bn20-matrix">
+    <text class="bn20-r1" x="0" y="20" textLength="61" clip-path="url(#bn20-line-0)">vault</text><text class="bn20-r3" x="73.2" y="20" textLength="12.2" clip-path="url(#bn20-line-0)">$</text><text class="bn20-r4" x="97.6" y="20" textLength="305" clip-path="url(#bn20-line-0)">bn&#160;related&#160;&#x27;Books/Deep&#160;Wo</text><text class="bn20-r2" x="1171.2" y="20" textLength="12.2" clip-path="url(#bn20-line-0)">
+</text><text class="bn20-r2" x="1171.2" y="44.4" textLength="12.2" clip-path="url(#bn20-line-1)">
+</text><text class="bn20-r2" x="1171.2" y="68.8" textLength="12.2" clip-path="url(#bn20-line-2)">
+</text><text class="bn20-r2" x="1171.2" y="93.2" textLength="12.2" clip-path="url(#bn20-line-3)">
+</text><text class="bn20-r2" x="1171.2" y="117.6" textLength="12.2" clip-path="url(#bn20-line-4)">
+</text><text class="bn20-r2" x="1171.2" y="142" textLength="12.2" clip-path="url(#bn20-line-5)">
+</text><text class="bn20-r2" x="1171.2" y="166.4" textLength="12.2" clip-path="url(#bn20-line-6)">
+</text><text class="bn20-r2" x="1171.2" y="190.8" textLength="12.2" clip-path="url(#bn20-line-7)">
+</text><text class="bn20-r2" x="1171.2" y="215.2" textLength="12.2" clip-path="url(#bn20-line-8)">
+</text><text class="bn20-r2" x="1171.2" y="239.6" textLength="12.2" clip-path="url(#bn20-line-9)">
+</text><text class="bn20-r2" x="1171.2" y="264" textLength="12.2" clip-path="url(#bn20-line-10)">
+</text><text class="bn20-r2" x="1171.2" y="288.4" textLength="12.2" clip-path="url(#bn20-line-11)">
+</text><text class="bn20-r2" x="1171.2" y="312.8" textLength="12.2" clip-path="url(#bn20-line-12)">
+</text><text class="bn20-r2" x="1171.2" y="337.2" textLength="12.2" clip-path="url(#bn20-line-13)">
+</text>
+    </g>
+    </g>
+</g>
+<style>
+.bn21-matrix { font-family: Fira Code, monospace; font-size: 20px; line-height: 24.4px; font-variant-east-asian: full-width; }
+.bn21-r1 { fill: #7dcfff;font-weight: bold }
+.bn21-r2 { fill: #c0caf5 }
+.bn21-r3 { fill: #7d84a2 }
+.bn21-r4 { fill: #c0caf5;font-weight: bold }
+.bn21-r5 { fill: #1a1b26 }
+</style>
+<defs><clipPath id="bn21-line-0">
+    <rect x="0" y="1.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn21-line-1">
+    <rect x="0" y="25.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn21-line-2">
+    <rect x="0" y="50.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn21-line-3">
+    <rect x="0" y="74.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn21-line-4">
+    <rect x="0" y="99.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn21-line-5">
+    <rect x="0" y="123.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn21-line-6">
+    <rect x="0" y="147.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn21-line-7">
+    <rect x="0" y="172.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn21-line-8">
+    <rect x="0" y="196.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn21-line-9">
+    <rect x="0" y="221.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn21-line-10">
+    <rect x="0" y="245.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn21-line-11">
+    <rect x="0" y="269.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn21-line-12">
+    <rect x="0" y="294.3" width="1171.2" height="24.65"/>
+            </clipPath></defs>
+<g class="bn-frame bn-f21">
+<text class="bn-caption" text-anchor="end" x="1166" y="27">related&#160;notes,&#160;with&#160;reasons</text>
+    <g transform="translate(9, 41)" clip-path="url(#bn-clip-terminal)">
+    <rect fill="#c0caf5" x="536.8" y="1.5" width="12.2" height="24.65" shape-rendering="crispEdges"/>
+    <g class="bn21-matrix">
+    <text class="bn21-r1" x="0" y="20" textLength="61" clip-path="url(#bn21-line-0)">vault</text><text class="bn21-r3" x="73.2" y="20" textLength="12.2" clip-path="url(#bn21-line-0)">$</text><text class="bn21-r4" x="97.6" y="20" textLength="439.2" clip-path="url(#bn21-line-0)">bn&#160;related&#160;&#x27;Books/Deep&#160;Work.md&#x27;&#160;|&#160;he</text><text class="bn21-r2" x="1171.2" y="20" textLength="12.2" clip-path="url(#bn21-line-0)">
+</text><text class="bn21-r2" x="1171.2" y="44.4" textLength="12.2" clip-path="url(#bn21-line-1)">
+</text><text class="bn21-r2" x="1171.2" y="68.8" textLength="12.2" clip-path="url(#bn21-line-2)">
+</text><text class="bn21-r2" x="1171.2" y="93.2" textLength="12.2" clip-path="url(#bn21-line-3)">
+</text><text class="bn21-r2" x="1171.2" y="117.6" textLength="12.2" clip-path="url(#bn21-line-4)">
+</text><text class="bn21-r2" x="1171.2" y="142" textLength="12.2" clip-path="url(#bn21-line-5)">
+</text><text class="bn21-r2" x="1171.2" y="166.4" textLength="12.2" clip-path="url(#bn21-line-6)">
+</text><text class="bn21-r2" x="1171.2" y="190.8" textLength="12.2" clip-path="url(#bn21-line-7)">
+</text><text class="bn21-r2" x="1171.2" y="215.2" textLength="12.2" clip-path="url(#bn21-line-8)">
+</text><text class="bn21-r2" x="1171.2" y="239.6" textLength="12.2" clip-path="url(#bn21-line-9)">
+</text><text class="bn21-r2" x="1171.2" y="264" textLength="12.2" clip-path="url(#bn21-line-10)">
+</text><text class="bn21-r2" x="1171.2" y="288.4" textLength="12.2" clip-path="url(#bn21-line-11)">
+</text><text class="bn21-r2" x="1171.2" y="312.8" textLength="12.2" clip-path="url(#bn21-line-12)">
+</text><text class="bn21-r2" x="1171.2" y="337.2" textLength="12.2" clip-path="url(#bn21-line-13)">
+</text>
+    </g>
+    </g>
+</g>
+<style>
+.bn22-matrix { font-family: Fira Code, monospace; font-size: 20px; line-height: 24.4px; font-variant-east-asian: full-width; }
+.bn22-r1 { fill: #7dcfff;font-weight: bold }
+.bn22-r2 { fill: #c0caf5 }
+.bn22-r3 { fill: #7d84a2 }
+.bn22-r4 { fill: #c0caf5;font-weight: bold }
+.bn22-r5 { fill: #1a1b26 }
+</style>
+<defs><clipPath id="bn22-line-0">
+    <rect x="0" y="1.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn22-line-1">
+    <rect x="0" y="25.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn22-line-2">
+    <rect x="0" y="50.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn22-line-3">
+    <rect x="0" y="74.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn22-line-4">
+    <rect x="0" y="99.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn22-line-5">
+    <rect x="0" y="123.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn22-line-6">
+    <rect x="0" y="147.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn22-line-7">
+    <rect x="0" y="172.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn22-line-8">
+    <rect x="0" y="196.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn22-line-9">
+    <rect x="0" y="221.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn22-line-10">
+    <rect x="0" y="245.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn22-line-11">
+    <rect x="0" y="269.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn22-line-12">
+    <rect x="0" y="294.3" width="1171.2" height="24.65"/>
+            </clipPath></defs>
+<g class="bn-frame bn-f22">
+<text class="bn-caption" text-anchor="end" x="1166" y="27">related&#160;notes,&#160;with&#160;reasons</text>
+    <g transform="translate(9, 41)" clip-path="url(#bn-clip-terminal)">
+    <rect fill="#c0caf5" x="610" y="1.5" width="12.2" height="24.65" shape-rendering="crispEdges"/>
+    <g class="bn22-matrix">
+    <text class="bn22-r1" x="0" y="20" textLength="61" clip-path="url(#bn22-line-0)">vault</text><text class="bn22-r3" x="73.2" y="20" textLength="12.2" clip-path="url(#bn22-line-0)">$</text><text class="bn22-r4" x="97.6" y="20" textLength="512.4" clip-path="url(#bn22-line-0)">bn&#160;related&#160;&#x27;Books/Deep&#160;Work.md&#x27;&#160;|&#160;head&#160;-12</text><text class="bn22-r2" x="1171.2" y="20" textLength="12.2" clip-path="url(#bn22-line-0)">
+</text><text class="bn22-r2" x="1171.2" y="44.4" textLength="12.2" clip-path="url(#bn22-line-1)">
+</text><text class="bn22-r2" x="1171.2" y="68.8" textLength="12.2" clip-path="url(#bn22-line-2)">
+</text><text class="bn22-r2" x="1171.2" y="93.2" textLength="12.2" clip-path="url(#bn22-line-3)">
+</text><text class="bn22-r2" x="1171.2" y="117.6" textLength="12.2" clip-path="url(#bn22-line-4)">
+</text><text class="bn22-r2" x="1171.2" y="142" textLength="12.2" clip-path="url(#bn22-line-5)">
+</text><text class="bn22-r2" x="1171.2" y="166.4" textLength="12.2" clip-path="url(#bn22-line-6)">
+</text><text class="bn22-r2" x="1171.2" y="190.8" textLength="12.2" clip-path="url(#bn22-line-7)">
+</text><text class="bn22-r2" x="1171.2" y="215.2" textLength="12.2" clip-path="url(#bn22-line-8)">
+</text><text class="bn22-r2" x="1171.2" y="239.6" textLength="12.2" clip-path="url(#bn22-line-9)">
+</text><text class="bn22-r2" x="1171.2" y="264" textLength="12.2" clip-path="url(#bn22-line-10)">
+</text><text class="bn22-r2" x="1171.2" y="288.4" textLength="12.2" clip-path="url(#bn22-line-11)">
+</text><text class="bn22-r2" x="1171.2" y="312.8" textLength="12.2" clip-path="url(#bn22-line-12)">
+</text><text class="bn22-r2" x="1171.2" y="337.2" textLength="12.2" clip-path="url(#bn22-line-13)">
+</text>
+    </g>
+    </g>
+</g>
+<style>
+.bn23-matrix { font-family: Fira Code, monospace; font-size: 20px; line-height: 24.4px; font-variant-east-asian: full-width; }
+.bn23-r1 { fill: #7dcfff;font-weight: bold }
+.bn23-r2 { fill: #c0caf5 }
+.bn23-r3 { fill: #7d84a2 }
+.bn23-r4 { fill: #c0caf5;font-weight: bold }
+.bn23-r5 { fill: #1a1b26 }
+</style>
+<defs><clipPath id="bn23-line-0">
+    <rect x="0" y="1.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn23-line-1">
+    <rect x="0" y="25.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn23-line-2">
+    <rect x="0" y="50.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn23-line-3">
+    <rect x="0" y="74.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn23-line-4">
+    <rect x="0" y="99.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn23-line-5">
+    <rect x="0" y="123.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn23-line-6">
+    <rect x="0" y="147.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn23-line-7">
+    <rect x="0" y="172.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn23-line-8">
+    <rect x="0" y="196.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn23-line-9">
+    <rect x="0" y="221.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn23-line-10">
+    <rect x="0" y="245.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn23-line-11">
+    <rect x="0" y="269.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn23-line-12">
+    <rect x="0" y="294.3" width="1171.2" height="24.65"/>
+            </clipPath></defs>
+<g class="bn-frame bn-f23">
+<text class="bn-caption" text-anchor="end" x="1166" y="27">related&#160;notes,&#160;with&#160;reasons</text>
+    <g transform="translate(9, 41)" clip-path="url(#bn-clip-terminal)">
+    <rect fill="#c0caf5" x="97.6" y="318.7" width="12.2" height="24.65" shape-rendering="crispEdges"/>
+    <g class="bn23-matrix">
+    <text class="bn23-r1" x="0" y="20" textLength="61" clip-path="url(#bn23-line-0)">vault</text><text class="bn23-r3" x="73.2" y="20" textLength="12.2" clip-path="url(#bn23-line-0)">$</text><text class="bn23-r4" x="97.6" y="20" textLength="512.4" clip-path="url(#bn23-line-0)">bn&#160;related&#160;&#x27;Books/Deep&#160;Work.md&#x27;&#160;|&#160;head&#160;-12</text><text class="bn23-r2" x="1171.2" y="20" textLength="12.2" clip-path="url(#bn23-line-0)">
+</text><text class="bn23-r2" x="0" y="44.4" textLength="536.8" clip-path="url(#bn23-line-1)">1.&#160;[direct]&#160;Books/How&#160;to&#160;Take&#160;Smart&#160;Notes.md</text><text class="bn23-r2" x="1171.2" y="44.4" textLength="12.2" clip-path="url(#bn23-line-1)">
+</text><text class="bn23-r2" x="0" y="68.8" textLength="256.2" clip-path="url(#bn23-line-2)">&#160;&#160;&#160;graph:&#160;direct&#160;link</text><text class="bn23-r2" x="1171.2" y="68.8" textLength="12.2" clip-path="url(#bn23-line-2)">
+</text><text class="bn23-r2" x="0" y="93.2" textLength="451.4" clip-path="url(#bn23-line-3)">&#160;&#160;&#160;text:&#160;shared&#160;terms:&#160;to,&#160;ideas,&#160;the</text><text class="bn23-r2" x="1171.2" y="93.2" textLength="12.2" clip-path="url(#bn23-line-3)">
+</text><text class="bn23-r2" x="0" y="117.6" textLength="561.2" clip-path="url(#bn23-line-4)">&#160;&#160;&#160;metadata:&#160;shared&#160;metadata:&#160;categories=books</text><text class="bn23-r2" x="1171.2" y="117.6" textLength="12.2" clip-path="url(#bn23-line-4)">
+</text><text class="bn23-r2" x="0" y="142" textLength="524.6" clip-path="url(#bn23-line-5)">2.&#160;[direct]&#160;Concepts/Deliberate&#160;Practice.md</text><text class="bn23-r2" x="1171.2" y="142" textLength="12.2" clip-path="url(#bn23-line-5)">
+</text><text class="bn23-r2" x="0" y="166.4" textLength="256.2" clip-path="url(#bn23-line-6)">&#160;&#160;&#160;graph:&#160;direct&#160;link</text><text class="bn23-r2" x="1171.2" y="166.4" textLength="12.2" clip-path="url(#bn23-line-6)">
+</text><text class="bn23-r2" x="0" y="190.8" textLength="597.8" clip-path="url(#bn23-line-7)">&#160;&#160;&#160;text:&#160;shared&#160;terms:&#160;deep,&#160;practice,&#160;deliberate</text><text class="bn23-r2" x="1171.2" y="190.8" textLength="12.2" clip-path="url(#bn23-line-7)">
+</text><text class="bn23-r2" x="0" y="215.2" textLength="488" clip-path="url(#bn23-line-8)">&#160;&#160;&#160;metadata:&#160;shared&#160;metadata:&#160;tags=focus</text><text class="bn23-r2" x="1171.2" y="215.2" textLength="12.2" clip-path="url(#bn23-line-8)">
+</text><text class="bn23-r2" x="0" y="239.6" textLength="341.6" clip-path="url(#bn23-line-9)">3.&#160;[direct]&#160;Weekly&#160;Review.md</text><text class="bn23-r2" x="1171.2" y="239.6" textLength="12.2" clip-path="url(#bn23-line-9)">
+</text><text class="bn23-r2" x="0" y="264" textLength="256.2" clip-path="url(#bn23-line-10)">&#160;&#160;&#160;graph:&#160;direct&#160;link</text><text class="bn23-r2" x="1171.2" y="264" textLength="12.2" clip-path="url(#bn23-line-10)">
+</text><text class="bn23-r2" x="0" y="288.4" textLength="488" clip-path="url(#bn23-line-11)">&#160;&#160;&#160;text:&#160;shared&#160;terms:&#160;the,&#160;weekly,&#160;deep</text><text class="bn23-r2" x="1171.2" y="288.4" textLength="12.2" clip-path="url(#bn23-line-11)">
+</text><text class="bn23-r2" x="0" y="312.8" textLength="573.4" clip-path="url(#bn23-line-12)">&#160;&#160;&#160;metadata:&#160;shared&#160;metadata:&#160;tags=productivity</text><text class="bn23-r2" x="1171.2" y="312.8" textLength="12.2" clip-path="url(#bn23-line-12)">
+</text><text class="bn23-r1" x="0" y="337.2" textLength="61" clip-path="url(#bn23-line-13)">vault</text><text class="bn23-r3" x="73.2" y="337.2" textLength="12.2" clip-path="url(#bn23-line-13)">$</text><text class="bn23-r2" x="1171.2" y="337.2" textLength="12.2" clip-path="url(#bn23-line-13)">
+</text>
+    </g>
+    </g>
+</g>
+<style>
+.bn24-matrix { font-family: Fira Code, monospace; font-size: 20px; line-height: 24.4px; font-variant-east-asian: full-width; }
+.bn24-r1 { fill: #7dcfff;font-weight: bold }
+.bn24-r2 { fill: #c0caf5 }
+.bn24-r3 { fill: #7d84a2 }
+.bn24-r4 { fill: #1a1b26 }
+</style>
+<defs><clipPath id="bn24-line-0">
+    <rect x="0" y="1.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn24-line-1">
+    <rect x="0" y="25.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn24-line-2">
+    <rect x="0" y="50.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn24-line-3">
+    <rect x="0" y="74.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn24-line-4">
+    <rect x="0" y="99.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn24-line-5">
+    <rect x="0" y="123.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn24-line-6">
+    <rect x="0" y="147.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn24-line-7">
+    <rect x="0" y="172.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn24-line-8">
+    <rect x="0" y="196.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn24-line-9">
+    <rect x="0" y="221.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn24-line-10">
+    <rect x="0" y="245.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn24-line-11">
+    <rect x="0" y="269.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn24-line-12">
+    <rect x="0" y="294.3" width="1171.2" height="24.65"/>
+            </clipPath></defs>
+<g class="bn-frame bn-f24">
+<text class="bn-caption" text-anchor="end" x="1166" y="27">capture&#160;without&#160;choosing&#160;a&#160;file</text>
+    <g transform="translate(9, 41)" clip-path="url(#bn-clip-terminal)">
+    <rect fill="#c0caf5" x="97.6" y="1.5" width="12.2" height="24.65" shape-rendering="crispEdges"/>
+    <g class="bn24-matrix">
+    <text class="bn24-r1" x="0" y="20" textLength="61" clip-path="url(#bn24-line-0)">vault</text><text class="bn24-r3" x="73.2" y="20" textLength="12.2" clip-path="url(#bn24-line-0)">$</text><text class="bn24-r2" x="1171.2" y="20" textLength="12.2" clip-path="url(#bn24-line-0)">
+</text><text class="bn24-r2" x="1171.2" y="44.4" textLength="12.2" clip-path="url(#bn24-line-1)">
+</text><text class="bn24-r2" x="1171.2" y="68.8" textLength="12.2" clip-path="url(#bn24-line-2)">
+</text><text class="bn24-r2" x="1171.2" y="93.2" textLength="12.2" clip-path="url(#bn24-line-3)">
+</text><text class="bn24-r2" x="1171.2" y="117.6" textLength="12.2" clip-path="url(#bn24-line-4)">
+</text><text class="bn24-r2" x="1171.2" y="142" textLength="12.2" clip-path="url(#bn24-line-5)">
+</text><text class="bn24-r2" x="1171.2" y="166.4" textLength="12.2" clip-path="url(#bn24-line-6)">
+</text><text class="bn24-r2" x="1171.2" y="190.8" textLength="12.2" clip-path="url(#bn24-line-7)">
+</text><text class="bn24-r2" x="1171.2" y="215.2" textLength="12.2" clip-path="url(#bn24-line-8)">
+</text><text class="bn24-r2" x="1171.2" y="239.6" textLength="12.2" clip-path="url(#bn24-line-9)">
+</text><text class="bn24-r2" x="1171.2" y="264" textLength="12.2" clip-path="url(#bn24-line-10)">
+</text><text class="bn24-r2" x="1171.2" y="288.4" textLength="12.2" clip-path="url(#bn24-line-11)">
+</text><text class="bn24-r2" x="1171.2" y="312.8" textLength="12.2" clip-path="url(#bn24-line-12)">
+</text><text class="bn24-r2" x="1171.2" y="337.2" textLength="12.2" clip-path="url(#bn24-line-13)">
+</text>
+    </g>
+    </g>
+</g>
+<style>
+.bn25-matrix { font-family: Fira Code, monospace; font-size: 20px; line-height: 24.4px; font-variant-east-asian: full-width; }
+.bn25-r1 { fill: #7dcfff;font-weight: bold }
+.bn25-r2 { fill: #c0caf5 }
+.bn25-r3 { fill: #7d84a2 }
+.bn25-r4 { fill: #c0caf5;font-weight: bold }
+.bn25-r5 { fill: #1a1b26 }
+</style>
+<defs><clipPath id="bn25-line-0">
+    <rect x="0" y="1.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn25-line-1">
+    <rect x="0" y="25.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn25-line-2">
+    <rect x="0" y="50.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn25-line-3">
+    <rect x="0" y="74.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn25-line-4">
+    <rect x="0" y="99.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn25-line-5">
+    <rect x="0" y="123.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn25-line-6">
+    <rect x="0" y="147.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn25-line-7">
+    <rect x="0" y="172.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn25-line-8">
+    <rect x="0" y="196.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn25-line-9">
+    <rect x="0" y="221.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn25-line-10">
+    <rect x="0" y="245.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn25-line-11">
+    <rect x="0" y="269.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn25-line-12">
+    <rect x="0" y="294.3" width="1171.2" height="24.65"/>
+            </clipPath></defs>
+<g class="bn-frame bn-f25">
+<text class="bn-caption" text-anchor="end" x="1166" y="27">capture&#160;without&#160;choosing&#160;a&#160;file</text>
+    <g transform="translate(9, 41)" clip-path="url(#bn-clip-terminal)">
+    <rect fill="#c0caf5" x="366" y="1.5" width="12.2" height="24.65" shape-rendering="crispEdges"/>
+    <g class="bn25-matrix">
+    <text class="bn25-r1" x="0" y="20" textLength="61" clip-path="url(#bn25-line-0)">vault</text><text class="bn25-r3" x="73.2" y="20" textLength="12.2" clip-path="url(#bn25-line-0)">$</text><text class="bn25-r4" x="97.6" y="20" textLength="268.4" clip-path="url(#bn25-line-0)">bn&#160;capture&#160;&#x27;Try&#160;the&#160;Fe</text><text class="bn25-r2" x="1171.2" y="20" textLength="12.2" clip-path="url(#bn25-line-0)">
+</text><text class="bn25-r2" x="1171.2" y="44.4" textLength="12.2" clip-path="url(#bn25-line-1)">
+</text><text class="bn25-r2" x="1171.2" y="68.8" textLength="12.2" clip-path="url(#bn25-line-2)">
+</text><text class="bn25-r2" x="1171.2" y="93.2" textLength="12.2" clip-path="url(#bn25-line-3)">
+</text><text class="bn25-r2" x="1171.2" y="117.6" textLength="12.2" clip-path="url(#bn25-line-4)">
+</text><text class="bn25-r2" x="1171.2" y="142" textLength="12.2" clip-path="url(#bn25-line-5)">
+</text><text class="bn25-r2" x="1171.2" y="166.4" textLength="12.2" clip-path="url(#bn25-line-6)">
+</text><text class="bn25-r2" x="1171.2" y="190.8" textLength="12.2" clip-path="url(#bn25-line-7)">
+</text><text class="bn25-r2" x="1171.2" y="215.2" textLength="12.2" clip-path="url(#bn25-line-8)">
+</text><text class="bn25-r2" x="1171.2" y="239.6" textLength="12.2" clip-path="url(#bn25-line-9)">
+</text><text class="bn25-r2" x="1171.2" y="264" textLength="12.2" clip-path="url(#bn25-line-10)">
+</text><text class="bn25-r2" x="1171.2" y="288.4" textLength="12.2" clip-path="url(#bn25-line-11)">
+</text><text class="bn25-r2" x="1171.2" y="312.8" textLength="12.2" clip-path="url(#bn25-line-12)">
+</text><text class="bn25-r2" x="1171.2" y="337.2" textLength="12.2" clip-path="url(#bn25-line-13)">
+</text>
+    </g>
+    </g>
+</g>
+<style>
+.bn26-matrix { font-family: Fira Code, monospace; font-size: 20px; line-height: 24.4px; font-variant-east-asian: full-width; }
+.bn26-r1 { fill: #7dcfff;font-weight: bold }
+.bn26-r2 { fill: #c0caf5 }
+.bn26-r3 { fill: #7d84a2 }
+.bn26-r4 { fill: #c0caf5;font-weight: bold }
+.bn26-r5 { fill: #1a1b26 }
+</style>
+<defs><clipPath id="bn26-line-0">
+    <rect x="0" y="1.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn26-line-1">
+    <rect x="0" y="25.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn26-line-2">
+    <rect x="0" y="50.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn26-line-3">
+    <rect x="0" y="74.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn26-line-4">
+    <rect x="0" y="99.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn26-line-5">
+    <rect x="0" y="123.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn26-line-6">
+    <rect x="0" y="147.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn26-line-7">
+    <rect x="0" y="172.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn26-line-8">
+    <rect x="0" y="196.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn26-line-9">
+    <rect x="0" y="221.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn26-line-10">
+    <rect x="0" y="245.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn26-line-11">
+    <rect x="0" y="269.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn26-line-12">
+    <rect x="0" y="294.3" width="1171.2" height="24.65"/>
+            </clipPath></defs>
+<g class="bn-frame bn-f26">
+<text class="bn-caption" text-anchor="end" x="1166" y="27">capture&#160;without&#160;choosing&#160;a&#160;file</text>
+    <g transform="translate(9, 41)" clip-path="url(#bn-clip-terminal)">
+    <rect fill="#c0caf5" x="634.4" y="1.5" width="12.2" height="24.65" shape-rendering="crispEdges"/>
+    <g class="bn26-matrix">
+    <text class="bn26-r1" x="0" y="20" textLength="61" clip-path="url(#bn26-line-0)">vault</text><text class="bn26-r3" x="73.2" y="20" textLength="12.2" clip-path="url(#bn26-line-0)">$</text><text class="bn26-r4" x="97.6" y="20" textLength="536.8" clip-path="url(#bn26-line-0)">bn&#160;capture&#160;&#x27;Try&#160;the&#160;Feynman&#160;technique&#160;on&#160;[[S</text><text class="bn26-r2" x="1171.2" y="20" textLength="12.2" clip-path="url(#bn26-line-0)">
+</text><text class="bn26-r2" x="1171.2" y="44.4" textLength="12.2" clip-path="url(#bn26-line-1)">
+</text><text class="bn26-r2" x="1171.2" y="68.8" textLength="12.2" clip-path="url(#bn26-line-2)">
+</text><text class="bn26-r2" x="1171.2" y="93.2" textLength="12.2" clip-path="url(#bn26-line-3)">
+</text><text class="bn26-r2" x="1171.2" y="117.6" textLength="12.2" clip-path="url(#bn26-line-4)">
+</text><text class="bn26-r2" x="1171.2" y="142" textLength="12.2" clip-path="url(#bn26-line-5)">
+</text><text class="bn26-r2" x="1171.2" y="166.4" textLength="12.2" clip-path="url(#bn26-line-6)">
+</text><text class="bn26-r2" x="1171.2" y="190.8" textLength="12.2" clip-path="url(#bn26-line-7)">
+</text><text class="bn26-r2" x="1171.2" y="215.2" textLength="12.2" clip-path="url(#bn26-line-8)">
+</text><text class="bn26-r2" x="1171.2" y="239.6" textLength="12.2" clip-path="url(#bn26-line-9)">
+</text><text class="bn26-r2" x="1171.2" y="264" textLength="12.2" clip-path="url(#bn26-line-10)">
+</text><text class="bn26-r2" x="1171.2" y="288.4" textLength="12.2" clip-path="url(#bn26-line-11)">
+</text><text class="bn26-r2" x="1171.2" y="312.8" textLength="12.2" clip-path="url(#bn26-line-12)">
+</text><text class="bn26-r2" x="1171.2" y="337.2" textLength="12.2" clip-path="url(#bn26-line-13)">
+</text>
+    </g>
+    </g>
+</g>
+<style>
+.bn27-matrix { font-family: Fira Code, monospace; font-size: 20px; line-height: 24.4px; font-variant-east-asian: full-width; }
+.bn27-r1 { fill: #7dcfff;font-weight: bold }
+.bn27-r2 { fill: #c0caf5 }
+.bn27-r3 { fill: #7d84a2 }
+.bn27-r4 { fill: #c0caf5;font-weight: bold }
+.bn27-r5 { fill: #1a1b26 }
+</style>
+<defs><clipPath id="bn27-line-0">
+    <rect x="0" y="1.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn27-line-1">
+    <rect x="0" y="25.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn27-line-2">
+    <rect x="0" y="50.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn27-line-3">
+    <rect x="0" y="74.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn27-line-4">
+    <rect x="0" y="99.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn27-line-5">
+    <rect x="0" y="123.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn27-line-6">
+    <rect x="0" y="147.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn27-line-7">
+    <rect x="0" y="172.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn27-line-8">
+    <rect x="0" y="196.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn27-line-9">
+    <rect x="0" y="221.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn27-line-10">
+    <rect x="0" y="245.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn27-line-11">
+    <rect x="0" y="269.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn27-line-12">
+    <rect x="0" y="294.3" width="1171.2" height="24.65"/>
+            </clipPath></defs>
+<g class="bn-frame bn-f27">
+<text class="bn-caption" text-anchor="end" x="1166" y="27">capture&#160;without&#160;choosing&#160;a&#160;file</text>
+    <g transform="translate(9, 41)" clip-path="url(#bn-clip-terminal)">
+    <rect fill="#c0caf5" x="854" y="1.5" width="12.2" height="24.65" shape-rendering="crispEdges"/>
+    <g class="bn27-matrix">
+    <text class="bn27-r1" x="0" y="20" textLength="61" clip-path="url(#bn27-line-0)">vault</text><text class="bn27-r3" x="73.2" y="20" textLength="12.2" clip-path="url(#bn27-line-0)">$</text><text class="bn27-r4" x="97.6" y="20" textLength="756.4" clip-path="url(#bn27-line-0)">bn&#160;capture&#160;&#x27;Try&#160;the&#160;Feynman&#160;technique&#160;on&#160;[[Spaced&#160;Repetition]]</text><text class="bn27-r2" x="1171.2" y="20" textLength="12.2" clip-path="url(#bn27-line-0)">
+</text><text class="bn27-r2" x="1171.2" y="44.4" textLength="12.2" clip-path="url(#bn27-line-1)">
+</text><text class="bn27-r2" x="1171.2" y="68.8" textLength="12.2" clip-path="url(#bn27-line-2)">
+</text><text class="bn27-r2" x="1171.2" y="93.2" textLength="12.2" clip-path="url(#bn27-line-3)">
+</text><text class="bn27-r2" x="1171.2" y="117.6" textLength="12.2" clip-path="url(#bn27-line-4)">
+</text><text class="bn27-r2" x="1171.2" y="142" textLength="12.2" clip-path="url(#bn27-line-5)">
+</text><text class="bn27-r2" x="1171.2" y="166.4" textLength="12.2" clip-path="url(#bn27-line-6)">
+</text><text class="bn27-r2" x="1171.2" y="190.8" textLength="12.2" clip-path="url(#bn27-line-7)">
+</text><text class="bn27-r2" x="1171.2" y="215.2" textLength="12.2" clip-path="url(#bn27-line-8)">
+</text><text class="bn27-r2" x="1171.2" y="239.6" textLength="12.2" clip-path="url(#bn27-line-9)">
+</text><text class="bn27-r2" x="1171.2" y="264" textLength="12.2" clip-path="url(#bn27-line-10)">
+</text><text class="bn27-r2" x="1171.2" y="288.4" textLength="12.2" clip-path="url(#bn27-line-11)">
+</text><text class="bn27-r2" x="1171.2" y="312.8" textLength="12.2" clip-path="url(#bn27-line-12)">
+</text><text class="bn27-r2" x="1171.2" y="337.2" textLength="12.2" clip-path="url(#bn27-line-13)">
+</text>
+    </g>
+    </g>
+</g>
+<style>
+.bn28-matrix { font-family: Fira Code, monospace; font-size: 20px; line-height: 24.4px; font-variant-east-asian: full-width; }
+.bn28-r1 { fill: #7dcfff;font-weight: bold }
+.bn28-r2 { fill: #c0caf5 }
+.bn28-r3 { fill: #7d84a2 }
+.bn28-r4 { fill: #c0caf5;font-weight: bold }
+.bn28-r5 { fill: #1a1b26 }
+</style>
+<defs><clipPath id="bn28-line-0">
+    <rect x="0" y="1.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn28-line-1">
+    <rect x="0" y="25.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn28-line-2">
+    <rect x="0" y="50.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn28-line-3">
+    <rect x="0" y="74.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn28-line-4">
+    <rect x="0" y="99.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn28-line-5">
+    <rect x="0" y="123.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn28-line-6">
+    <rect x="0" y="147.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn28-line-7">
+    <rect x="0" y="172.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn28-line-8">
+    <rect x="0" y="196.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn28-line-9">
+    <rect x="0" y="221.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn28-line-10">
+    <rect x="0" y="245.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn28-line-11">
+    <rect x="0" y="269.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn28-line-12">
+    <rect x="0" y="294.3" width="1171.2" height="24.65"/>
+            </clipPath></defs>
+<g class="bn-frame bn-f28">
+<text class="bn-caption" text-anchor="end" x="1166" y="27">capture&#160;without&#160;choosing&#160;a&#160;file</text>
+    <g transform="translate(9, 41)" clip-path="url(#bn-clip-terminal)">
+    <rect fill="#c0caf5" x="988.2" y="1.5" width="12.2" height="24.65" shape-rendering="crispEdges"/>
+    <g class="bn28-matrix">
+    <text class="bn28-r1" x="0" y="20" textLength="61" clip-path="url(#bn28-line-0)">vault</text><text class="bn28-r3" x="73.2" y="20" textLength="12.2" clip-path="url(#bn28-line-0)">$</text><text class="bn28-r4" x="97.6" y="20" textLength="890.6" clip-path="url(#bn28-line-0)">bn&#160;capture&#160;&#x27;Try&#160;the&#160;Feynman&#160;technique&#160;on&#160;[[Spaced&#160;Repetition]]&#x27;&#160;|&#160;head&#160;-2</text><text class="bn28-r2" x="1171.2" y="20" textLength="12.2" clip-path="url(#bn28-line-0)">
+</text><text class="bn28-r2" x="1171.2" y="44.4" textLength="12.2" clip-path="url(#bn28-line-1)">
+</text><text class="bn28-r2" x="1171.2" y="68.8" textLength="12.2" clip-path="url(#bn28-line-2)">
+</text><text class="bn28-r2" x="1171.2" y="93.2" textLength="12.2" clip-path="url(#bn28-line-3)">
+</text><text class="bn28-r2" x="1171.2" y="117.6" textLength="12.2" clip-path="url(#bn28-line-4)">
+</text><text class="bn28-r2" x="1171.2" y="142" textLength="12.2" clip-path="url(#bn28-line-5)">
+</text><text class="bn28-r2" x="1171.2" y="166.4" textLength="12.2" clip-path="url(#bn28-line-6)">
+</text><text class="bn28-r2" x="1171.2" y="190.8" textLength="12.2" clip-path="url(#bn28-line-7)">
+</text><text class="bn28-r2" x="1171.2" y="215.2" textLength="12.2" clip-path="url(#bn28-line-8)">
+</text><text class="bn28-r2" x="1171.2" y="239.6" textLength="12.2" clip-path="url(#bn28-line-9)">
+</text><text class="bn28-r2" x="1171.2" y="264" textLength="12.2" clip-path="url(#bn28-line-10)">
+</text><text class="bn28-r2" x="1171.2" y="288.4" textLength="12.2" clip-path="url(#bn28-line-11)">
+</text><text class="bn28-r2" x="1171.2" y="312.8" textLength="12.2" clip-path="url(#bn28-line-12)">
+</text><text class="bn28-r2" x="1171.2" y="337.2" textLength="12.2" clip-path="url(#bn28-line-13)">
+</text>
+    </g>
+    </g>
+</g>
+<style>
+.bn29-matrix { font-family: Fira Code, monospace; font-size: 20px; line-height: 24.4px; font-variant-east-asian: full-width; }
+.bn29-r1 { fill: #7dcfff;font-weight: bold }
+.bn29-r2 { fill: #c0caf5 }
+.bn29-r3 { fill: #7d84a2 }
+.bn29-r4 { fill: #c0caf5;font-weight: bold }
+.bn29-r5 { fill: #1a1b26 }
+</style>
+<defs><clipPath id="bn29-line-0">
+    <rect x="0" y="1.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn29-line-1">
+    <rect x="0" y="25.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn29-line-2">
+    <rect x="0" y="50.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn29-line-3">
+    <rect x="0" y="74.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn29-line-4">
+    <rect x="0" y="99.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn29-line-5">
+    <rect x="0" y="123.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn29-line-6">
+    <rect x="0" y="147.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn29-line-7">
+    <rect x="0" y="172.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn29-line-8">
+    <rect x="0" y="196.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn29-line-9">
+    <rect x="0" y="221.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn29-line-10">
+    <rect x="0" y="245.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn29-line-11">
+    <rect x="0" y="269.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn29-line-12">
+    <rect x="0" y="294.3" width="1171.2" height="24.65"/>
+            </clipPath></defs>
+<g class="bn-frame bn-f29">
+<text class="bn-caption" text-anchor="end" x="1166" y="27">capture&#160;without&#160;choosing&#160;a&#160;file</text>
+    <g transform="translate(9, 41)" clip-path="url(#bn-clip-terminal)">
+    <rect fill="#c0caf5" x="97.6" y="74.7" width="12.2" height="24.65" shape-rendering="crispEdges"/>
+    <g class="bn29-matrix">
+    <text class="bn29-r1" x="0" y="20" textLength="61" clip-path="url(#bn29-line-0)">vault</text><text class="bn29-r3" x="73.2" y="20" textLength="12.2" clip-path="url(#bn29-line-0)">$</text><text class="bn29-r4" x="97.6" y="20" textLength="890.6" clip-path="url(#bn29-line-0)">bn&#160;capture&#160;&#x27;Try&#160;the&#160;Feynman&#160;technique&#160;on&#160;[[Spaced&#160;Repetition]]&#x27;&#160;|&#160;head&#160;-2</text><text class="bn29-r2" x="1171.2" y="20" textLength="12.2" clip-path="url(#bn29-line-0)">
+</text><text class="bn29-r2" x="0" y="44.4" textLength="244" clip-path="url(#bn29-line-1)">captured&#160;to&#160;Inbox.md</text><text class="bn29-r2" x="1171.2" y="44.4" textLength="12.2" clip-path="url(#bn29-line-1)">
+</text><text class="bn29-r2" x="0" y="68.8" textLength="841.8" clip-path="url(#bn29-line-2)">-&#160;2026-10-21&#160;15:02&#160;Try&#160;the&#160;Feynman&#160;technique&#160;on&#160;[[Spaced&#160;Repetition]]</text><text class="bn29-r2" x="1171.2" y="68.8" textLength="12.2" clip-path="url(#bn29-line-2)">
+</text><text class="bn29-r1" x="0" y="93.2" textLength="61" clip-path="url(#bn29-line-3)">vault</text><text class="bn29-r3" x="73.2" y="93.2" textLength="12.2" clip-path="url(#bn29-line-3)">$</text><text class="bn29-r2" x="1171.2" y="93.2" textLength="12.2" clip-path="url(#bn29-line-3)">
+</text><text class="bn29-r2" x="1171.2" y="117.6" textLength="12.2" clip-path="url(#bn29-line-4)">
+</text><text class="bn29-r2" x="1171.2" y="142" textLength="12.2" clip-path="url(#bn29-line-5)">
+</text><text class="bn29-r2" x="1171.2" y="166.4" textLength="12.2" clip-path="url(#bn29-line-6)">
+</text><text class="bn29-r2" x="1171.2" y="190.8" textLength="12.2" clip-path="url(#bn29-line-7)">
+</text><text class="bn29-r2" x="1171.2" y="215.2" textLength="12.2" clip-path="url(#bn29-line-8)">
+</text><text class="bn29-r2" x="1171.2" y="239.6" textLength="12.2" clip-path="url(#bn29-line-9)">
+</text><text class="bn29-r2" x="1171.2" y="264" textLength="12.2" clip-path="url(#bn29-line-10)">
+</text><text class="bn29-r2" x="1171.2" y="288.4" textLength="12.2" clip-path="url(#bn29-line-11)">
+</text><text class="bn29-r2" x="1171.2" y="312.8" textLength="12.2" clip-path="url(#bn29-line-12)">
+</text><text class="bn29-r2" x="1171.2" y="337.2" textLength="12.2" clip-path="url(#bn29-line-13)">
+</text>
+    </g>
+    </g>
+</g>
+<style>
+.bn30-matrix { font-family: Fira Code, monospace; font-size: 20px; line-height: 24.4px; font-variant-east-asian: full-width; }
+.bn30-r1 { fill: #7dcfff;font-weight: bold }
+.bn30-r2 { fill: #c0caf5 }
+.bn30-r3 { fill: #7d84a2 }
+.bn30-r4 { fill: #c0caf5;font-weight: bold }
+.bn30-r5 { fill: #1a1b26 }
+</style>
+<defs><clipPath id="bn30-line-0">
+    <rect x="0" y="1.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn30-line-1">
+    <rect x="0" y="25.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn30-line-2">
+    <rect x="0" y="50.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn30-line-3">
+    <rect x="0" y="74.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn30-line-4">
+    <rect x="0" y="99.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn30-line-5">
+    <rect x="0" y="123.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn30-line-6">
+    <rect x="0" y="147.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn30-line-7">
+    <rect x="0" y="172.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn30-line-8">
+    <rect x="0" y="196.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn30-line-9">
+    <rect x="0" y="221.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn30-line-10">
+    <rect x="0" y="245.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn30-line-11">
+    <rect x="0" y="269.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn30-line-12">
+    <rect x="0" y="294.3" width="1171.2" height="24.65"/>
+            </clipPath></defs>
+<g class="bn-frame bn-f30">
+<text class="bn-caption" text-anchor="end" x="1166" y="27">bulk&#160;edits&#160;preview&#160;first</text>
+    <g transform="translate(9, 41)" clip-path="url(#bn-clip-terminal)">
+    <rect fill="#c0caf5" x="97.6" y="74.7" width="12.2" height="24.65" shape-rendering="crispEdges"/>
+    <g class="bn30-matrix">
+    <text class="bn30-r1" x="0" y="20" textLength="61" clip-path="url(#bn30-line-0)">vault</text><text class="bn30-r3" x="73.2" y="20" textLength="12.2" clip-path="url(#bn30-line-0)">$</text><text class="bn30-r4" x="97.6" y="20" textLength="890.6" clip-path="url(#bn30-line-0)">bn&#160;capture&#160;&#x27;Try&#160;the&#160;Feynman&#160;technique&#160;on&#160;[[Spaced&#160;Repetition]]&#x27;&#160;|&#160;head&#160;-2</text><text class="bn30-r2" x="1171.2" y="20" textLength="12.2" clip-path="url(#bn30-line-0)">
+</text><text class="bn30-r2" x="0" y="44.4" textLength="244" clip-path="url(#bn30-line-1)">captured&#160;to&#160;Inbox.md</text><text class="bn30-r2" x="1171.2" y="44.4" textLength="12.2" clip-path="url(#bn30-line-1)">
+</text><text class="bn30-r2" x="0" y="68.8" textLength="841.8" clip-path="url(#bn30-line-2)">-&#160;2026-10-21&#160;15:02&#160;Try&#160;the&#160;Feynman&#160;technique&#160;on&#160;[[Spaced&#160;Repetition]]</text><text class="bn30-r2" x="1171.2" y="68.8" textLength="12.2" clip-path="url(#bn30-line-2)">
+</text><text class="bn30-r1" x="0" y="93.2" textLength="61" clip-path="url(#bn30-line-3)">vault</text><text class="bn30-r3" x="73.2" y="93.2" textLength="12.2" clip-path="url(#bn30-line-3)">$</text><text class="bn30-r2" x="1171.2" y="93.2" textLength="12.2" clip-path="url(#bn30-line-3)">
+</text><text class="bn30-r2" x="1171.2" y="117.6" textLength="12.2" clip-path="url(#bn30-line-4)">
+</text><text class="bn30-r2" x="1171.2" y="142" textLength="12.2" clip-path="url(#bn30-line-5)">
+</text><text class="bn30-r2" x="1171.2" y="166.4" textLength="12.2" clip-path="url(#bn30-line-6)">
+</text><text class="bn30-r2" x="1171.2" y="190.8" textLength="12.2" clip-path="url(#bn30-line-7)">
+</text><text class="bn30-r2" x="1171.2" y="215.2" textLength="12.2" clip-path="url(#bn30-line-8)">
+</text><text class="bn30-r2" x="1171.2" y="239.6" textLength="12.2" clip-path="url(#bn30-line-9)">
+</text><text class="bn30-r2" x="1171.2" y="264" textLength="12.2" clip-path="url(#bn30-line-10)">
+</text><text class="bn30-r2" x="1171.2" y="288.4" textLength="12.2" clip-path="url(#bn30-line-11)">
+</text><text class="bn30-r2" x="1171.2" y="312.8" textLength="12.2" clip-path="url(#bn30-line-12)">
+</text><text class="bn30-r2" x="1171.2" y="337.2" textLength="12.2" clip-path="url(#bn30-line-13)">
+</text>
+    </g>
+    </g>
+</g>
+<style>
+.bn31-matrix { font-family: Fira Code, monospace; font-size: 20px; line-height: 24.4px; font-variant-east-asian: full-width; }
+.bn31-r1 { fill: #7dcfff;font-weight: bold }
+.bn31-r2 { fill: #c0caf5 }
+.bn31-r3 { fill: #7d84a2 }
+.bn31-r4 { fill: #c0caf5;font-weight: bold }
+.bn31-r5 { fill: #1a1b26 }
+</style>
+<defs><clipPath id="bn31-line-0">
+    <rect x="0" y="1.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn31-line-1">
+    <rect x="0" y="25.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn31-line-2">
+    <rect x="0" y="50.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn31-line-3">
+    <rect x="0" y="74.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn31-line-4">
+    <rect x="0" y="99.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn31-line-5">
+    <rect x="0" y="123.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn31-line-6">
+    <rect x="0" y="147.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn31-line-7">
+    <rect x="0" y="172.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn31-line-8">
+    <rect x="0" y="196.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn31-line-9">
+    <rect x="0" y="221.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn31-line-10">
+    <rect x="0" y="245.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn31-line-11">
+    <rect x="0" y="269.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn31-line-12">
+    <rect x="0" y="294.3" width="1171.2" height="24.65"/>
+            </clipPath></defs>
+<g class="bn-frame bn-f31">
+<text class="bn-caption" text-anchor="end" x="1166" y="27">bulk&#160;edits&#160;preview&#160;first</text>
+    <g transform="translate(9, 41)" clip-path="url(#bn-clip-terminal)">
+    <rect fill="#c0caf5" x="341.6" y="74.7" width="12.2" height="24.65" shape-rendering="crispEdges"/>
+    <g class="bn31-matrix">
+    <text class="bn31-r1" x="0" y="20" textLength="61" clip-path="url(#bn31-line-0)">vault</text><text class="bn31-r3" x="73.2" y="20" textLength="12.2" clip-path="url(#bn31-line-0)">$</text><text class="bn31-r4" x="97.6" y="20" textLength="890.6" clip-path="url(#bn31-line-0)">bn&#160;capture&#160;&#x27;Try&#160;the&#160;Feynman&#160;technique&#160;on&#160;[[Spaced&#160;Repetition]]&#x27;&#160;|&#160;head&#160;-2</text><text class="bn31-r2" x="1171.2" y="20" textLength="12.2" clip-path="url(#bn31-line-0)">
+</text><text class="bn31-r2" x="0" y="44.4" textLength="244" clip-path="url(#bn31-line-1)">captured&#160;to&#160;Inbox.md</text><text class="bn31-r2" x="1171.2" y="44.4" textLength="12.2" clip-path="url(#bn31-line-1)">
+</text><text class="bn31-r2" x="0" y="68.8" textLength="841.8" clip-path="url(#bn31-line-2)">-&#160;2026-10-21&#160;15:02&#160;Try&#160;the&#160;Feynman&#160;technique&#160;on&#160;[[Spaced&#160;Repetition]]</text><text class="bn31-r2" x="1171.2" y="68.8" textLength="12.2" clip-path="url(#bn31-line-2)">
+</text><text class="bn31-r1" x="0" y="93.2" textLength="61" clip-path="url(#bn31-line-3)">vault</text><text class="bn31-r3" x="73.2" y="93.2" textLength="12.2" clip-path="url(#bn31-line-3)">$</text><text class="bn31-r4" x="97.6" y="93.2" textLength="244" clip-path="url(#bn31-line-3)">bn&#160;find&#160;--view&#160;&#x27;Read</text><text class="bn31-r2" x="1171.2" y="93.2" textLength="12.2" clip-path="url(#bn31-line-3)">
+</text><text class="bn31-r2" x="1171.2" y="117.6" textLength="12.2" clip-path="url(#bn31-line-4)">
+</text><text class="bn31-r2" x="1171.2" y="142" textLength="12.2" clip-path="url(#bn31-line-5)">
+</text><text class="bn31-r2" x="1171.2" y="166.4" textLength="12.2" clip-path="url(#bn31-line-6)">
+</text><text class="bn31-r2" x="1171.2" y="190.8" textLength="12.2" clip-path="url(#bn31-line-7)">
+</text><text class="bn31-r2" x="1171.2" y="215.2" textLength="12.2" clip-path="url(#bn31-line-8)">
+</text><text class="bn31-r2" x="1171.2" y="239.6" textLength="12.2" clip-path="url(#bn31-line-9)">
+</text><text class="bn31-r2" x="1171.2" y="264" textLength="12.2" clip-path="url(#bn31-line-10)">
+</text><text class="bn31-r2" x="1171.2" y="288.4" textLength="12.2" clip-path="url(#bn31-line-11)">
+</text><text class="bn31-r2" x="1171.2" y="312.8" textLength="12.2" clip-path="url(#bn31-line-12)">
+</text><text class="bn31-r2" x="1171.2" y="337.2" textLength="12.2" clip-path="url(#bn31-line-13)">
+</text>
+    </g>
+    </g>
+</g>
+<style>
+.bn32-matrix { font-family: Fira Code, monospace; font-size: 20px; line-height: 24.4px; font-variant-east-asian: full-width; }
+.bn32-r1 { fill: #7dcfff;font-weight: bold }
+.bn32-r2 { fill: #c0caf5 }
+.bn32-r3 { fill: #7d84a2 }
+.bn32-r4 { fill: #c0caf5;font-weight: bold }
+.bn32-r5 { fill: #1a1b26 }
+</style>
+<defs><clipPath id="bn32-line-0">
+    <rect x="0" y="1.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn32-line-1">
+    <rect x="0" y="25.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn32-line-2">
+    <rect x="0" y="50.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn32-line-3">
+    <rect x="0" y="74.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn32-line-4">
+    <rect x="0" y="99.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn32-line-5">
+    <rect x="0" y="123.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn32-line-6">
+    <rect x="0" y="147.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn32-line-7">
+    <rect x="0" y="172.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn32-line-8">
+    <rect x="0" y="196.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn32-line-9">
+    <rect x="0" y="221.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn32-line-10">
+    <rect x="0" y="245.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn32-line-11">
+    <rect x="0" y="269.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn32-line-12">
+    <rect x="0" y="294.3" width="1171.2" height="24.65"/>
+            </clipPath></defs>
+<g class="bn-frame bn-f32">
+<text class="bn-caption" text-anchor="end" x="1166" y="27">bulk&#160;edits&#160;preview&#160;first</text>
+    <g transform="translate(9, 41)" clip-path="url(#bn-clip-terminal)">
+    <rect fill="#c0caf5" x="573.4" y="74.7" width="12.2" height="24.65" shape-rendering="crispEdges"/>
+    <g class="bn32-matrix">
+    <text class="bn32-r1" x="0" y="20" textLength="61" clip-path="url(#bn32-line-0)">vault</text><text class="bn32-r3" x="73.2" y="20" textLength="12.2" clip-path="url(#bn32-line-0)">$</text><text class="bn32-r4" x="97.6" y="20" textLength="890.6" clip-path="url(#bn32-line-0)">bn&#160;capture&#160;&#x27;Try&#160;the&#160;Feynman&#160;technique&#160;on&#160;[[Spaced&#160;Repetition]]&#x27;&#160;|&#160;head&#160;-2</text><text class="bn32-r2" x="1171.2" y="20" textLength="12.2" clip-path="url(#bn32-line-0)">
+</text><text class="bn32-r2" x="0" y="44.4" textLength="244" clip-path="url(#bn32-line-1)">captured&#160;to&#160;Inbox.md</text><text class="bn32-r2" x="1171.2" y="44.4" textLength="12.2" clip-path="url(#bn32-line-1)">
+</text><text class="bn32-r2" x="0" y="68.8" textLength="841.8" clip-path="url(#bn32-line-2)">-&#160;2026-10-21&#160;15:02&#160;Try&#160;the&#160;Feynman&#160;technique&#160;on&#160;[[Spaced&#160;Repetition]]</text><text class="bn32-r2" x="1171.2" y="68.8" textLength="12.2" clip-path="url(#bn32-line-2)">
+</text><text class="bn32-r1" x="0" y="93.2" textLength="61" clip-path="url(#bn32-line-3)">vault</text><text class="bn32-r3" x="73.2" y="93.2" textLength="12.2" clip-path="url(#bn32-line-3)">$</text><text class="bn32-r4" x="97.6" y="93.2" textLength="475.8" clip-path="url(#bn32-line-3)">bn&#160;find&#160;--view&#160;&#x27;Reading&#160;list&#x27;&#160;|&#160;bn&#160;set&#160;</text><text class="bn32-r2" x="1171.2" y="93.2" textLength="12.2" clip-path="url(#bn32-line-3)">
+</text><text class="bn32-r2" x="1171.2" y="117.6" textLength="12.2" clip-path="url(#bn32-line-4)">
+</text><text class="bn32-r2" x="1171.2" y="142" textLength="12.2" clip-path="url(#bn32-line-5)">
+</text><text class="bn32-r2" x="1171.2" y="166.4" textLength="12.2" clip-path="url(#bn32-line-6)">
+</text><text class="bn32-r2" x="1171.2" y="190.8" textLength="12.2" clip-path="url(#bn32-line-7)">
+</text><text class="bn32-r2" x="1171.2" y="215.2" textLength="12.2" clip-path="url(#bn32-line-8)">
+</text><text class="bn32-r2" x="1171.2" y="239.6" textLength="12.2" clip-path="url(#bn32-line-9)">
+</text><text class="bn32-r2" x="1171.2" y="264" textLength="12.2" clip-path="url(#bn32-line-10)">
+</text><text class="bn32-r2" x="1171.2" y="288.4" textLength="12.2" clip-path="url(#bn32-line-11)">
+</text><text class="bn32-r2" x="1171.2" y="312.8" textLength="12.2" clip-path="url(#bn32-line-12)">
+</text><text class="bn32-r2" x="1171.2" y="337.2" textLength="12.2" clip-path="url(#bn32-line-13)">
+</text>
+    </g>
+    </g>
+</g>
+<style>
+.bn33-matrix { font-family: Fira Code, monospace; font-size: 20px; line-height: 24.4px; font-variant-east-asian: full-width; }
+.bn33-r1 { fill: #7dcfff;font-weight: bold }
+.bn33-r2 { fill: #c0caf5 }
+.bn33-r3 { fill: #7d84a2 }
+.bn33-r4 { fill: #c0caf5;font-weight: bold }
+.bn33-r5 { fill: #1a1b26 }
+</style>
+<defs><clipPath id="bn33-line-0">
+    <rect x="0" y="1.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn33-line-1">
+    <rect x="0" y="25.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn33-line-2">
+    <rect x="0" y="50.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn33-line-3">
+    <rect x="0" y="74.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn33-line-4">
+    <rect x="0" y="99.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn33-line-5">
+    <rect x="0" y="123.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn33-line-6">
+    <rect x="0" y="147.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn33-line-7">
+    <rect x="0" y="172.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn33-line-8">
+    <rect x="0" y="196.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn33-line-9">
+    <rect x="0" y="221.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn33-line-10">
+    <rect x="0" y="245.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn33-line-11">
+    <rect x="0" y="269.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn33-line-12">
+    <rect x="0" y="294.3" width="1171.2" height="24.65"/>
+            </clipPath></defs>
+<g class="bn-frame bn-f33">
+<text class="bn-caption" text-anchor="end" x="1166" y="27">bulk&#160;edits&#160;preview&#160;first</text>
+    <g transform="translate(9, 41)" clip-path="url(#bn-clip-terminal)">
+    <rect fill="#c0caf5" x="768.6" y="74.7" width="12.2" height="24.65" shape-rendering="crispEdges"/>
+    <g class="bn33-matrix">
+    <text class="bn33-r1" x="0" y="20" textLength="61" clip-path="url(#bn33-line-0)">vault</text><text class="bn33-r3" x="73.2" y="20" textLength="12.2" clip-path="url(#bn33-line-0)">$</text><text class="bn33-r4" x="97.6" y="20" textLength="890.6" clip-path="url(#bn33-line-0)">bn&#160;capture&#160;&#x27;Try&#160;the&#160;Feynman&#160;technique&#160;on&#160;[[Spaced&#160;Repetition]]&#x27;&#160;|&#160;head&#160;-2</text><text class="bn33-r2" x="1171.2" y="20" textLength="12.2" clip-path="url(#bn33-line-0)">
+</text><text class="bn33-r2" x="0" y="44.4" textLength="244" clip-path="url(#bn33-line-1)">captured&#160;to&#160;Inbox.md</text><text class="bn33-r2" x="1171.2" y="44.4" textLength="12.2" clip-path="url(#bn33-line-1)">
+</text><text class="bn33-r2" x="0" y="68.8" textLength="841.8" clip-path="url(#bn33-line-2)">-&#160;2026-10-21&#160;15:02&#160;Try&#160;the&#160;Feynman&#160;technique&#160;on&#160;[[Spaced&#160;Repetition]]</text><text class="bn33-r2" x="1171.2" y="68.8" textLength="12.2" clip-path="url(#bn33-line-2)">
+</text><text class="bn33-r1" x="0" y="93.2" textLength="61" clip-path="url(#bn33-line-3)">vault</text><text class="bn33-r3" x="73.2" y="93.2" textLength="12.2" clip-path="url(#bn33-line-3)">$</text><text class="bn33-r4" x="97.6" y="93.2" textLength="671" clip-path="url(#bn33-line-3)">bn&#160;find&#160;--view&#160;&#x27;Reading&#160;list&#x27;&#160;|&#160;bn&#160;set&#160;-&#160;status=reading</text><text class="bn33-r2" x="1171.2" y="93.2" textLength="12.2" clip-path="url(#bn33-line-3)">
+</text><text class="bn33-r2" x="1171.2" y="117.6" textLength="12.2" clip-path="url(#bn33-line-4)">
+</text><text class="bn33-r2" x="1171.2" y="142" textLength="12.2" clip-path="url(#bn33-line-5)">
+</text><text class="bn33-r2" x="1171.2" y="166.4" textLength="12.2" clip-path="url(#bn33-line-6)">
+</text><text class="bn33-r2" x="1171.2" y="190.8" textLength="12.2" clip-path="url(#bn33-line-7)">
+</text><text class="bn33-r2" x="1171.2" y="215.2" textLength="12.2" clip-path="url(#bn33-line-8)">
+</text><text class="bn33-r2" x="1171.2" y="239.6" textLength="12.2" clip-path="url(#bn33-line-9)">
+</text><text class="bn33-r2" x="1171.2" y="264" textLength="12.2" clip-path="url(#bn33-line-10)">
+</text><text class="bn33-r2" x="1171.2" y="288.4" textLength="12.2" clip-path="url(#bn33-line-11)">
+</text><text class="bn33-r2" x="1171.2" y="312.8" textLength="12.2" clip-path="url(#bn33-line-12)">
+</text><text class="bn33-r2" x="1171.2" y="337.2" textLength="12.2" clip-path="url(#bn33-line-13)">
+</text>
+    </g>
+    </g>
+</g>
+<style>
+.bn34-matrix { font-family: Fira Code, monospace; font-size: 20px; line-height: 24.4px; font-variant-east-asian: full-width; }
+.bn34-r1 { fill: #7dcfff;font-weight: bold }
+.bn34-r2 { fill: #c0caf5 }
+.bn34-r3 { fill: #7d84a2 }
+.bn34-r4 { fill: #c0caf5;font-weight: bold }
+.bn34-r5 { fill: #1a1b26 }
+</style>
+<defs><clipPath id="bn34-line-0">
+    <rect x="0" y="1.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn34-line-1">
+    <rect x="0" y="25.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn34-line-2">
+    <rect x="0" y="50.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn34-line-3">
+    <rect x="0" y="74.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn34-line-4">
+    <rect x="0" y="99.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn34-line-5">
+    <rect x="0" y="123.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn34-line-6">
+    <rect x="0" y="147.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn34-line-7">
+    <rect x="0" y="172.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn34-line-8">
+    <rect x="0" y="196.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn34-line-9">
+    <rect x="0" y="221.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn34-line-10">
+    <rect x="0" y="245.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn34-line-11">
+    <rect x="0" y="269.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn34-line-12">
+    <rect x="0" y="294.3" width="1171.2" height="24.65"/>
+            </clipPath></defs>
+<g class="bn-frame bn-f34">
+<text class="bn-caption" text-anchor="end" x="1166" y="27">bulk&#160;edits&#160;preview&#160;first</text>
+    <g transform="translate(9, 41)" clip-path="url(#bn-clip-terminal)">
+    <rect fill="#c0caf5" x="890.6" y="74.7" width="12.2" height="24.65" shape-rendering="crispEdges"/>
+    <g class="bn34-matrix">
+    <text class="bn34-r1" x="0" y="20" textLength="61" clip-path="url(#bn34-line-0)">vault</text><text class="bn34-r3" x="73.2" y="20" textLength="12.2" clip-path="url(#bn34-line-0)">$</text><text class="bn34-r4" x="97.6" y="20" textLength="890.6" clip-path="url(#bn34-line-0)">bn&#160;capture&#160;&#x27;Try&#160;the&#160;Feynman&#160;technique&#160;on&#160;[[Spaced&#160;Repetition]]&#x27;&#160;|&#160;head&#160;-2</text><text class="bn34-r2" x="1171.2" y="20" textLength="12.2" clip-path="url(#bn34-line-0)">
+</text><text class="bn34-r2" x="0" y="44.4" textLength="244" clip-path="url(#bn34-line-1)">captured&#160;to&#160;Inbox.md</text><text class="bn34-r2" x="1171.2" y="44.4" textLength="12.2" clip-path="url(#bn34-line-1)">
+</text><text class="bn34-r2" x="0" y="68.8" textLength="841.8" clip-path="url(#bn34-line-2)">-&#160;2026-10-21&#160;15:02&#160;Try&#160;the&#160;Feynman&#160;technique&#160;on&#160;[[Spaced&#160;Repetition]]</text><text class="bn34-r2" x="1171.2" y="68.8" textLength="12.2" clip-path="url(#bn34-line-2)">
+</text><text class="bn34-r1" x="0" y="93.2" textLength="61" clip-path="url(#bn34-line-3)">vault</text><text class="bn34-r3" x="73.2" y="93.2" textLength="12.2" clip-path="url(#bn34-line-3)">$</text><text class="bn34-r4" x="97.6" y="93.2" textLength="793" clip-path="url(#bn34-line-3)">bn&#160;find&#160;--view&#160;&#x27;Reading&#160;list&#x27;&#160;|&#160;bn&#160;set&#160;-&#160;status=reading&#160;--dry-run</text><text class="bn34-r2" x="1171.2" y="93.2" textLength="12.2" clip-path="url(#bn34-line-3)">
+</text><text class="bn34-r2" x="1171.2" y="117.6" textLength="12.2" clip-path="url(#bn34-line-4)">
+</text><text class="bn34-r2" x="1171.2" y="142" textLength="12.2" clip-path="url(#bn34-line-5)">
+</text><text class="bn34-r2" x="1171.2" y="166.4" textLength="12.2" clip-path="url(#bn34-line-6)">
+</text><text class="bn34-r2" x="1171.2" y="190.8" textLength="12.2" clip-path="url(#bn34-line-7)">
+</text><text class="bn34-r2" x="1171.2" y="215.2" textLength="12.2" clip-path="url(#bn34-line-8)">
+</text><text class="bn34-r2" x="1171.2" y="239.6" textLength="12.2" clip-path="url(#bn34-line-9)">
+</text><text class="bn34-r2" x="1171.2" y="264" textLength="12.2" clip-path="url(#bn34-line-10)">
+</text><text class="bn34-r2" x="1171.2" y="288.4" textLength="12.2" clip-path="url(#bn34-line-11)">
+</text><text class="bn34-r2" x="1171.2" y="312.8" textLength="12.2" clip-path="url(#bn34-line-12)">
+</text><text class="bn34-r2" x="1171.2" y="337.2" textLength="12.2" clip-path="url(#bn34-line-13)">
+</text>
+    </g>
+    </g>
+</g>
+<style>
+.bn35-matrix { font-family: Fira Code, monospace; font-size: 20px; line-height: 24.4px; font-variant-east-asian: full-width; }
+.bn35-r1 { fill: #7dcfff;font-weight: bold }
+.bn35-r2 { fill: #c0caf5 }
+.bn35-r3 { fill: #7d84a2 }
+.bn35-r4 { fill: #c0caf5;font-weight: bold }
+.bn35-r5 { fill: #1a1b26 }
+</style>
+<defs><clipPath id="bn35-line-0">
+    <rect x="0" y="1.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn35-line-1">
+    <rect x="0" y="25.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn35-line-2">
+    <rect x="0" y="50.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn35-line-3">
+    <rect x="0" y="74.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn35-line-4">
+    <rect x="0" y="99.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn35-line-5">
+    <rect x="0" y="123.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn35-line-6">
+    <rect x="0" y="147.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn35-line-7">
+    <rect x="0" y="172.3" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn35-line-8">
+    <rect x="0" y="196.7" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn35-line-9">
+    <rect x="0" y="221.1" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn35-line-10">
+    <rect x="0" y="245.5" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn35-line-11">
+    <rect x="0" y="269.9" width="1171.2" height="24.65"/>
+            </clipPath>
+<clipPath id="bn35-line-12">
+    <rect x="0" y="294.3" width="1171.2" height="24.65"/>
+            </clipPath></defs>
+<g class="bn-frame bn-f35">
+<text class="bn-caption" text-anchor="end" x="1166" y="27">bulk&#160;edits&#160;preview&#160;first</text>
+    <g transform="translate(9, 41)" clip-path="url(#bn-clip-terminal)">
+    <rect fill="#c0caf5" x="97.6" y="245.5" width="12.2" height="24.65" shape-rendering="crispEdges"/>
+    <g class="bn35-matrix">
+    <text class="bn35-r1" x="0" y="20" textLength="61" clip-path="url(#bn35-line-0)">vault</text><text class="bn35-r3" x="73.2" y="20" textLength="12.2" clip-path="url(#bn35-line-0)">$</text><text class="bn35-r4" x="97.6" y="20" textLength="890.6" clip-path="url(#bn35-line-0)">bn&#160;capture&#160;&#x27;Try&#160;the&#160;Feynman&#160;technique&#160;on&#160;[[Spaced&#160;Repetition]]&#x27;&#160;|&#160;head&#160;-2</text><text class="bn35-r2" x="1171.2" y="20" textLength="12.2" clip-path="url(#bn35-line-0)">
+</text><text class="bn35-r2" x="0" y="44.4" textLength="244" clip-path="url(#bn35-line-1)">captured&#160;to&#160;Inbox.md</text><text class="bn35-r2" x="1171.2" y="44.4" textLength="12.2" clip-path="url(#bn35-line-1)">
+</text><text class="bn35-r2" x="0" y="68.8" textLength="841.8" clip-path="url(#bn35-line-2)">-&#160;2026-10-21&#160;15:02&#160;Try&#160;the&#160;Feynman&#160;technique&#160;on&#160;[[Spaced&#160;Repetition]]</text><text class="bn35-r2" x="1171.2" y="68.8" textLength="12.2" clip-path="url(#bn35-line-2)">
+</text><text class="bn35-r1" x="0" y="93.2" textLength="61" clip-path="url(#bn35-line-3)">vault</text><text class="bn35-r3" x="73.2" y="93.2" textLength="12.2" clip-path="url(#bn35-line-3)">$</text><text class="bn35-r4" x="97.6" y="93.2" textLength="793" clip-path="url(#bn35-line-3)">bn&#160;find&#160;--view&#160;&#x27;Reading&#160;list&#x27;&#160;|&#160;bn&#160;set&#160;-&#160;status=reading&#160;--dry-run</text><text class="bn35-r2" x="1171.2" y="93.2" textLength="12.2" clip-path="url(#bn35-line-3)">
+</text><text class="bn35-r2" x="0" y="117.6" textLength="317.2" clip-path="url(#bn35-line-4)">---&#160;Books/Atomic&#160;Habits.md</text><text class="bn35-r2" x="1171.2" y="117.6" textLength="12.2" clip-path="url(#bn35-line-4)">
+</text><text class="bn35-r2" x="0" y="142" textLength="475.8" clip-path="url(#bn35-line-5)">frontmatter[status]:&#160;to-read&#160;-&gt;&#160;reading</text><text class="bn35-r2" x="1171.2" y="142" textLength="12.2" clip-path="url(#bn35-line-5)">
+</text><text class="bn35-r2" x="0" y="166.4" textLength="390.4" clip-path="url(#bn35-line-6)">---&#160;Books/The&#160;Art&#160;of&#160;Learning.md</text><text class="bn35-r2" x="1171.2" y="166.4" textLength="12.2" clip-path="url(#bn35-line-6)">
+</text><text class="bn35-r2" x="0" y="190.8" textLength="475.8" clip-path="url(#bn35-line-7)">frontmatter[status]:&#160;to-read&#160;-&gt;&#160;reading</text><text class="bn35-r2" x="1171.2" y="190.8" textLength="12.2" clip-path="url(#bn35-line-7)">
+</text><text class="bn35-r2" x="0" y="215.2" textLength="439.2" clip-path="url(#bn35-line-8)">---&#160;Books/Thinking,&#160;Fast&#160;and&#160;Slow.md</text><text class="bn35-r2" x="1171.2" y="215.2" textLength="12.2" clip-path="url(#bn35-line-8)">
+</text><text class="bn35-r2" x="0" y="239.6" textLength="475.8" clip-path="url(#bn35-line-9)">frontmatter[status]:&#160;to-read&#160;-&gt;&#160;reading</text><text class="bn35-r2" x="1171.2" y="239.6" textLength="12.2" clip-path="url(#bn35-line-9)">
+</text><text class="bn35-r1" x="0" y="264" textLength="61" clip-path="url(#bn35-line-10)">vault</text><text class="bn35-r3" x="73.2" y="264" textLength="12.2" clip-path="url(#bn35-line-10)">$</text><text class="bn35-r2" x="1171.2" y="264" textLength="12.2" clip-path="url(#bn35-line-10)">
+</text><text class="bn35-r2" x="1171.2" y="288.4" textLength="12.2" clip-path="url(#bn35-line-11)">
+</text><text class="bn35-r2" x="1171.2" y="312.8" textLength="12.2" clip-path="url(#bn35-line-12)">
+</text><text class="bn35-r2" x="1171.2" y="337.2" textLength="12.2" clip-path="url(#bn35-line-13)">
+</text>
+    </g>
+    </g>
+</g>
+</svg>

@@ -4,17 +4,18 @@
 // directory under the system temporary root, and drives only that copy:
 //
 //   web  Playwright tours `bn serve` (started through vault_sandbox.py, exactly
-//        like the browser fixtures) and ffmpeg turns the video into
-//        docs/assets/demo-web.gif.
-//   cli  VHS replays scripts/demo/cli.tape against the same throwaway vault
-//        into docs/assets/demo-cli.gif.
+//        like the browser fixtures), screenshots each step, and
+//        svg_slideshow.mjs stacks them into docs/assets/demo-web.svg.
+//   cli  Each command in CLI_STEPS runs for real in a shell; its typing and
+//        output become ANSI frames that render_terminal_svg.py turns into
+//        docs/assets/demo-cli.svg.
 //
 // No step reads $BNOTES_VAULT or the developer's HOME: the server gets an
-// explicit --vault through the sandbox, and the terminal gets an isolated HOME
+// explicit --vault through the sandbox, and the shell gets an isolated HOME
 // whose BNOTES_VAULT names the copy.
 
 import { execFileSync, spawn } from "node:child_process";
-import { cpSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -23,6 +24,8 @@ import { chromium } from "@playwright/test";
 
 import { REPO_ROOT } from "../../internal/web/e2e/manifest.mjs";
 import { refuseFixtureStorageInsideCheckout } from "../../internal/web/e2e/prepare.mjs";
+
+import { buildSlideshowSVG } from "./svg_slideshow.mjs";
 
 const DEMO_DIR = join(REPO_ROOT, "scripts", "demo");
 const ASSETS_DIR = join(REPO_ROOT, "docs", "assets");
@@ -150,74 +153,83 @@ function tour(page) {
   return { pause, click, type, goto, moveTo };
 }
 
+// The address bar shows the default serving address rather than this run's
+// random port, so the image does not change on every recording, and stops
+// short of the caption beside it.
+function displayURL(page) {
+  const url = new URL(page.url());
+  const shown = `127.0.0.1:8729${decodeURIComponent(url.pathname)}${decodeURIComponent(url.search)}`;
+  return shown.length > 52 ? `${shown.slice(0, 51)}…` : shown;
+}
+
 async function recordWeb(world) {
   const { stop, baseURL } = await startServer(world);
-  const videoDir = join(world.root, "video");
   const browser = await chromium.launch();
+  const frames = [];
   try {
-    const context = await browser.newContext({
-      baseURL,
-      viewport: VIEWPORT,
-      colorScheme: "dark",
-      recordVideo: { dir: videoDir, size: VIEWPORT },
-    });
+    const context = await browser.newContext({ baseURL, viewport: VIEWPORT, colorScheme: "dark" });
     await context.addInitScript(CURSOR_SCRIPT);
     const page = await context.newPage();
     page.setDefaultTimeout(10000);
-    const started = Date.now();
     const t = tour(page);
+    const shot = async (caption, holdMs) => {
+      await t.pause(350);
+      frames.push({ jpeg: await page.screenshot({ type: "jpeg", quality: 82 }), url: displayURL(page), caption, holdMs });
+    };
 
     // 1. The Daily Brief, then a quick capture into the inbox.
     await t.goto("/");
-    const startOffset = (Date.now() - started) / 1000;
-    await t.pause(1800);
+    await shot("Daily Brief: continue, rediscover, connect", 3000);
     await t.type(page.locator("[data-capture-input]"), "Re-read [[Deep Work]] chapter on boredom");
-    await t.pause(400);
+    await shot("Quick capture, straight into the inbox", 2200);
     await t.click(page.locator("[data-capture-submit]"));
-    await t.pause(1500);
+    await shot("Captured, without choosing a file", 1800);
 
-    // 2. Library: full-text search, then one query expression for the shelf.
+    // 2. Library: full-text search.
     await t.click(page.getByRole("link", { name: "Library", exact: true }).first());
     await page.waitForURL("**/library**");
-    await t.pause(600);
     await t.type(page.getByRole("searchbox", { name: "Search notes" }), "deliberate practice");
     await page.keyboard.press("Enter");
-    await t.pause(2200);
+    await page.getByRole("link", { name: /^Deep Work/ }).first().waitFor();
+    await shot("Library: search titles and bodies", 3000);
 
     // 3. Read a note: rendered Markdown, properties and links.
     await t.click(page.getByRole("link", { name: /^Deep Work/ }).first());
     await page.waitForURL("**/n/**");
-    await t.pause(1500);
-    await page.mouse.wheel(0, 420);
-    await t.pause(1600);
+    await shot("Rendered Markdown with its properties", 3000);
+    await page.mouse.wheel(0, 640);
+    await shot("Related notes, ranked with reasons", 2600);
 
     // 4. Edit it in the browser and save.
     await t.click(page.getByRole("link", { name: "Edit in browser", exact: true }));
     const surface = page.locator("[data-source-surface] .cm-content");
     await surface.waitFor();
-    await t.pause(800);
     await t.click(surface);
     await page.keyboard.press("ControlOrMeta+End");
-    await page.keyboard.type("\n\n## Practice\n\nTwo 90-minute blocks every morning, phone in another room.", { delay: 35 });
-    await t.pause(600);
+    await page.keyboard.type("\n\n## Practice\n\nTwo 90-minute blocks every morning, phone in another room.", { delay: 10 });
+    await shot("Edit the Markdown source with a live preview", 3000);
     await t.click(page.locator("[data-source-save]"));
-    await t.pause(1800);
+    await page.locator("[data-source-status]").filter({ hasText: /Saved/ }).waitFor();
+    await shot("Saved to the vault as a plain .md file", 2000);
 
     // 5. The link graph, filtered down to one neighbourhood.
     await t.click(page.getByRole("link", { name: "Graph", exact: true }).first());
     await page.waitForURL("**/graph**");
-    await t.pause(2200);
+    await t.pause(1200);
+    await shot("The link graph of the whole vault", 2800);
     await t.type(page.locator("#graph-filter-input"), "notes");
-    await t.pause(2800);
+    await t.pause(1200);
+    await shot("Filtered to one neighbourhood", 3200);
 
-    await context.close().catch(() => {});
-    const [video] = readdirSync(videoDir).filter((name) => name.endsWith(".webm"));
-    toGif(join(videoDir, video), join(ASSETS_DIR, "demo-web.gif"), startOffset, 880);
+    await context.close();
+    const output = join(ASSETS_DIR, "demo-web.svg");
+    writeFileSync(output, buildSlideshowSVG(frames, VIEWPORT));
+    console.log(`wrote ${output}`);
   } catch (error) {
     // Outside world.root, which is removed when the run ends.
-    const shot = join(tmpdir(), "bn-demo-failure.png");
-    await browser.contexts()[0]?.pages()[0]?.screenshot({ path: shot }).catch(() => {});
-    console.error(`tour failed; screenshot at ${shot}`);
+    const failure = join(tmpdir(), "bn-demo-failure.png");
+    await browser.contexts()[0]?.pages()[0]?.screenshot({ path: failure }).catch(() => {});
+    console.error(`tour failed; screenshot at ${failure}`);
     throw error;
   } finally {
     await browser.close();
@@ -225,36 +237,60 @@ async function recordWeb(world) {
   }
 }
 
-// toGif builds a palette from this video: a GIF has at most 256 colours, and a
-// generic palette bands the dark theme. 10 fps, 880 px and 96 colours keep the
-// tour legible at around 5 MB, under GitHub's 10 MB inline image limit.
-function toGif(input, output, start, width) {
-  run("ffmpeg", ["-y", "-loglevel", "error", "-ss", String(start), "-i", input,
-    "-vf", `fps=10,scale=${width}:-1:flags=lanczos,split[a][b];[a]palettegen=max_colors=96:stats_mode=diff[p];` +
-      "[b][p]paletteuse=dither=bayer:bayer_scale=5:diff_mode=rectangle",
-    output]);
-  console.log(`wrote ${output}`);
+// The terminal session: each command runs for real against the vault copy.
+// `clear` starts the step on an empty screen, as a person would before a long
+// output.
+const CLI_STEPS = [
+  { caption: "saved views are named queries", command: "bn views" },
+  { caption: "one query language", command: "bn find -q 'category:Books and prop:rating>=5' --json | jq -r '.[].title'" },
+  { caption: "link-graph operators", command: "bn find -q 'near:[[Deep Work]]<=2 and status:wip' --json | jq -r '.[].title'" },
+  { caption: "related notes, with reasons", command: "bn related 'Books/Deep Work.md' | head -12", clear: true },
+  { caption: "capture without choosing a file", command: "bn capture 'Try the Feynman technique on [[Spaced Repetition]]' | head -2", clear: true },
+  { caption: "bulk edits preview first", command: "bn find --view 'Reading list' | bn set - status=reading --dry-run" },
+];
+const ROWS = 16;
+const PROMPT = "\x1b[1;36mvault\x1b[0m \x1b[2m$\x1b[0m ";
+const CURSOR = "\x1b[7m \x1b[0m";
+
+// cliFrames runs CLI_STEPS and returns the screens a viewer would see: the
+// command appearing in a few bursts, then its output. Every screen is padded
+// to ROWS lines so the terminal keeps one size.
+function cliFrames(world) {
+  const env = {
+    PATH: `${join(world.root, "bin")}:${process.env.PATH}`,
+    TMPDIR: tmpdir(),
+    HOME: world.home,
+    XDG_CONFIG_HOME: join(world.home, ".config"),
+    BNOTES_VAULT: world.vault,
+  };
+  const frames = [];
+  let lines = [];
+  const screen = (current) => {
+    const visible = [...lines, current].slice(-ROWS);
+    return [...visible, ...Array(ROWS - visible.length).fill("")].join("\n");
+  };
+  for (const step of CLI_STEPS) {
+    if (step.clear) lines = [];
+    const typed = (text) => `${PROMPT}\x1b[1m${text}\x1b[0m`;
+    frames.push({ ansi: screen(PROMPT + CURSOR), hold_ms: 600, caption: step.caption });
+    for (const fraction of [0.3, 0.6, 0.85]) {
+      const text = step.command.slice(0, Math.round(step.command.length * fraction));
+      frames.push({ ansi: screen(typed(text) + CURSOR), hold_ms: 140, caption: step.caption });
+    }
+    frames.push({ ansi: screen(typed(step.command) + CURSOR), hold_ms: 500, caption: step.caption });
+    const output = execFileSync("bash", ["-c", step.command], { cwd: world.vault, env, encoding: "utf8" });
+    lines.push(typed(step.command), ...output.replace(/\n$/, "").split("\n"));
+    frames.push({ ansi: screen(PROMPT + CURSOR), hold_ms: 2600, caption: step.caption });
+  }
+  return frames;
 }
 
 function recordCli(world) {
-  const tape = readFileSync(join(DEMO_DIR, "cli.tape"), "utf8").replaceAll("{{OUTPUT}}", join(ASSETS_DIR, "demo-cli.gif"));
-  const tapePath = join(world.root, "cli.tape");
-  writeFileSync(tapePath, tape);
-  // VHS starts its shell with this environment; the prompt and HOME are the
-  // demo's own so nothing from the developer's shell ends up in the recording.
-  run("vhs", [tapePath], {
-    cwd: world.vault,
-    stdio: ["ignore", "inherit", "inherit"],
-    env: {
-      PATH: `${join(world.root, "bin")}:${process.env.PATH}`,
-      TMPDIR: tmpdir(),
-      HOME: world.home,
-      XDG_CONFIG_HOME: join(world.home, ".config"),
-      BNOTES_VAULT: world.vault,
-      TERM: "xterm-256color",
-    },
-  });
-  console.log(`wrote ${join(ASSETS_DIR, "demo-cli.gif")}`);
+  const framesPath = join(world.root, "demo-cli.json");
+  writeFileSync(framesPath, JSON.stringify(cliFrames(world)));
+  const output = join(ASSETS_DIR, "demo-cli.svg");
+  run("uv", ["run", "-q", join(DEMO_DIR, "render_terminal_svg.py"), framesPath, output], { stdio: "inherit" });
+  console.log(`wrote ${output}`);
 }
 
 const which = process.argv[2] ?? "all";

@@ -9,12 +9,12 @@ Use it alongside an editor such as VS Code or Neovim, or run `bn serve` to
 browse and edit your notes in the browser. Your notes stay ordinary Markdown
 files with YAML frontmatter; there is no database to export from.
 
-![The bn serve browser workspace: Daily Brief, quick capture, Library search, a rendered note, the in-browser editor, and the link graph](docs/assets/demo-web.gif)
+![The bn serve browser workspace: Daily Brief, quick capture, Library search, a rendered note, the in-browser editor, and the link graph](docs/assets/demo-web.svg)
 
 <details>
 <summary>The same vault from the terminal</summary>
 
-![bn at the terminal: saved views, query expressions, related notes, capture, and a previewed bulk edit](docs/assets/demo-cli.gif)
+![bn at the terminal: saved views, query expressions, related notes, capture, and a previewed bulk edit](docs/assets/demo-cli.svg)
 
 </details>
 
