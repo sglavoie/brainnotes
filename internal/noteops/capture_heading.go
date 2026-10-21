@@ -9,14 +9,19 @@ import (
 	"github.com/sglavoie/sglavoie_brainnotes/internal/wikilink"
 )
 
-// captureATXHeading matches an ATX markdown heading line and captures the hash
-// run and the title with any closing hash sequence trimmed, so `## Captures ##`
-// still anchors `## Captures`. The shape mirrors internal/cockpit/review.go's
-// atxHeading; cockpit imports noteops and not the reverse, so the matcher is
-// duplicated here rather than exported from there. The `\s{0,3}` prefix is also
-// why four-space indented code needs no separate handling: such a line can never
-// be read as a heading.
-var captureATXHeading = regexp.MustCompile(`^\s{0,3}(#{1,6})\s+(.*?)\s*#*\s*$`)
+// captureATXHeading matches an ATX markdown heading line per CommonMark and
+// captures the hash run and the title with any closing hash sequence trimmed, so
+// `## Captures ##` still anchors `## Captures`. A closing sequence counts only
+// when a space or tab precedes it, so `## Notes on C#` keeps its `#`. Indentation
+// is up to three spaces and never a tab: four spaces or a tab make indented
+// code, which needs no separate handling because such a line can never match. A
+// bare `##` or `## ##` is an empty heading: it ends a section, but has no title
+// to anchor on. The lazy `??` tries the empty title first, which is what makes
+// `### ###` empty rather than titled `###`. The shape mirrors
+// internal/cockpit/review.go's atxHeading and the web synthesis draft check;
+// cockpit imports noteops and not the reverse, so the matcher is duplicated
+// rather than exported from there.
+var captureATXHeading = regexp.MustCompile(`^ {0,3}(#{1,6})(?:[ \t]+(.*?))??(?:[ \t]+#+)?[ \t]*\r?$`)
 
 // captureTopLevelBullet matches a top-level list item. Up to three leading
 // spaces still count as top level, matching the heading rule, so a two-space

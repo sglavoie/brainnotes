@@ -1,7 +1,6 @@
 package query
 
 import (
-	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -345,31 +344,15 @@ func linkTitleKey(title string) string {
 	return strings.ToLower(textnorm.NFC(title))
 }
 
-func linkTargetKey(target string) string {
-	target = strings.TrimSpace(strings.ReplaceAll(target, "\\", "/"))
-	target = strings.TrimPrefix(path.Clean("/"+target), "/")
-	target = normalizeMarkdownLinkTitle(target)
-	if target == "" || target == "." {
-		return ""
-	}
-	return strings.ToLower(textnorm.NFC(target))
-}
+// linkTargetKey is wikilink.TargetPathKey: the graph keys notes with the same
+// function RewriteMove matches with, so the two cannot drift.
+func linkTargetKey(target string) string { return wikilink.TargetPathKey(target) }
 
-// linkTargetResolveKey normalizes a folder-qualified wikilink target when it is
-// safe to interpret as a vault-relative path. Dot segments are rejected so
-// links like [[../Beta]] stay broken instead of collapsing onto a real note.
+// linkTargetResolveKey is wikilink.ResolveTargetPathKey. Dot segments are
+// rejected so links like [[../Beta]] stay broken instead of collapsing onto a
+// real note.
 func linkTargetResolveKey(target string) (string, bool) {
-	target = strings.TrimSpace(strings.ReplaceAll(target, "\\", "/"))
-	for _, part := range strings.Split(target, "/") {
-		if part == "." || part == ".." {
-			return "", false
-		}
-	}
-	key := linkTargetKey(target)
-	if key == "" {
-		return "", false
-	}
-	return key, true
+	return wikilink.ResolveTargetPathKey(target)
 }
 
 func notePathKey(root, notePath string) string {

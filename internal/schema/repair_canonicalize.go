@@ -1,12 +1,26 @@
 package schema
 
-import "strings"
+import (
+	"strings"
 
+	"github.com/sglavoie/sglavoie_brainnotes/internal/textnorm"
+)
+
+// allowedKey is the form a value and an allowed spelling are compared in when
+// repair looks for the allowed spelling a value was meant to be: NFC, then
+// lowercased, the key query's tag/status/type predicates use. Without the NFC
+// step a decomposed `café` written by a macOS tool matched no allowed entry
+// and was reported value_not_allowed instead of being canonicalized.
+func allowedKey(s string) string { return strings.ToLower(textnorm.NFC(s)) }
+
+// canonicalizeString returns the single allowed spelling s matches under
+// allowedKey. The allowed list's spelling wins, so repair rewrites a value to
+// exactly the bytes lint then accepts.
 func canonicalizeString(s string, allowed []string) (string, bool) {
-	lower := strings.ToLower(s)
+	lower := allowedKey(s)
 	var matches []string
 	for _, a := range allowed {
-		if strings.ToLower(a) == lower {
+		if allowedKey(a) == lower {
 			matches = append(matches, a)
 		}
 	}

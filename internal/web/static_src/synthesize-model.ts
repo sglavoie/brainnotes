@@ -206,8 +206,11 @@ export const synthesisDraftContainsSources = (draft: string): boolean => {
     if (fenced) {
       continue;
     }
-    const match = /^\s{0,3}(#{1,6})\s+(.*?)\s*#*\s*$/.exec(line);
-    if (match && match[1].length === 2 && match[2].trim().normalize("NFC").toLowerCase() === "sources") {
+    // noteops's captureATXHeading, the CommonMark ATX shape: up to three
+    // spaces (a tab makes code), and a closing `#` run only after a space or tab.
+    const match = /^ {0,3}(#{1,6})(?:[ \t]+(.*?))??(?:[ \t]+#+)?[ \t]*$/.exec(line);
+    const title = match?.[2] ?? "";
+    if (match && match[1].length === 2 && title.trim().normalize("NFC").toLowerCase() === "sources") {
       return true;
     }
   }

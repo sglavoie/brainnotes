@@ -3,6 +3,8 @@ package frontmatter
 import (
 	"errors"
 	"reflect"
+
+	"github.com/sglavoie/sglavoie_brainnotes/internal/textnorm"
 )
 
 // ErrNotAList is returned by list-mutation methods when the target key exists
@@ -19,9 +21,9 @@ var ErrKeyConflict = errors.New("frontmatter: target key already exists")
 // Adding an already-present value is a no-op for that value. changed is true
 // only if at least one value was actually appended.
 //
-// Values are compared as-is with reflect.DeepEqual; callers responsible for
-// wikilink-typed properties must wrap values into `[[X]]` form before calling
-// so that the comparison treats them as equal to existing wrapped entries.
+// Strings are compared under NFC and other values with reflect.DeepEqual
+// (see listItemEqual); callers responsible for wikilink-typed properties must
+// wrap values into `[[X]]` form before calling so that the comparison treats them as equal to existing wrapped entries.
 func (m *Map) ListAdd(k string, values ...any) (bool, error) {
 	if len(values) == 0 {
 		return false, nil
@@ -79,8 +81,9 @@ func (m *Map) ListAdd(k string, values ...any) (bool, error) {
 // If removal empties the list, an empty list is left in place — the key is
 // not deleted. Use Unset for key deletion.
 //
-// Values are compared as-is with reflect.DeepEqual; callers responsible for
-// wikilink-typed properties must wrap values into `[[X]]` form before calling.
+// Strings are compared under NFC and other values with reflect.DeepEqual
+// (see listItemEqual); callers responsible for wikilink-typed properties must
+// wrap values into `[[X]]` form before calling.
 func (m *Map) ListRemove(k string, values ...any) (bool, error) {
 	if len(values) == 0 {
 		return false, nil
@@ -206,13 +209,29 @@ func (m *Map) RenameKey(oldK, newK string) (bool, error) {
 	return true, nil
 }
 
-// containsAny reports whether haystack contains an element equal (per
-// reflect.DeepEqual) to needle.
+// containsAny reports whether haystack contains an element equal to needle
+// per listItemEqual.
 func containsAny(haystack []any, needle any) bool {
 	for _, h := range haystack {
-		if reflect.DeepEqual(h, needle) {
+		if listItemEqual(h, needle) {
 			return true
 		}
 	}
 	return false
+}
+
+// listItemEqual is the equality ListAdd and ListRemove use. Two strings are
+// equal when their NFC forms are, so a decomposed `café` written by a macOS
+// tool and the composed `café` a user types name one list item: without this,
+// `tags-=café` would leave the stored item in place and `tags+=café` would
+// append a visually identical duplicate. Only the comparison is normalized; a
+// retained item keeps its stored bytes. Every other value compares with
+// reflect.DeepEqual.
+func listItemEqual(a, b any) bool {
+	as, aok := a.(string)
+	bs, bok := b.(string)
+	if aok && bok {
+		return as == bs || textnorm.NFC(as) == textnorm.NFC(bs)
+	}
+	return reflect.DeepEqual(a, b)
 }

@@ -100,7 +100,7 @@ bn: find: query: operator ">" is not defined for field "pinned"; use ":", "=", o
 | `type` | Notes with a type (or kind) value. |
 | `has` | Notes that store a frontmatter property (`has:rating`). |
 | `missing` | Notes that omit one (`missing:rating`; exactly `not has:rating`). |
-| `folder` | Notes under a vault folder. |
+| `folder` | Notes under a vault folder, matched case-insensitively and regardless of Unicode normalization form, like `tag`, `category`, `status` and `type` (`folder:archive` matches `Archive/`). |
 | `age` | Notes by date: `age>90d`, or another date property as its argument, `age:created<30d`. |
 | `prop` | Any frontmatter key, declared or not: `prop:rating>3`. |
 | `pinned` | Pinned notes, spelled `pinned:true`. |

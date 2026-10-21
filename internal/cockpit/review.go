@@ -137,10 +137,13 @@ func isHubNote(front *frontmatter.Map, hubTypes []string) bool {
 	return false
 }
 
-// atxHeading matches an ATX markdown heading line (one to six leading hashes
-// followed by whitespace) and captures the heading text. Trailing hashes and
-// surrounding whitespace are trimmed by the caller.
-var atxHeading = regexp.MustCompile(`^\s{0,3}(#{1,6})\s+(.*?)\s*#*\s*$`)
+// atxHeading matches an ATX markdown heading line per CommonMark and captures
+// the heading text without its closing hash sequence. A closing sequence counts
+// only when a space or tab precedes it (`## Notes on C#` keeps its `#`), and
+// indentation is up to three spaces, never a tab, which makes indented code. A
+// bare `##` is an empty heading. It is internal/noteops's captureATXHeading;
+// see there for why the two are duplicated.
+var atxHeading = regexp.MustCompile(`^ {0,3}(#{1,6})(?:[ \t]+(.*?))??(?:[ \t]+#+)?[ \t]*\r?$`)
 
 // emptyHubHeadings returns the subset of wanted heading titles that appear in
 // body as ATX headings but have no non-blank content between the heading and the

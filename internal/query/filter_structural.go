@@ -17,6 +17,10 @@ import (
 // folder are normalized: `--folder /References`, `--folder References/`,
 // `--folder ./References`, and `--folder References\Books` all behave like
 // `References` (or `References/Books`).
+//
+// The comparison goes through comparisonKey, like tag, category, status and
+// type: case-insensitive and NFC-normalized on both sides, so `folder:café`
+// matches a `Café/` directory macOS stored decomposed.
 func Folder(folder, root string) Predicate {
 	folder = strings.TrimSpace(folder)
 	want := strings.Trim(strings.ReplaceAll(folder, "\\", "/"), "/")
@@ -24,6 +28,7 @@ func Folder(folder, root string) Predicate {
 	if want == "." {
 		want = ""
 	}
+	want = comparisonKey(want)
 	return func(n *vault.Note) bool {
 		if n == nil {
 			return false
@@ -35,6 +40,7 @@ func Folder(folder, root string) Predicate {
 		if err != nil {
 			return false
 		}
+		nf = comparisonKey(nf)
 		return nf == want || strings.HasPrefix(nf, want+"/")
 	}
 }
