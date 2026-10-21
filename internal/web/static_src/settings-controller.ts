@@ -10,7 +10,7 @@ import { renderConfigDiff, renderSettingsList, type SettingRow } from "./setting
 import { fetchSettings, type FetchLike } from "./settings-requests";
 import { setStatusText, type StatusKind } from "./status";
 import { parseDisplayedSetting } from "./settings-units";
-import { controlText, markSettingDraft, updateSettingRow } from "./settings-rows";
+import { controlText, markSettingDraft, settingRowsModified, updateSettingRow } from "./settings-rows";
 import { offerWriteOutcomeCheck } from "./write-outcome-check";
 
 export type SettingsPanelDeps = {
@@ -22,6 +22,8 @@ export type SettingsPanelDeps = {
 export type SettingsPanel = {
   load: () => Promise<void>;
   pending: () => SettingPendingSave | null;
+  /** Whether a row holds an unsaved edit or an unconfirmed preview. */
+  modified: () => boolean;
 };
 
 type SettingsElements = {
@@ -222,6 +224,20 @@ const pendingRenderer = (
   applyFilter();
 };
 
+// listBusyMarker marks the list busy for a read and returns the function that
+// ends it. Reads are counted apart from the panel's `reading`, which an edit
+// also bumps to discard a read: the list stays busy until the latest answers.
+const listBusyMarker = (list: HTMLElement) => {
+  let loading = 0;
+  return (): (() => void) => {
+    const listing = ++loading;
+    list.setAttribute("aria-busy", "true");
+    return () => {
+      if (listing === loading) list.setAttribute("aria-busy", "false");
+    };
+  };
+};
+
 /**
  * Mounts the portable-settings panel.
  *
@@ -296,13 +312,16 @@ export const createSettingsPanel = (deps: SettingsPanelDeps): SettingsPanel | nu
   };
 
   let linkedSettingVisited = false;
+  const markListBusy = listBusyMarker(elements.list);
   const load = async (): Promise<void> => {
     if (writer.busy()) return;
     writer.cancel();
     const issue = ++reading;
     showPending(null);
     setStatus("Loading settings…", "is-loading");
+    const listed = markListBusy();
     const outcome = await fetchSettings(deps.fetch);
+    listed();
     if (issue !== reading) return;
     if (!outcome.ok) {
       setStatus(outcome.message, "is-error");
@@ -321,5 +340,6 @@ export const createSettingsPanel = (deps: SettingsPanelDeps): SettingsPanel | nu
   elements.refresh?.addEventListener("click", () => void load());
   showPending(null);
 
-  return { load, pending: () => writer.pending() };
+  const modified = (): boolean => writer.pending() !== null || settingRowsModified(rows);
+  return { load, pending: () => writer.pending(), modified };
 };

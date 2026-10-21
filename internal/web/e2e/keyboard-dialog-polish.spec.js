@@ -17,7 +17,11 @@ const openStatusEditor = async (page) => {
 test("Properties owns / for its note search and keeps the editor on a popover's Escape", async ({ page }) => {
   const { row, form } = await openStatusEditor(page);
   const input = form.locator("input").first();
-  await input.fill("kept value");
+  // The editor's control takes focus on opening, so typing needs no click.
+  await expect(input).toBeFocused();
+  await page.keyboard.press("ControlOrMeta+A");
+  await page.keyboard.type("kept value");
+  await expect(input).toHaveValue("kept value");
 
   // The Workspace popover takes Escape first; the open editor and its value stay.
   const workspace = page.locator(".source-editor-workspace");
@@ -40,6 +44,30 @@ test("Properties owns / for its note search and keeps the editor on a popover's 
   await row.focus();
   await page.keyboard.press("Control+/");
   await expect(row).toBeFocused();
+});
+
+test("closing the property editor returns focus to the row that opened it", async ({ page }) => {
+  const { row, form } = await openStatusEditor(page);
+  const input = form.locator("input").first();
+  await expect(input).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(form).toHaveCount(0);
+  await expect(row).toBeFocused();
+
+  // Cancel from the keyboard lands on the same row, and so does the Edit button.
+  await row.press("Enter");
+  await expect(input).toBeFocused();
+  await form.locator("[data-property-editor-cancel]").focus();
+  await page.keyboard.press("Enter");
+  await expect(form).toHaveCount(0);
+  await expect(row).toBeFocused();
+
+  const edit = row.locator("[data-property-row-edit]");
+  await edit.focus();
+  await page.keyboard.press("Enter");
+  await expect(input).toBeFocused();
+  await page.keyboard.press("Escape");
+  await expect(edit).toBeFocused();
 });
 
 test("the property preview is a native modal that starts on Cancel", async ({ page }) => {

@@ -63,6 +63,30 @@ test("an unreadable template reply retains the draft and spends the preview", as
   expect(gitStatus(manifest.localVault)).toBe("");
 });
 
+test("leaving with an unsaved setting or template edit asks first", async ({ page }) => {
+  await page.goto("/settings");
+  await page.waitForLoadState("networkidle");
+  const prompts = [];
+  page.on("dialog", async (dialog) => {
+    prompts.push(dialog.type());
+    await dialog.dismiss();
+  });
+  const row = page.locator('[data-settings-row="brief.exclude_types"]');
+  await row.locator("[data-settings-edit]").click();
+  const control = row.locator("[data-settings-control]");
+  const original = await control.inputValue();
+  await control.fill("unsaved-unload-fixture");
+  await page.goto("/library").catch(() => {});
+  expect(prompts).toEqual(["beforeunload"]);
+  await expect(page).toHaveURL(/\/settings/);
+
+  await control.fill(original);
+  await page.locator("[data-templates-content]").fill("# typed, never saved\n");
+  await page.goto("/library").catch(() => {});
+  expect(prompts).toEqual(["beforeunload", "beforeunload"]);
+  await expect(page).toHaveURL(/\/settings/);
+});
+
 test("a refused settings preview offers correction without uncertain-write recovery", async ({ page }) => {
   await page.goto("/settings");
   await page.waitForLoadState("networkidle");

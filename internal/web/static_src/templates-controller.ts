@@ -1,7 +1,7 @@
 import type { TemplatesResult } from "./api";
 import { fetchTemplates, type FetchLike } from "./settings-requests";
 import type { StatusKind } from "./status";
-import { createTemplatesWriter } from "./templates-actions";
+import { createTemplatesWriter, type TemplatesWriter } from "./templates-actions";
 import {
   emptyTemplateDraft,
   newTemplateDraft,
@@ -10,7 +10,11 @@ import {
   type TemplateDraft,
   type TemplatePendingSave,
 } from "./templates-model";
-import { createTemplateDraftGuard, type TemplateConfirm } from "./templates-draft-guard";
+import {
+  createTemplateDraftGuard,
+  type TemplateConfirm,
+  type TemplateDraftGuard,
+} from "./templates-draft-guard";
 import { createTemplatesView, readTemplatesElements, type TemplatesView } from "./templates-view";
 import { offerWriteOutcomeCheck } from "./write-outcome-check";
 
@@ -25,6 +29,8 @@ export type TemplatesPanel = {
   load: () => Promise<void>;
   draft: () => TemplateDraft;
   pending: () => TemplatePendingSave | null;
+  /** Whether the editor holds edits or an unconfirmed receipt. */
+  modified: () => boolean;
 };
 
 const listSummary = (result: TemplatesResult): [string, StatusKind] =>
@@ -44,24 +50,38 @@ const clickedTemplate = (event: Event): string => {
   return target.closest("[data-templates-open]")?.getAttribute("data-templates-open") || "";
 };
 
+type ListingReader = () => Promise<TemplatesResult | null>;
+
 /**
- * Re-reads the directory listing into the view, or reports why it could not.
+ * Returns a function that re-reads the directory listing into the view, or
+ * reports why it could not.
  *
  * The listing is reloaded after every write rather than patched in place: a save
  * can change a name, a delete removes one, and the server is the only thing that
- * knows which files the templates directory now holds.
+ * knows which files the templates directory now holds. Each request is
+ * numbered, so a superseded one resolves to null and paints nothing.
  */
-const reloadInto = async (
+const createListingReader = (
   fetcher: FetchLike,
-  view: TemplatesView
-): Promise<TemplatesResult | null> => {
-  const outcome = await fetchTemplates(fetcher);
-  if (!outcome.ok) {
-    view.setStatus(outcome.message, "is-error");
-    return null;
-  }
-  view.absorb(outcome.result);
-  return outcome.result;
+  view: TemplatesView,
+  list: HTMLElement
+): ListingReader => {
+  let reading = 0;
+  return async () => {
+    const issue = ++reading;
+    list.setAttribute("aria-busy", "true");
+    const outcome = await fetchTemplates(fetcher);
+    if (issue !== reading) {
+      return null;
+    }
+    list.setAttribute("aria-busy", "false");
+    if (!outcome.ok) {
+      view.setStatus(outcome.message, "is-error");
+      return null;
+    }
+    view.absorb(outcome.result);
+    return outcome.result;
+  };
 };
 
 // The draft is settled on the bytes the receipt carried — the ones the server
@@ -69,65 +89,22 @@ const reloadInto = async (
 // textarea holds now. They are the same thing for a person who confirmed what
 // they typed, and different for one who kept typing over the diff: settling on
 // the editor would leave unwritten bytes on screen under a "Saved" message.
-const savedSettler = (fetcher: FetchLike, view: TemplatesView) =>
+const savedSettler = (reload: ListingReader, view: TemplatesView) =>
   (issued: TemplatePendingSave, result: TemplatesResult): void => {
     view.showDraft(
       issued.op === "delete"
         ? emptyTemplateDraft()
         : { name: issued.name, content: issued.content, revision: result.revision, created: false }
     );
-    void reloadInto(fetcher, view);
+    void reload();
   };
 
-/**
- * Mounts the template editor.
- *
- * The draft's revision is the load-bearing field: it is the digest the bytes in
- * the textarea were read at, it travels on every write, and it is what makes a
- * template changed underneath this page — in another window, by `bn`, or by an
- * arriving synchronization package — a refusal rather than an overwrite. A name
- * typed over an opened draft deliberately drops it: that edit is a create, and
- * the server refuses a create whose destination exists, which is the answer a
- * person wants rather than a silent overwrite of a second file.
- *
- * Nothing here parses a template. The bytes round-trip exactly, because a
- * template's frontmatter holds unrendered actions no YAML parser accepts — the
- * same reason the vault walker prunes this directory.
- */
-export const createTemplatesPanel = (deps: TemplatesPanelDeps): TemplatesPanel | null => {
-  const elements = readTemplatesElements(deps.root);
-  if (!elements) {
-    return null;
-  }
-  const view = createTemplatesView(elements);
-  const guard = createTemplateDraftGuard({
-    root: deps.root, fetch: deps.fetch, view, writer: () => writer, confirm: deps.confirm,
-    reload: () => void reloadInto(deps.fetch, view),
-  });
-
-  const settle = savedSettler(deps.fetch, view);
-
-  let issued: TemplatePendingSave | null = null;
-  const writer = createTemplatesWriter({
-    fetch: deps.fetch,
-    token: deps.token,
-    hooks: {
-      onStatus: (message, kind, uncertain, operationID) => {
-        view.setStatus(message, kind, uncertain);
-        const unanswered = issued;
-        if (uncertain && operationID && unanswered) {
-          offerWriteOutcomeCheck(elements.status, operationID, deps.fetch, "Template change",
-            () => void guard.settleConfirmed(unanswered));
-        }
-      },
-      onPending: (pending) => {
-        if (pending) issued = pending;
-        view.showPending(pending);
-      },
-      onSaved: settle,
-    },
-  });
-
+/** The Save and Delete buttons: each previews its write once the draft allows it. */
+const writeRequests = (
+  view: TemplatesView,
+  writer: TemplatesWriter,
+  guard: TemplateDraftGuard
+): { requestSave: () => void; requestDelete: () => void } => {
   const requestSave = (): void => {
     if (guard.refuseWhileOpening()) return;
     const draft = view.draft();
@@ -157,11 +134,70 @@ export const createTemplatesPanel = (deps: TemplatesPanelDeps): TemplatesPanel |
     }
     void writer.preview({ op: "delete", name: draft.name, content: "", revision: draft.revision });
   };
+  return { requestSave, requestDelete };
+};
 
+/**
+ * Mounts the template editor.
+ *
+ * The draft's revision is the load-bearing field: it is the digest the bytes in
+ * the textarea were read at, it travels on every write, and it is what makes a
+ * template changed underneath this page — in another window, by `bn`, or by an
+ * arriving synchronization package — a refusal rather than an overwrite. A name
+ * typed over an opened draft deliberately drops it: that edit is a create, and
+ * the server refuses a create whose destination exists, which is the answer a
+ * person wants rather than a silent overwrite of a second file.
+ *
+ * Nothing here parses a template. The bytes round-trip exactly, because a
+ * template's frontmatter holds unrendered actions no YAML parser accepts — the
+ * same reason the vault walker prunes this directory.
+ */
+export const createTemplatesPanel = (deps: TemplatesPanelDeps): TemplatesPanel | null => {
+  const elements = readTemplatesElements(deps.root);
+  if (!elements) {
+    return null;
+  }
+  const view = createTemplatesView(elements);
+  const reload = createListingReader(deps.fetch, view, elements.list);
+  const guard = createTemplateDraftGuard({
+    root: deps.root, fetch: deps.fetch, view, writer: () => writer, confirm: deps.confirm,
+    reload: () => void reload(),
+  });
+
+  const settle = savedSettler(reload, view);
+
+  let issued: TemplatePendingSave | null = null;
+  const writer = createTemplatesWriter({
+    fetch: deps.fetch,
+    token: deps.token,
+    hooks: {
+      onStatus: (message, kind, uncertain, operationID) => {
+        view.setStatus(message, kind, uncertain);
+        const unanswered = issued;
+        if (uncertain && operationID && unanswered) {
+          offerWriteOutcomeCheck(elements.status, operationID, deps.fetch, "Template change",
+            () => void guard.settleConfirmed(unanswered));
+        }
+      },
+      onPending: (pending) => {
+        if (pending) issued = pending;
+        view.showPending(pending);
+      },
+      onSaved: settle,
+    },
+  });
+
+  const { requestSave, requestDelete } = writeRequests(view, writer, guard);
+
+  // load mirrors the settings panel: a write in flight keeps its locked editor
+  // and its status, and a waiting receipt is dropped through the writer so the
+  // writer and the view agree about it.
   const load = async (): Promise<void> => {
+    if (writer.busy()) return;
+    writer.cancel();
     view.showPending(null);
     view.setStatus("Loading templates…", "is-loading");
-    const result = await reloadInto(deps.fetch, view);
+    const result = await reload();
     if (result) {
       view.setStatus(...listSummary(result));
     }
@@ -189,5 +225,5 @@ export const createTemplatesPanel = (deps: TemplatesPanelDeps): TemplatesPanel |
   view.showPending(null);
   view.showDraft(emptyTemplateDraft());
 
-  return { load, draft: view.draft, pending: () => writer.pending() };
+  return { load, draft: view.draft, pending: () => writer.pending(), modified: guard.modified };
 };

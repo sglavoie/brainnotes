@@ -1,7 +1,7 @@
 import type { PropertyMutationAction, PropertySummary, PropertyTypedValue } from "./api";
 import { valueDisplayText } from "./properties-model";
 import { createValueControl, type ValueControl } from "./properties-value-control";
-import type { WorkbenchEditor } from "./properties-workbench-editor";
+import type { EditorForm, WorkbenchEditor } from "./properties-workbench-editor";
 import {
   actionTitle,
   editAllowed,
@@ -23,7 +23,7 @@ export type WorkbenchFormContext = {
   setStatus: (message: string, kind?: StatusKind) => void;
 };
 
-type Submit = () => string | null;
+type Submit = EditorForm;
 
 const previewTextFor = (value: PropertyTypedValue): string =>
   value.kind === "list" ? (value.items || []).map((item) => item.text).join(", ") : value.text;
@@ -90,8 +90,7 @@ export const openRowEditor = (
         op === "replace"
           ? buildValueControl(ctx, form, current, seed)
           : buildItemControl(ctx, form, current);
-      control.focus();
-      return () => {
+      const submit = (): string | null => {
         const message = control.error();
         if (message !== "") {
           return message;
@@ -104,6 +103,7 @@ export const openRowEditor = (
         void ctx.mutations.runImmediate(relPath, op, value, row.hash, text);
         return null;
       };
+      return { submit, focus: control.focus };
     }
   );
 };
@@ -123,8 +123,7 @@ const buildRenameForm = (
   input.setAttribute("data-property-new-name", "");
   input.value = ctx.property;
   form.appendChild(input);
-  input.focus();
-  return () => {
+  const submit = (): string | null => {
     const newName = input.value.trim();
     if (newName === "") {
       return "Enter a new property name.";
@@ -140,6 +139,7 @@ const buildRenameForm = (
     });
     return null;
   };
+  return { submit, focus: () => input.focus() };
 };
 
 const buildValueActionForm = (
@@ -150,8 +150,7 @@ const buildValueActionForm = (
   current: PropertySummary
 ): Submit => {
   const control = buildValueControl(ctx, form, current);
-  control.focus();
-  return () => {
+  const submit = (): string | null => {
     const message = control.error();
     if (message !== "") {
       return message;
@@ -174,6 +173,7 @@ const buildValueActionForm = (
     });
     return null;
   };
+  return { submit, focus: control.focus };
 };
 
 export const openActionEditor = (

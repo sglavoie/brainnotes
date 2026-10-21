@@ -5,6 +5,7 @@ import {
   normalizeNoteInsightResponse,
 } from "./api";
 import { queryElement } from "./dom";
+import { captureFocusReturn, focusedWithin } from "./focus-return";
 import { copyWithFallback } from "./clipboard";
 import { setStatusText } from "./status";
 import { isUnreachableError, serverUnreachableMessage } from "./request-outcome";
@@ -148,8 +149,12 @@ class NoteInsight {
 
   private async run(): Promise<void> {
     if (this.els.submit.disabled) return;
+    const focused = focusedWithin(this.els.root);
     this.setBusy(true);
-    if (!await this.canRun()) { this.setBusy(false); return; }
+    const accepted = await this.canRun();
+    // Watched from here, after any disclosure dialog has handed focus back.
+    const returnFocus = captureFocusReturn(focused);
+    if (!accepted) { this.setBusy(false); returnFocus(); return; }
     this.setStatus("Generating response…", "is-loading");
     try {
       const requestBody = buildNoteInsightForm({
@@ -166,6 +171,7 @@ class NoteInsight {
       this.setStatus(describeClientError(error), "is-error");
     } finally {
       this.setBusy(false);
+      returnFocus();
     }
   }
 

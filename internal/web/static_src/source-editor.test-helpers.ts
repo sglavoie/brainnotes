@@ -49,7 +49,7 @@ export const editorMarkup = (): string => `
   <p data-source-status></p>
   <p data-source-draft-status></p>
   <section data-source-recovery hidden>
-    <h3 data-source-recovery-heading></h3>
+    <h2 data-source-recovery-heading></h2>
     <p data-source-recovery-lede></p>
     <pre data-source-recovery-source></pre>
     <button type="button" data-source-recovery-restore>Put it back in the editor</button>

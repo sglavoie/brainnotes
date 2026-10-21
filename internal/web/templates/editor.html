@@ -67,7 +67,7 @@
         move the note out from under it.
       -->
       <section class="source-editor-gate" data-source-gate hidden aria-labelledby="source-editor-gate-heading">
-        <h3 id="source-editor-gate-heading">There is unsaved text in this editor</h3>
+        <h2 id="source-editor-gate-heading">There is unsaved text in this editor</h2>
         <p class="source-editor-gate-message" data-source-gate-message></p>
         <div class="source-editor-gate-actions">
           <button type="button" class="source-editor-gate-save" data-source-gate-save>Save first, then continue</button>
@@ -112,7 +112,7 @@
         itself.
       -->
       <section class="source-editor-recovery" data-source-recovery hidden aria-labelledby="source-editor-recovery-heading">
-        <h3 id="source-editor-recovery-heading" data-source-recovery-heading>Unsaved text kept in this browser</h3>
+        <h2 id="source-editor-recovery-heading" data-source-recovery-heading>Unsaved text kept in this browser</h2>
         <p class="source-editor-recovery-lede" data-source-recovery-lede></p>
         <pre class="source-editor-recovery-source" data-source-recovery-source></pre>
         <div class="source-editor-recovery-actions">
@@ -140,7 +140,7 @@
       </div>
 
       <section class="source-editor-conflict" data-source-conflict hidden aria-labelledby="source-editor-conflict-heading">
-        <h3 id="source-editor-conflict-heading">This note changed on disk</h3>
+        <h2 id="source-editor-conflict-heading">This note changed on disk</h2>
         <p class="source-editor-conflict-lede">Your draft is kept. Review what saving it would replace, or load the current note.</p>
         <div data-source-conflict-comparison></div>
         <details><summary>Current note — full text</summary><pre class="source-editor-conflict-source" data-source-conflict-source></pre></details>
@@ -164,7 +164,7 @@
       </div>
 
       <section class="source-editor-attachments" data-source-attachments hidden aria-labelledby="source-editor-attachments-heading">
-        <h3 id="source-editor-attachments-heading">Waiting to be saved with this note</h3>
+        <h2 id="source-editor-attachments-heading">Waiting to be saved with this note</h2>
         <ul class="source-editor-attachment-list" data-source-attachment-list></ul>
       </section>
 
@@ -175,6 +175,7 @@
       -->
       <details class="source-editor-manage" data-source-manage>
         <summary>This note and this vault</summary>
+        <h2 class="visually-hidden">This note and this vault</h2>
 
         <a href="/history?path={{ .RelPath }}&amp;path_match=exact" data-note-history>History for this note</a>
         <details class="source-editor-title" data-source-manage-feedback="rename">
@@ -190,7 +191,7 @@
 
         <div class="source-editor-manage-groups">
           <div class="source-editor-manage-group" data-source-manage-feedback="location">
-            <h4>Where this note lives</h4>
+            <h3>Where this note lives</h3>
             <label class="source-editor-manage-field" for="source-editor-move-folder">Folder</label>
             <input type="text" id="source-editor-move-folder" class="source-editor-manage-input" data-source-move-folder data-folder-suggestions autocomplete="off" aria-describedby="source-editor-move-hint">
             <p id="source-editor-move-hint">Choose an existing folder or type a new path.</p>
@@ -201,7 +202,7 @@
           </div>
 
           <div class="source-editor-manage-group" data-source-manage-feedback="properties">
-            <h4>Properties</h4>
+            <h3>Properties</h3>
             <label class="source-editor-manage-field" for="source-editor-property-name">Property</label>
             <input type="text" id="source-editor-property-name" class="source-editor-manage-input" data-source-property-name autocomplete="off">
             <label class="source-editor-manage-field" for="source-editor-property-value">Value</label>
@@ -212,14 +213,14 @@
           </div>
 
           <div class="source-editor-manage-group" data-source-manage-feedback="pins">
-            <h4>Pins</h4>
+            <h3>Pins</h3>
             <button type="button" class="source-editor-manage-action" data-source-pin>Pin this note</button>
             <button type="button" class="source-editor-manage-action" data-source-unpin>Unpin this note</button>
             <p class="source-editor-manage-status" data-source-manage-status role="status" aria-live="polite"></p>
           </div>
 
           <div class="source-editor-manage-group" data-source-manage-feedback="capture">
-            <h4>Capture</h4>
+            <h3>Capture</h3>
             <label class="source-editor-manage-field" for="source-editor-capture-text">Line to capture</label>
             <textarea id="source-editor-capture-text" class="source-editor-manage-input" data-source-capture-text rows="2"></textarea>
             <button type="button" class="source-editor-manage-action" data-source-capture>Capture</button>
@@ -228,7 +229,7 @@
           </div>
 
           <div class="source-editor-manage-group" data-source-manage-feedback="create">
-            <h4>Create a note</h4>
+            <h3>Create a note</h3>
             <label class="source-editor-manage-field" for="source-editor-note-create-target">Title or path</label>
             <input type="text" id="source-editor-note-create-target" class="source-editor-manage-input" data-source-note-create-target autocomplete="off">
             <button type="button" class="source-editor-manage-action" data-source-note-create>Create</button>
@@ -236,7 +237,7 @@
           </div>
 
           <div class="source-editor-manage-group" data-source-manage-feedback="undo">
-            <h4>Undo</h4>
+            <h3>Undo</h3>
             <p class="source-editor-manage-hint">Undoes the most recent change to this vault, whatever it was — including a rename or a trash from this page.</p>
             <button type="button" class="source-editor-manage-action" data-source-undo>Undo latest vault change</button>
             <p class="source-editor-manage-status" data-source-manage-status role="status" aria-live="polite"></p>

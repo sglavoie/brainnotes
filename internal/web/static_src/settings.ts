@@ -1,6 +1,9 @@
 import { queryElement } from "./dom";
 import { createSettingsPanel } from "./settings-controller";
 import { createTemplatesPanel } from "./templates-controller";
+import { warnBeforeUnload } from "./unload-guard";
+
+type Panel = { load: () => Promise<void>; modified: () => boolean };
 
 /**
  * Mounts the settings page.
@@ -16,23 +19,26 @@ import { createTemplatesPanel } from "./templates-controller";
  * succeed is worse than offering none.
  */
 export const initSettings = (doc: Document = document): void => {
-  const settingsRoot = queryElement(doc, "[data-settings-panel]", HTMLElement);
-  if (settingsRoot) {
-    const panel = createSettingsPanel({
-      root: settingsRoot,
-      fetch: (input, init) => window.fetch(input, init),
-      token: settingsRoot.getAttribute("data-settings-csrf") || "",
-    });
+  const fetcher = (input: RequestInfo | URL, init?: RequestInit) => window.fetch(input, init);
+  const mounted = (
+    selector: string,
+    csrf: string,
+    create: (root: HTMLElement, token: string) => Panel | null
+  ): Panel | null => {
+    const root = queryElement(doc, selector, HTMLElement);
+    const panel = root ? create(root, root.getAttribute(csrf) || "") : null;
     void panel?.load();
-  }
+    return panel;
+  };
+  const panels = [
+    mounted("[data-settings-panel]", "data-settings-csrf", (root, token) =>
+      createSettingsPanel({ root, fetch: fetcher, token })),
+    mounted("[data-templates-panel]", "data-templates-csrf", (root, token) =>
+      createTemplatesPanel({ root, fetch: fetcher, token })),
+  ].filter((panel): panel is Panel => panel !== null);
 
-  const templatesRoot = queryElement(doc, "[data-templates-panel]", HTMLElement);
-  if (templatesRoot) {
-    const panel = createTemplatesPanel({
-      root: templatesRoot,
-      fetch: (input, init) => window.fetch(input, init),
-      token: templatesRoot.getAttribute("data-templates-csrf") || "",
-    });
-    void panel?.load();
+  // Unsaved setting rows and template edits exist only in this tab.
+  if (panels.length > 0) {
+    warnBeforeUnload(doc.defaultView, () => panels.some((panel) => panel.modified()));
   }
 };

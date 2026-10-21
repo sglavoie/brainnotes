@@ -22,6 +22,10 @@ export const markSettingDraft = (row: SettingRow): void => {
   if (marker) marker.hidden = !dirty;
 };
 
+/** Whether any row's control differs from the value it was read with. */
+export const settingRowsModified = (rows: readonly SettingRow[]): boolean =>
+  rows.some((row) => controlText(row.control) !== settingControlText(row.summary));
+
 // Reconcile in place: controls, selection, disclosures and focus belong to the
 // person editing. A read may update the saved value, but must not erase a draft.
 export const updateSettingRow = (row: SettingRow, summary: SettingSummary, savedText?: string): void => {

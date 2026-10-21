@@ -281,7 +281,7 @@
   display: none;
 }
 
-.source-editor-recovery h3 {
+.source-editor-recovery h2 {
   margin: 0;
   color: var(--bn-warning);
   font-size: 1rem;
@@ -370,7 +370,7 @@
   display: none;
 }
 
-.source-editor-conflict h3 {
+.source-editor-conflict h2 {
   margin: 0;
   color: var(--bn-danger);
   font-size: 1rem;
