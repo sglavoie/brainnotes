@@ -22,7 +22,8 @@ By default the search is case-insensitive and treats the pattern as a literal st
 
 Output modes:
   paths (default)  One absolute path per matching note, sorted.
-  --context N      Each match with N lines of surrounding body context (grep-style).
+  --context N      Each match with N lines of surrounding body context (grep-style);
+                   -C 0 prints the matching lines alone.
   --count          Match count per note, sorted by count descending then path.
   --open           Open the first matching result in the configured editor at the matching line.
   --json           A JSON array of {path, abs_path, title, count, matches: [{line, text}]}.

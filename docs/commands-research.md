@@ -42,7 +42,7 @@ selected fzf row instead.
 | Output mode | Flag | Description |
 | --- | --- | --- |
 | paths (default) | — | One absolute path per matching note, sorted. |
-| context | `--context N` / `-C N` | Each match with N lines of surrounding body context (grep-style). |
+| context | `--context N` / `-C N` | Each match with N lines of surrounding body context (grep-style); `-C 0` prints the matching lines alone. |
 | count | `--count` | Match count per note, sorted by count descending then path. |
 | open | `--open` | Open the first matching note at its first matching line, or the selected row with `-i`. |
 | JSON | `--json` | An array of `{path, abs_path, title, count, matches: [{line, text}]}`, in path order. |
