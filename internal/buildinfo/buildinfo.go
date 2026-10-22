@@ -12,7 +12,8 @@
 // appended when the working tree had uncommitted changes. A build made outside
 // a checkout carries no revision; it may set one with
 // `-ldflags "-X github.com/sglavoie/brainnotes/internal/buildinfo.revision=<id>"`,
-// and otherwise reports Unknown. Two dirty builds of one revision compare equal
+// and otherwise reports Unknown. Tagged release builds set the tag this way, so
+// a released binary reports its version, such as `v0.1.0`. Two dirty builds of one revision compare equal
 // even when their changes differ: the identifier detects a binary that was not
 // rebuilt, not every possible difference.
 package buildinfo
@@ -76,8 +77,8 @@ func Known(id string) bool { return id != "" && id != Unknown }
 // side is not evidence of skew, so it never reports one.
 func Mismatch(a, b string) bool { return Known(a) && Known(b) && a != b }
 
-// Short abbreviates an identifier for a log line or a message. The full value is
-// what records store.
+// Short abbreviates a revision for a log line or a message. The full value is
+// what records store. A release tag is already short and is kept whole.
 func Short(id string) string {
 	const width = 12
 	if !Known(id) {
@@ -87,8 +88,12 @@ func Short(id string) string {
 	if trimmed, dirty := strings.CutSuffix(id, "-dirty"); dirty {
 		id, suffix = trimmed, "-dirty"
 	}
-	if len(id) > width {
+	if len(id) > width && isHex(id) {
 		id = id[:width]
 	}
 	return id + suffix
+}
+
+func isHex(s string) bool {
+	return strings.Trim(s, "0123456789abcdef") == ""
 }

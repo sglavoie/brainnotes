@@ -57,3 +57,9 @@ func TestMismatchNeedsTwoKnownDifferentBuilds(t *testing.T) {
 		}
 	}
 }
+
+func TestShortKeepsAReleaseTagWhole(t *testing.T) {
+	if got := Short("v0.10.0-rc.12"); got != "v0.10.0-rc.12" {
+		t.Fatalf("Short = %q", got)
+	}
+}
