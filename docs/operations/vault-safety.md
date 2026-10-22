@@ -14,8 +14,9 @@ it to operate on a good day.
 `just install` replaces `bn`, `bn-vault-guard` and `bn-vault-sync` together, but
 the LaunchAgents keep running the companion binaries they started until they are
 restarted; the recipe ends by printing the two `launchctl kickstart -k` lines.
-Every binary reports the same build identifier (the Git revision it was built
-from, `-dirty` for an uncommitted tree): `bn --version`,
+Every binary reports the same build identifier (the release tag for a prebuilt
+binary, otherwise the Git revision it was built from, `-dirty` for an
+uncommitted tree): `bn --version`,
 `bn-vault-guard -version` and `bn-vault-sync -version`. The running companions
 write theirs to `guard.json` (beside `blocked.json`) and `.bnotes/sync/companion.json`,
 log it on their `started` record, and `bn doctor` warns on stderr when either

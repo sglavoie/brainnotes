@@ -36,13 +36,20 @@ jobs:
 
       # Every platform cross-compiles from here: nothing in the module uses cgo.
       # The archives are staged outside the checkout: an untracked file in the
-      # working tree would make Go stamp the binaries as `-dirty`.
+      # working tree would make Go stamp the binaries as `-dirty`. A tagged
+      # release reports its tag as the build identifier; a manual run keeps the
+      # Git revision Go stamps.
       - name: Build archives
         env:
           CGO_ENABLED: "0"
           VERSION: ${{ github.ref_type == 'tag' && github.ref_name || format('dev-{0}', github.sha) }}
+          STAMP: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
         run: |
           set -euo pipefail
+          ldflags="-s -w"
+          if [ -n "$STAMP" ]; then
+            ldflags="$ldflags -X github.com/sglavoie/brainnotes/internal/buildinfo.revision=$STAMP"
+          fi
           dist="$RUNNER_TEMP/dist"
           mkdir -p "$dist"
           for target in darwin/amd64 darwin/arm64 linux/amd64 linux/arm64; do
@@ -52,7 +59,7 @@ jobs:
             stage="$dist/$name"
             mkdir -p "$stage"
             for cmd in bn bn-vault-guard bn-vault-sync; do
-              GOOS="$goos" GOARCH="$goarch" go build -trimpath -ldflags "-s -w" -o "$stage/$cmd" "./cmd/$cmd"
+              GOOS="$goos" GOARCH="$goarch" go build -trimpath -ldflags "$ldflags" -o "$stage/$cmd" "./cmd/$cmd"
             done
             cp LICENSE README.md THIRD_PARTY_NOTICES.md "$stage/"
             tar -C "$dist" -czf "$dist/$name.tar.gz" "$name"
@@ -61,14 +68,23 @@ jobs:
           (cd "$dist" && sha256sum * > checksums.txt)
           ls -l "$dist"
 
-      - name: Smoke-test the Linux binary
+      - name: Smoke-test the Linux binaries
+        env:
+          STAMP: ${{ github.ref_type == 'tag' && github.ref_name || '' }}
         run: |
           set -euo pipefail
           dir="$(mktemp -d)"
           tar -C "$dir" -xzf "$RUNNER_TEMP"/dist/*_linux_amd64.tar.gz
-          version="$("$dir"/*/bn --version)"
-          echo "$version"
-          case "$version" in *-dirty|*unknown) echo "release binary is not stamped with a clean revision" >&2; exit 1;; esac
+          for cmd in bn bn-vault-guard bn-vault-sync; do
+            version="$("$dir"/*/"$cmd" --version)"
+            echo "$version"
+            id="${version##* }"
+            case "$id" in *-dirty|unknown) echo "$cmd is not stamped with a clean revision" >&2; exit 1;; esac
+            if [ -n "$STAMP" ] && [ "$id" != "$STAMP" ]; then
+              echo "$cmd reports $id, want the tag $STAMP" >&2
+              exit 1
+            fi
+          done
 
       - uses: actions/upload-artifact@v7
         with:
