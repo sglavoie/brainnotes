@@ -59,7 +59,7 @@ const summarize = (count: number): [string, StatusKind] =>
   count === 0
     ? ["No editable settings.", "is-empty"]
     : [
-        `${count} portable settings. Machine-local settings stay in brainnotes.local.toml and are not editable here.`,
+        `${count} vault settings. These settings travel with your notes.`,
         "",
       ];
 

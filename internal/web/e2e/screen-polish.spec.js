@@ -128,3 +128,49 @@ test("mobile Library gives the title the remaining row width and moves Pin below
   await row.locator('input[type="checkbox"]').check();
   await expect(page.locator("[data-overview-selected-count]")).toContainText("1");
 });
+
+for (const [width, height] of [[320, 568], [390, 640]]) {
+  test(`Brief capture is reachable on entry at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height });
+    await page.goto("/");
+    const input = page.getByRole("combobox", { name: "Capture a thought", exact: true });
+    const submit = page.locator("[data-capture-submit]");
+    await expect(input).toBeInViewport({ ratio: 1 });
+    await expect(submit).toBeInViewport({ ratio: 1 });
+    expect((await input.boundingBox()).y).toBeLessThan((await page.locator("[data-brief-root]").boundingBox()).y);
+    await input.focus();
+    await expect(page.locator("#capture-hint")).toBeInViewport({ ratio: 1 });
+    expect((await page.locator("#capture-hint").boundingBox()).width).toBeGreaterThan(100);
+    await expect(submit).toBeInViewport({ ratio: 1 });
+    await expect(page.locator("[data-brief-action-open]").first()).toHaveText("Open in editor");
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+  });
+
+  test(`short metadata with long values leaves writing space at ${width}px`, async ({ page }) => {
+    await page.setViewportSize({ width, height });
+    await page.goto("/edit?key=Survey");
+    await expect(page.locator(".cm-line").filter({ hasText: /^The water has fallen/ }).first()).toBeInViewport();
+    await expect(page.locator("[data-source-save]")).toBeInViewport({ ratio: 1 });
+    const unfold = page.getByRole("button", { name: "Show frontmatter in source editor" });
+    await unfold.click();
+    await expect(page.locator(".cm-content")).toContainText("location: North bank");
+    await expect(page.locator("[data-source-save]")).toBeDisabled();
+  });
+}
+
+test("Library invites a search without requesting the whole vault", async ({ page }) => {
+  const searches = [];
+  page.on("request", (request) => {
+    if (new URL(request.url()).pathname === "/api/search") searches.push(request.url());
+  });
+  await page.setViewportSize({ width: 390, height: 640 });
+  await page.goto("/library");
+  await expect(page.locator("[data-overview-search-status]")).toContainText("Search by title or text");
+  await expect(page.locator(".recent-note-title").first()).toBeInViewport();
+  await expect(page.getByRole("combobox", { name: "Sort results" })).toBeHidden();
+  await expect(page.locator("[data-overview-search-reset]")).toBeHidden();
+  expect(searches).toEqual([]);
+  await page.locator("#search-input").fill("Alpha");
+  await expect(page.locator(".overview-result-link").first()).toBeVisible();
+  await expect(page.getByRole("combobox", { name: "Sort results" })).toBeVisible();
+});

@@ -19,7 +19,7 @@
     {{template "siteSync" .}}
     <div class="management-intro">
       <p class="page-subtitle">Manage settings and note templates.</p>
-      <details><summary>About settings on this device</summary><p>The settings and templates this vault carries to your other replicas. Settings that name <em>this machine</em> — your editor, the address the server listens on, the agent command — live in <code>brainnotes.local.toml</code> and are not shown here.</p></details>
+      <details><summary>About settings on this device</summary><p>Vault settings and templates travel with your notes. Device settings — your editor, the server address, and the AI command — stay in <code>brainnotes.local.toml</code> and are not shown here.</p></details>
     </div>
 
     <section id="workspace-content" tabindex="-1"
@@ -31,7 +31,7 @@
       aria-describedby="settings-status"
     >
       <div class="panel-header">
-        <h2 id="settings-heading">Portable settings</h2>
+        <h2 id="settings-heading">Vault settings</h2>
         <div class="settings-actions">
           <button class="bn-button settings-button" type="button" data-settings-refresh>Refresh</button>
         </div>

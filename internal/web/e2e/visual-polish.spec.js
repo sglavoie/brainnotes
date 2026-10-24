@@ -1,6 +1,6 @@
 import { test, expect } from "./fixture.js";
 import { graphVisuals } from "./graph-visuals.js";
-import { reviewVisuals } from "./review-visuals.js";
+import { fixedHistory, fixedRecentNotes, reviewVisuals } from "./review-visuals.js";
 import { SURFACE } from "./editor-helpers.js";
 
 // Every key surface covers both themes at both widths; theme and viewport
@@ -32,6 +32,16 @@ for (const [theme, width] of [["light", 1280], ["dark", 390], ["light", 390], ["
         await snapshot(page, name);
       });
     }
+    test("Library invitation and recently modified notes", async ({ page }) => {
+      await fixedHistory(page);
+      await page.goto("/library");
+      await expect(page.locator("[data-overview-search-status]")).toContainText("Search by title or text");
+      await expect(page.locator(".recent-note-title").first()).toBeVisible();
+      await fixedRecentNotes(page);
+      await expect(page.locator("[data-history-panel]")).toHaveAttribute("aria-busy", "false");
+      await expect(page.locator("[data-sync-line]")).toContainText("Review 5 incoming changes");
+      await snapshot(page, "library-start");
+    });
     test("Library dense results and a long title", async ({ page }) => {
       await page.goto("/library?q=field&status=reference&sort=title");
       await expect(page.locator(".overview-result-link").first()).toBeVisible();
@@ -45,27 +55,33 @@ for (const [theme, width] of [["light", 1280], ["dark", 390], ["light", 390], ["
       await page.goto("/");
       await expect(page.locator("[data-brief-card]")).toHaveCount(3);
       await page.locator("[data-brief-card]").evaluateAll((cards) => {
-        const titles = ["Field journal", "Earlier observations", "Connections worth revisiting"];
+        const titles = ["Field journal", "A small experiment in remembering what we read", "Connections worth revisiting"];
+        const excerpts = [
+          "The river is lower today. Compare the exposed roots with last month's sketches before drawing conclusions.",
+          "One question at the end of a chapter can be more useful than a page of highlights.",
+          "Both notes ask how repeated observation changes an explanation. What would make you revise yours?",
+        ];
         for (const [index, card] of cards.entries()) {
           card.querySelector(".brief-card-title a").textContent = titles[index];
-          card.querySelector(".brief-card-excerpt").textContent = "Follow the river, record the changing light, and return to the questions that still need an answer.";
+          card.querySelector(".brief-card-excerpt").textContent = excerpts[index];
         }
       });
       await snapshot(page, "brief-entry");
     });
     test("reading and Contents", async ({ page }) => {
-      await page.goto("/n/Reading");
+      await page.goto("/n/Survey");
       await expect(page.locator("[data-note-body]")).toBeVisible();
       await expect(page.locator(".frontmatter-panel h2")).toHaveText("Properties");
       await expect(page.locator(".frontmatter-panel form:visible")).toHaveCount(0);
       await expect(page.locator("[data-note-body] p").first()).toBeInViewport();
+      await expect(page.locator("[data-sync-line]")).toContainText("Review 5 incoming changes");
       await snapshot(page, "reading-entry");
-      await page.locator("#second-section").evaluate((heading) => heading.scrollIntoView());
+      await page.locator("#measurements-and-uncertainties").evaluate((heading) => heading.scrollIntoView());
       await snapshot(page, "reading");
     });
     test("editor and exact Undo confirmation", async ({ page }) => {
-      await page.goto("/edit?key=Writing");
-      await expect(page.locator(SURFACE)).toContainText("The morning trail");
+      await page.goto("/edit?key=Survey");
+      await expect(page.locator(SURFACE)).toContainText("The water has fallen");
       await snapshot(page, "editor");
       await page.route("**/api/history/preview", (route) => route.fulfill({ json: {
         ok: true, entry_id: "visual-entry", preview_id: "visual-receipt",

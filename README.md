@@ -151,8 +151,8 @@ described in [SECURITY.md](SECURITY.md).
 `bn --vault /path/to/replica serve --read-only --state-dir /path/to/activity --no-open`
 serves a read-only note browser. Create the activity directory outside the vault first.
 The server skips transaction recovery and Git safety initialization, keeps its note
-index in memory, and permits only Daily Brief visits and Open/Another actions to
-write external activity state. Open navigates to a rendered note in this mode.
+index in memory, and permits only Daily Brief visits and Read note/Another actions to
+write external activity state. Read note navigates to a rendered note in this mode.
 Editor, agent, note/config writes and undo are blocked centrally.
 
 Optionally supply `--replica-status-file /path/to/status.json` containing

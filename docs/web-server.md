@@ -17,6 +17,8 @@ These links and the navigation disclosures work without JavaScript.
 ## Find a note
 
 Use Library to combine text search, filters, and an optional **Query expression**.
+Before searching, recently modified notes appear first in Recent activity.
+Sorting and result actions appear once a search or filter is active.
 Library shows one results list as you type; Enter moves focus to its heading.
 The matching count and result actions sit together above the list.
 An active search uses a compact phone layout with two-line excerpts to leave more
@@ -93,8 +95,8 @@ See [query expressions and saved views](web-server-query-bar.md) for syntax.
 
 A note shows its rendered body, properties, backlinks, outgoing links, and
 Contents. Properties initially show their values. Choose **Edit** beside a
-property to reveal its existing Set/Unset and list controls; **Add property**
-opens the new-property form. Read-only replicas show values without edit controls.
+property to reveal **Update property**, **Remove property**, and list controls.
+**Add property** opens the new-property form. Read-only replicas show values without edit controls.
 
 Contents highlights the current section as you scroll without moving focus or
 changing the URL. At widths up to 960 pixels, **Metadata** and **Contents** start
@@ -285,8 +287,15 @@ keyboard navigation respect filtering, isolation, and folder collapsing.
 
 ## Daily Brief
 
-Brief leads with the recommended notes, followed by capture and maintenance.
-Each card shows its title, excerpt, and Open/Another actions. **Why this note?**
+On writable servers, **Quick capture** appears above the recommendations, with
+the input and Capture button visible on entry on phones. Keyboard and wikilink
+hints appear while the capture form has focus.
+
+Recommended notes follow capture; maintenance stays farther down the page.
+Each card shows its title, excerpt, and **Another** action. The other action is
+**Open in editor** on local servers and **Read note** on hosted servers and
+read-only replicas. A note title always opens the browser reader, even when an
+external editor is not configured. **Why this note?**
 reveals its location and recommendation reasons; **Ask AI** expands the prompt.
 Both start closed again when Another loads a replacement. Activity counts and
 optional tool setup follow the recommendations.

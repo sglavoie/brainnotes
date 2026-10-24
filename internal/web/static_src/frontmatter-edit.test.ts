@@ -90,7 +90,7 @@ describe("frontmatter DOM behavior", () => {
       </section>
     `;
     const fetchMock = vi.fn(async () =>
-      frontmatterResponse({ ok: true, message: "Updated frontmatter." })
+      frontmatterResponse({ ok: true, message: "Updated property." })
     );
 
     initFrontmatterEditing({ fetch: fetchMock as typeof fetch });
@@ -100,7 +100,7 @@ describe("frontmatter DOM behavior", () => {
     form?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
 
     expect(button?.disabled).toBe(true);
-    expect(status?.textContent).toBe("Updating frontmatter…");
+    expect(status?.textContent).toBe("Updating property…");
 
     await waitForExpect(() => {
       expect(button?.disabled).toBe(false);
@@ -112,7 +112,7 @@ describe("frontmatter DOM behavior", () => {
       method: "POST",
       body: "key=source&token=csrf-token&property=status&op=%3D&value=done",
     });
-    expect(status?.textContent).toBe("Updated frontmatter. Refresh properties");
+    expect(status?.textContent).toBe("Updated property. Refresh properties");
     expect(status?.classList.contains("is-success")).toBe(true);
   });
 

@@ -183,6 +183,7 @@ func NewServer(cfg *config.Config, v *vault.Vault, opts Options) (*Server, error
 	tpl, err := template.New("").Funcs(template.FuncMap{
 		"readOnly":      func() bool { return !caps.documentWrites },
 		"processLaunch": func() bool { return caps.processLaunch },
+		"browserOpen":   func() bool { return caps.browserOpen },
 		"serveMode":     func() string { return string(caps.mode) },
 	}).ParseFS(embeddedFiles, "templates/*.html")
 	if err != nil {

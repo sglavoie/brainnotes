@@ -11,8 +11,8 @@ const entry = {
   files: [{ path: "Notes/Field journal.md", class: "note", before: "file", after: "file", recorded: true, travels: true }],
 };
 
-const fixedHistory = async (page) => {
-  await page.route("**/api/history?**", (route) => route.fulfill({ json: {
+export const fixedHistory = async (page) => {
+  await page.route(/\/api\/history(?:\?.*)?$/, (route) => route.fulfill({ json: {
     ok: true, entries: [entry], total: 1, offset: 0, limit: 20, has_more: false,
     origins: [{ value: "browser", label: "Saved in the browser" }],
     classes: [{ value: "note", label: "Notes" }],
@@ -120,5 +120,26 @@ export const reviewVisuals = (snapshot) => {
     await page.locator("[data-source-conflict]").scrollIntoViewIfNeeded();
     await expect(page.locator(".comparison-legend")).toContainText("Your draft");
     await snapshot(page, "editor-conflict");
+  });
+};
+
+export const fixedRecentNotes = async (page) => {
+  // Other browser journeys write to this vault. Pin the recent list's
+  // content for visual comparison; screen-polish checks the real list.
+  await page.locator(".recent-list").evaluate((list) => {
+    const sample = list.querySelector("li");
+    const notes = [
+      ["Writing", "/n/Writing", "/"],
+      ["A long note title about field observations, unfinished ideas, and a careful return to the work in progress", "/n/Notes/A%20long%20note%20title%20about%20field%20observations%2C%20unfinished%20ideas%2C%20and%20a%20careful%20return%20to%20the%20work%20in%20progress", "Notes"],
+      ["Reading", "/n/Reading", "/"],
+    ];
+    list.replaceChildren(...notes.map(([title, href, folder]) => {
+      const item = sample.cloneNode(true);
+      const link = item.querySelector("a");
+      link.textContent = title;
+      link.href = href;
+      item.querySelector(".recent-note-meta span").textContent = folder;
+      return item;
+    }));
   });
 };

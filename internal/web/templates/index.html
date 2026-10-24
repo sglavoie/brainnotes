@@ -40,8 +40,60 @@
     </section>
     {{end}}
 
+    {{if not readOnly}}
     <section {{if not .IsEmptyVault}}id="workspace-content" tabindex="-1"{{end}}
+      class="panel capture-panel"
+      data-capture-root
+      data-capture-csrf="{{.CSRFToken}}"
+      data-capture-target="{{.CaptureRelPath}}"
+      data-capture-vault="{{.VaultID}}"
+      data-capture-heading="{{.CaptureHeading}}"
+      data-capture-configured="{{if .CaptureConfigured}}true{{else}}false{{end}}"
+      aria-labelledby="capture-heading"
+    >
+      <div class="panel-header">
+        <h2 id="capture-heading">Quick capture</h2>
+        {{if .CaptureConfigured}}
+          <p class="capture-destination">{{if .CapturePath}}<a href="{{.CapturePath}}"><code>{{.CaptureRelPath}}</code></a>{{else}}<code>{{.CaptureRelPath}}</code>{{end}} · <code>{{.CaptureHeading}}</code></p>
+        {{end}}
+      </div>
+      {{if and (not .CaptureConfigured) (not readOnly)}}
+        <p class="capture-hint"><a href="/settings#setting-capture-inbox_note">Configure capture</a> by setting the inbox note and heading in Settings.</p>
+      {{end}}
+      <div class="capture-field">
+        <label class="capture-label visually-hidden" for="capture-input">Capture a thought</label>
+        <div class="capture-controls">
+          <textarea
+            id="capture-input"
+            class="capture-input"
+            rows="2"
+            maxlength="2000"
+            aria-describedby="capture-hint capture-count"
+            placeholder="Capture a thought…"
+            data-capture-input
+            {{if not .CaptureConfigured}}disabled{{end}}
+          ></textarea>
+          <button
+            class="bn-button brief-action-button"
+            type="button"
+            data-capture-submit
+            {{if not .CaptureConfigured}}disabled{{end}}
+          >Capture</button>
+        </div>
+        <span class="capture-hint capture-guidance" id="capture-hint">Type [[ for note suggestions; ↑↓ to choose, Enter to insert, Esc to dismiss. Press Ctrl/⌘ + Enter to capture.</span>
+        <span class="capture-hint capture-guidance" id="capture-count" data-capture-count>0 / 2000 characters</span>
+      </div>
+      <p class="review-status capture-status" data-capture-status role="status" aria-live="polite"></p>
+      <div class="bn-live-region" role="status" aria-live="polite"><p class="capture-hint" data-capture-draft-status hidden></p></div>
+      <a data-capture-view-inbox {{if .CapturePath}}href="{{.CapturePath}}"{{end}} hidden>View inbox</a>
+      <ul class="capture-recent" data-capture-recent aria-label="Captured in this session"></ul>
+    </section>
+
+    {{end}}
+
+    <section {{if and readOnly (not .IsEmptyVault)}}id="workspace-content" tabindex="-1"{{end}}
       class="panel brief-panel"
+      data-brief-open-label="{{if browserOpen}}Read note{{else}}Open in editor{{end}}"
       data-brief-root
       data-brief-date="{{.DateISO}}"
       data-brief-view-endpoint="{{.BriefViewEndpoint}}"
@@ -57,7 +109,6 @@
         <p class="brief-intro">Choose one note to continue, one to rediscover, and one connection to sharpen.</p>
         <p><time datetime="{{.DateISO}}">{{.DateLabel}}</time></p>
       </div>
-
 
       {{if .StateUnreadable}}
         <p class="review-error" role="alert" data-brief-state-unreadable>{{.StateUnreadableMsg}}</p>
@@ -90,7 +141,7 @@
                 data-brief-card-id="{{.Continue.Card.ID}}"
                 data-brief-slot="{{.Continue.Slot}}"
                 {{if not .Continue.Card.OpenEnabled}}disabled{{end}}
-              >Open</button>
+              >{{if browserOpen}}Read note{{else}}Open in editor{{end}}</button>
               <button
                 class="bn-button brief-action-button"
                 type="button"
@@ -175,7 +226,7 @@
                   data-brief-card-id="{{.Rediscover.Card.ID}}"
                   data-brief-slot="{{.Rediscover.Slot}}"
                   {{if not .Rediscover.Card.OpenEnabled}}disabled{{end}}
-                >Open</button>
+                >{{if browserOpen}}Read note{{else}}Open in editor{{end}}</button>
                 <button
                   class="bn-button brief-action-button"
                   type="button"
@@ -263,7 +314,7 @@
                   data-brief-card-id="{{.Connect.Card.ID}}"
                   data-brief-slot="{{.Connect.Slot}}"
                   {{if not .Connect.Card.OpenEnabled}}disabled{{end}}
-                >Open</button>
+                >{{if browserOpen}}Read note{{else}}Open in editor{{end}}</button>
                 <button
                   class="bn-button brief-action-button"
                   type="button"
@@ -354,54 +405,6 @@
       </dl>
       </details>
       <p id="brief-global-status" class="review-status brief-global-status" role="status" aria-live="polite"></p>
-    </section>
-
-    <section
-      class="panel capture-panel"
-      data-capture-root
-      data-capture-csrf="{{.CSRFToken}}"
-      data-capture-target="{{.CaptureRelPath}}"
-      data-capture-vault="{{.VaultID}}"
-      data-capture-heading="{{.CaptureHeading}}"
-      data-capture-configured="{{if .CaptureConfigured}}true{{else}}false{{end}}"
-      aria-labelledby="capture-heading"
-    >
-      <div class="panel-header">
-        <h2 id="capture-heading">Quick capture</h2>
-        {{if .CaptureConfigured}}
-          <p class="capture-destination">{{if .CapturePath}}<a href="{{.CapturePath}}"><code>{{.CaptureRelPath}}</code></a>{{else}}<code>{{.CaptureRelPath}}</code>{{end}} · <code>{{.CaptureHeading}}</code></p>
-        {{end}}
-      </div>
-      {{if and (not .CaptureConfigured) (not readOnly)}}
-        <p class="capture-hint"><a href="/settings#setting-capture-inbox_note">Configure capture</a> by setting the inbox note and heading in Settings.</p>
-      {{end}}
-      <div class="capture-field">
-        <label class="capture-label" for="capture-input">Capture a thought</label>
-        <div class="capture-controls">
-          <textarea
-            id="capture-input"
-            class="capture-input"
-            rows="2"
-            maxlength="2000"
-            aria-describedby="capture-hint capture-count"
-            placeholder="A passing thought. Wikilinks pass through untouched."
-            data-capture-input
-            {{if not .CaptureConfigured}}disabled{{end}}
-          ></textarea>
-          <button
-            class="bn-button brief-action-button"
-            type="button"
-            data-capture-submit
-            {{if not .CaptureConfigured}}disabled{{end}}
-          >Capture</button>
-        </div>
-        <span class="capture-hint" id="capture-hint">Type [[ for note suggestions; ↑↓ to choose, Enter to insert, Esc to dismiss. Press Ctrl/⌘ + Enter to capture.</span>
-        <span class="capture-hint" id="capture-count" data-capture-count>0 / 2000 characters</span>
-      </div>
-      <p class="review-status capture-status" data-capture-status role="status" aria-live="polite"></p>
-      <div class="bn-live-region" role="status" aria-live="polite"><p class="capture-hint" data-capture-draft-status hidden></p></div>
-      <a data-capture-view-inbox {{if .CapturePath}}href="{{.CapturePath}}"{{end}} hidden>View inbox</a>
-      <ul class="capture-recent" data-capture-recent aria-label="Captured in this session"></ul>
     </section>
 
     <section class="panel">

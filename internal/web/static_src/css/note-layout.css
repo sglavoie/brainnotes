@@ -17,7 +17,8 @@
 .note-layout-toolbar {
   display: flex;
   justify-content: flex-start;
-  margin: 0 0 0.5rem;
+  margin: 0;
+  order: 1;
 }
 
 .note-sidebar-toggle {

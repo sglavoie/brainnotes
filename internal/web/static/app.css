@@ -1544,6 +1544,16 @@ code {
   font-size: 0.82rem;
   overflow-wrap: anywhere;
 }
+
+/* Capture is the first task on Brief. Help appears while composing; the
+   description remains available to assistive technology before focus. */
+.capture-panel .panel-header { gap: 0.3rem 1rem; flex-wrap: wrap; }
+.capture-panel .panel-header h2 { margin: 0; font-size: 1rem; }
+.capture-panel:not(:focus-within) .capture-guidance {
+  position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden;
+  clip-path: inset(50%); white-space: nowrap;
+}
+.capture-panel .capture-status:empty, .capture-recent:empty { display: none; }
 /* internal/web/static_src/css/brief-actions.css */
 .brief-action-button,
 .brief-insight-copy {
@@ -3710,7 +3720,8 @@ code {
 .note-layout-toolbar {
   display: flex;
   justify-content: flex-start;
-  margin: 0 0 0.5rem;
+  margin: 0;
+  order: 1;
 }
 
 .note-sidebar-toggle {
@@ -5147,7 +5158,7 @@ code {
 .note-code-copy { justify-content: flex-end; padding: 0.25rem 0.5rem; border-bottom: 1px solid var(--bn-border); }
 .note-code-copy .copy-button { background: transparent; border-color: transparent; min-height: 2.75rem; }
 .note-code-block pre { border: 0; border-radius: 0; margin: 0; }
-.note-links-empty { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.5rem; padding-block: 0.6rem; }
+.note-links-empty { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.5rem; padding: 0.15rem 0; border: 0; background: transparent; }
 .note-links-empty h2 { font-size: 0.9rem; margin: 0; }
 .note-links-empty p { margin: 0; color: var(--bn-muted); font-size: 0.85rem; }
 /* internal/web/static_src/css/frontmatter.css */
@@ -5157,7 +5168,7 @@ code {
 
 .frontmatter-rows {
   display: grid;
-  gap: 0.65rem;
+  gap: 0.45rem;
   margin: 0;
 }
 
@@ -5177,7 +5188,7 @@ code {
 .frontmatter-row {
   min-width: 0;
   border-top: 1px solid var(--bn-border);
-  padding-top: 0.65rem;
+  padding-top: 0.45rem;
 }
 
 .frontmatter-row:first-child {
@@ -5311,6 +5322,14 @@ code {
 .frontmatter-add { margin-top: 0.75rem; }
 .frontmatter-add-form { margin-top: 0; }
 .frontmatter-edit-status:empty { display: none; }
+
+/* Keep a property value and its edit disclosure together, expanding only the
+   active editor onto a full row. Long values still wrap within the sidebar. */
+.frontmatter-row dd { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.25rem 0.6rem; }
+.frontmatter-row dd > .frontmatter-text { flex: 1 1 auto; min-width: 0; }
+.frontmatter-editor { margin-top: 0; margin-left: auto; }
+.frontmatter-editor[open] { flex: 1 1 100%; }
+.frontmatter-row dd > :is(.frontmatter-list, .frontmatter-map) { flex: 1 1 100%; }
 /* internal/web/static_src/css/backlinks.css */
 .backlink-item + .backlink-item {
   margin-top: 0.85rem;
@@ -9321,6 +9340,10 @@ summary { cursor: pointer; min-height: var(--bn-control-height); box-sizing: bor
 
 .library-pagination { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin-block: 1rem; flex-wrap: wrap; }
 .library-pagination[hidden] { display: none; }
+
+/* Before a search, offer a starting point without result-only controls. */
+.library-search:not([data-searching="true"]) + .overview-results :is(.panel-header, .library-results-tools) { display: none; }
+.library-activity[data-searching="false"] { margin-top: 0.5rem; }
 /* internal/web/static_src/css/responsive.css */
 @media (max-width: 960px) {
   .synthesize-columns {
@@ -9510,7 +9533,7 @@ summary { cursor: pointer; min-height: var(--bn-control-height); box-sizing: bor
   }
 
   .capture-controls {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr) auto;
   }
 
   .note-insight-controls {

@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/sglavoie/brainnotes/internal/config"
 	"github.com/sglavoie/brainnotes/internal/noteops"
 )
 
@@ -229,21 +230,7 @@ func (s *Server) handleNoteMove(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleNoteFrontmatterSet(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path != "/api/notes/frontmatter/set" {
-		http.NotFound(w, r)
-		return
-	}
-	if r.Method != http.MethodPost {
-		w.Header().Set("Allow", http.MethodPost)
-		writeManagementErrorStatus(w, http.StatusMethodNotAllowed, noteops.Errorf(noteops.CodeInvalidRequest, "method not allowed"))
-		return
-	}
-	if err := r.ParseForm(); err != nil {
-		writeManagementError(w, noteops.WrapError(noteops.CodeInvalidRequest, "invalid request form", err))
-		return
-	}
-	if !csrfTokenMatches(s.csrfToken, requestCSRFToken(r)) {
-		writeManagementError(w, noteops.Errorf(noteops.CodeForbidden, "csrf token required"))
+	if !s.requireManagementPost(w, r, "/api/notes/frontmatter/set", 0) {
 		return
 	}
 	if err := s.ensureConfigWritable(); err != nil {
@@ -257,23 +244,7 @@ func (s *Server) handleNoteFrontmatterSet(w http.ResponseWriter, r *http.Request
 		writeManagementError(w, err)
 		return
 	}
-	property, ok := managementFormValue(r, "property", "prop", "frontmatter_key")
-	if !ok {
-		writeManagementError(w, noteops.Errorf(noteops.CodeInvalidRequest, "frontmatter: missing property"))
-		return
-	}
-	op := strings.TrimSpace(r.Form.Get("op"))
-	if op == "" {
-		op = "="
-	}
-	value, ok := managementFormValue(r, "value")
-	if !ok {
-		writeManagementError(w, noteops.Errorf(noteops.CodeInvalidRequest, "frontmatter: missing value"))
-		return
-	}
-	typeFlag := strings.TrimSpace(r.Form.Get("type"))
-
-	mutation, err := noteops.NewFrontmatterMutation(property, op, value, typeFlag, &cfg.Frontmatter)
+	mutation, err := frontmatterMutationFromForm(r, &cfg.Frontmatter)
 	if err != nil {
 		writeManagementError(w, err)
 		return
@@ -288,9 +259,9 @@ func (s *Server) handleNoteFrontmatterSet(w http.ResponseWriter, r *http.Request
 		s.state.invalidate()
 	}
 
-	message := "Updated frontmatter."
+	message := "Updated property."
 	if !result.Changed {
-		message = "Frontmatter unchanged."
+		message = "Property unchanged."
 	}
 	writeManagementJSON(w, http.StatusOK, noteops.ResultForPath(
 		message,
@@ -301,22 +272,24 @@ func (s *Server) handleNoteFrontmatterSet(w http.ResponseWriter, r *http.Request
 	))
 }
 
+func frontmatterMutationFromForm(r *http.Request, fm *config.FrontmatterConfig) (noteops.FrontmatterMutation, error) {
+	property, ok := managementFormValue(r, "property", "prop", "frontmatter_key")
+	if !ok {
+		return noteops.FrontmatterMutation{}, noteops.Errorf(noteops.CodeInvalidRequest, "frontmatter: missing property")
+	}
+	op := strings.TrimSpace(r.Form.Get("op"))
+	if op == "" {
+		op = "="
+	}
+	value, ok := managementFormValue(r, "value")
+	if !ok {
+		return noteops.FrontmatterMutation{}, noteops.Errorf(noteops.CodeInvalidRequest, "frontmatter: missing value")
+	}
+	return noteops.NewFrontmatterMutation(property, op, value, strings.TrimSpace(r.Form.Get("type")), fm)
+}
+
 func (s *Server) handleNoteFrontmatterUnset(w http.ResponseWriter, r *http.Request) {
-	if r.URL.Path != "/api/notes/frontmatter/unset" {
-		http.NotFound(w, r)
-		return
-	}
-	if r.Method != http.MethodPost {
-		w.Header().Set("Allow", http.MethodPost)
-		writeManagementErrorStatus(w, http.StatusMethodNotAllowed, noteops.Errorf(noteops.CodeInvalidRequest, "method not allowed"))
-		return
-	}
-	if err := r.ParseForm(); err != nil {
-		writeManagementError(w, noteops.WrapError(noteops.CodeInvalidRequest, "invalid request form", err))
-		return
-	}
-	if !csrfTokenMatches(s.csrfToken, requestCSRFToken(r)) {
-		writeManagementError(w, noteops.Errorf(noteops.CodeForbidden, "csrf token required"))
+	if !s.requireManagementPost(w, r, "/api/notes/frontmatter/unset", 0) {
 		return
 	}
 	if err := s.ensureConfigWritable(); err != nil {
@@ -345,9 +318,9 @@ func (s *Server) handleNoteFrontmatterUnset(w http.ResponseWriter, r *http.Reque
 		s.state.invalidate()
 	}
 
-	message := "Unset frontmatter."
+	message := "Removed property."
 	if !result.Changed {
-		message = "Frontmatter unchanged."
+		message = "Property unchanged."
 	}
 	writeManagementJSON(w, http.StatusOK, noteops.ResultForPath(
 		message,

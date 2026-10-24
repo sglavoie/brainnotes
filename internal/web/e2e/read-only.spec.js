@@ -23,6 +23,7 @@ test("the read-only Brief browses notes while every document-write door stays cl
 
   const open = page.locator("[data-brief-action-open]").first();
   await expect(open).toBeVisible();
+  await expect(open).toHaveText("Read note");
   await open.click();
   await expect(page).toHaveURL(/\/n\//);
   await expect(page.locator("[data-source-editor-launch]")).toBeHidden();

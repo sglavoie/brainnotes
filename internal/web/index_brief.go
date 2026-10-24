@@ -142,9 +142,9 @@ func editorAvailability(configured, envEditor string) (bool, string) {
 		return true, ""
 	}
 	if errors.Is(err, editor.ErrNoEditorConfigured) {
-		return false, "Open is disabled until [open].editor or $EDITOR is configured."
+		return false, "The external editor is not configured. Select a note title to read it here. Configure [open].editor or $EDITOR to open it in an editor."
 	}
-	return false, "Open is disabled because editor configuration is invalid."
+	return false, "The external editor configuration is invalid. Select a note title to read it here."
 }
 
 func slotLabel(slot brief.SlotKind) string {

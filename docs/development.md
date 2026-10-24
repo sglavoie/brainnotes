@@ -76,14 +76,20 @@ CI commands need no filename allow-list.
 
 ## Visual baselines
 
-Visual baselines cover Library, Brief, reading, editing, management pages,
-conflict and restore comparisons, confirmation, and empty/error states in both
+Visual baselines cover Library (including its initial invitation), Brief, reading,
+editing, management pages, conflict and restore comparisons, confirmation, and
+empty/error states in both
 light and dark themes at both desktop and mobile widths. Run these on macOS with
 `npm run test:e2e -- --project=visual-chromium`; after an intentional design
 change, append `--update-snapshots`, inspect the changed images in
 `internal/web/e2e/visual-baselines`, and commit them. CI compares on macOS to
 avoid cross-platform font differences. A weekly and manually runnable
 qualification workflow exercises Chromium, Firefox, and WebKit at both widths.
+
+Reading and editor baselines use `internal/web/e2e/fixtures/Survey.md`: varied
+paragraphs, quotations, lists, a table, code, and long property values. Brief
+cards use distinct deterministic excerpts and uneven titles. The longer
+`Reading` and `Writing` fixtures still exercise scrolling and passage continuity.
 
 ## README demos
 

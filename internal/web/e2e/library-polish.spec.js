@@ -53,7 +53,7 @@ test("Reset search clears query settings, pending expression text, and selection
   await expect(page).toHaveURL(/\/library$/);
   await expect(page.locator("#search-input")).toHaveValue("");
   await expect(page.locator("[data-query-bar-input]")).toHaveValue("");
-  await expect(page.locator("[data-overview-search-status]")).toHaveText("No query or filters selected.");
+  await expect(page.locator("[data-overview-search-status]")).toHaveText("Search by title or text, or choose a filter. Recently modified notes are below.");
   await expect(page.locator("[data-overview-bulk]")).toBeHidden();
   await expect(page.locator("[data-overview-search-list]")).toBeHidden();
 

@@ -98,7 +98,7 @@ export const renderPreviewResultRow = (listEl: HTMLElement, result: BulkPreviewR
   if (result.move) {
     const move = doc.createElement("p");
     move.className = "overview-bulk-preview-detail";
-    move.textContent = `${result.move.rewrite_count} rewrites across ${result.move.rewrite_file_count} files (body ${result.move.body_rewrite_count}, frontmatter ${result.move.frontmatter_rewrite_count})`;
+    move.textContent = `${result.move.rewrite_count} rewrites across ${result.move.rewrite_file_count} files (body ${result.move.body_rewrite_count}, properties ${result.move.frontmatter_rewrite_count})`;
     item.appendChild(move);
   }
 

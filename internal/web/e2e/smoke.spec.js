@@ -13,13 +13,16 @@ import { expect, manifest, test } from "./fixture.js";
 // matches two elements and every assertion through it is a strict-mode error.
 const NOTE_BODY = ".note-body:not([data-note-insight-body])";
 
-test("the library page lists every seeded note", async ({ page }) => {
+test("Library can find every seeded note", async ({ page }) => {
   const response = await page.goto("/library");
   expect(response.status()).toBe(200);
 
-  const body = page.locator("body");
+  // Recent activity is bounded; older notes remain available through search.
+  await expect(page.locator(".recent-note-title").first()).toBeVisible();
   for (const rel of manifest.seedNotes) {
-    await expect(body).toContainText(rel.split("/").pop().replace(/\.md$/, ""));
+    const title = rel.split("/").pop().replace(/\.md$/, "");
+    await page.locator("#search-input").fill(title);
+    await expect(page.locator(".overview-result-title")).toContainText([title]);
   }
 });
 

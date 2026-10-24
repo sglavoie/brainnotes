@@ -297,7 +297,7 @@ describe("bulk apply contracts", () => {
   it("normalizes bulk apply results and preserves preview error messages", () => {
     expect(normalizeBulkManagementResult({
       ok: true,
-      message: " Updated frontmatter on 1 note. ",
+      message: " Updated property on 1 note. ",
       changed: "1",
       unchanged: "2",
       failed: "1",
@@ -310,7 +310,7 @@ describe("bulk apply contracts", () => {
       ],
     })).toEqual({
       ok: true,
-      message: "Updated frontmatter on 1 note.",
+      message: "Updated property on 1 note.",
       changed: 1,
       unchanged: 2,
       failed: 1,

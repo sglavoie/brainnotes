@@ -31,7 +31,7 @@ import { PERFORMANCE_COUNTS } from "./performance-selection.mjs";
 // own, and it exists because no other layer can make it: see its comment.
 
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, relative, sep } from "node:path";
@@ -72,6 +72,7 @@ const ACTIVE_MEDIA = {
 };
 
 const SEED_NOTES = {
+  "Survey.md": readFileSync(new URL("./fixtures/Survey.md", import.meta.url), "utf8"),
   "Notes/A long note title about field observations, unfinished ideas, and a careful return to the work in progress.md":
     "---\nstatus: reference\n---\n\nField observations from the riverside walk. Compare [[Writing|the journal]] with the earlier survey and record what changed.\n",
   "Writing.md": "---\nstatus: reference\ntitle: Field journal\n" +

@@ -163,8 +163,8 @@ describe("settings panel: rendering", () => {
       "capture.file",
       "sync.auto",
     ]);
-    expect(statusText(mounted.root)).toContain("2 portable settings");
-    expect(statusText(mounted.root)).toContain("brainnotes.local.toml");
+    expect(statusText(mounted.root)).toContain("2 vault settings");
+    expect(statusText(mounted.root)).toContain("These settings travel with your notes.");
   });
 
   it("builds the control the declared kind calls for", async () => {

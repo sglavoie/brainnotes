@@ -19,8 +19,8 @@ test("a confirmed property edit appears after explicit refresh, retaining Librar
   await expect(value).toHaveText("draft");
   await panel.getByLabel("Edit status", { exact: true }).click();
   await form.locator("input").fill("done");
-  await form.getByRole("button", { name: "Set", exact: true }).click();
-  await expect(panel.locator("[data-frontmatter-status]")).toContainText("Updated frontmatter.");
+  await form.getByRole("button", { name: "Update property", exact: true }).click();
+  await expect(panel.locator("[data-frontmatter-status]")).toContainText("Updated property.");
   expect(readFileSync(notePath, "utf8")).toContain("status: done");
   await expect(value).toHaveText("draft");
   await panel.getByRole("link", { name: "Refresh properties" }).click();
@@ -30,8 +30,8 @@ test("a confirmed property edit appears after explicit refresh, retaining Librar
   await page.waitForLoadState("networkidle");
   await panel.getByLabel("Edit status", { exact: true }).click();
   await form.locator("input").fill("draft");
-  await form.getByRole("button", { name: "Set", exact: true }).click();
-  await expect(panel.locator("[data-frontmatter-status]")).toContainText("Updated frontmatter.");
+  await form.getByRole("button", { name: "Update property", exact: true }).click();
+  await expect(panel.locator("[data-frontmatter-status]")).toContainText("Updated property.");
   // Property writes serialize frontmatter keys in canonical order.
   const restored = readFileSync(notePath, "utf8");
   const [oldHeader, ...oldBody] = before.split("\n---\n");

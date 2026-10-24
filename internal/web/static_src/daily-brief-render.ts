@@ -9,6 +9,7 @@ import { queryAllElements, queryElement } from "./dom";
 // SlotAvailability captures the page-level conditions that decide whether a
 // card's actions can be offered, so hint building stays free of DOM lookups.
 export type SlotAvailability = {
+  openLabel?: string;
   stateUnreadable: boolean;
   editorConfigured: boolean;
   insightConfigured: boolean;
@@ -181,7 +182,7 @@ export const buildUnavailableHint = (
         ? "Open is unavailable because this note route could not be resolved."
         : availability.editorConfigured
           ? ""
-          : "Open is disabled until the editor is configured.",
+          : "The external editor is not configured. Select the note title to read it here.",
     another: "",
     insight: availability.insightConfigured
       ? ""
@@ -227,7 +228,7 @@ export const renderCard = (
   const actionRow = doc.createElement("div");
   actionRow.className = "brief-card-actions";
   actionRow.append(
-    createActionButton(doc, slot, card.ID, "open", "Open", unavailable.open === ""),
+    createActionButton(doc, slot, card.ID, "open", availability.openLabel || "Open in editor", unavailable.open === ""),
     createActionButton(doc, slot, card.ID, "another", "Another", unavailable.another === "")
   );
   cardEl.appendChild(actionRow);

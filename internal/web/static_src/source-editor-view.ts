@@ -323,10 +323,11 @@ const applyWikilink =
   };
 
 // Long metadata stays editable, but does not push the prose out of the first
-// viewport. This changes only the initial view, never the source or selection.
+// viewport. Short headers with long values wrap into many lines on phones,
+// so bound both lines and characters. This never changes the source or selection.
 const initialSourceState = (state: EditorState): EditorState => {
   const header = /^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/.exec(state.doc.toString());
-  if (!header || header[0].split("\n").length < 9) return state;
+  if (!header || (header[0].split("\n").length < 9 && header[0].length < 240)) return state;
   return state.update({ effects: foldEffect.of({ from: 0, to: header[0].trimEnd().length }) }).state;
 };
 

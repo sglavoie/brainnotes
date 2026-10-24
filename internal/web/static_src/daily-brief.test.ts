@@ -261,8 +261,9 @@ describe("daily brief view and open", () => {
 });
 
 describe("daily brief card refresh and Ask AI", () => {
-  it("replaces continue/connect atomically and restores focus after Another", async () => {
+  it.each(["Read note", "Open in editor"])("preserves %s and restores focus after Another", async (label) => {
     document.body.innerHTML = briefRootHTML();
+    document.querySelector<HTMLElement>("[data-brief-root]")!.dataset.briefOpenLabel = label;
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       if (String(input) === "/api/brief/item") {
         const continueCard = cardPayload("continue-2", "continue", "Next.md", "Next");
@@ -301,6 +302,7 @@ describe("daily brief card refresh and Ask AI", () => {
     });
     expect(document.querySelector('[data-brief-slot="continue"] [data-brief-insight-prompt]')).not.toBeNull();
     expect(document.querySelector('[data-brief-slot="connect"] [data-brief-card-id="connect-2"]')).not.toBeNull();
+    expect(document.querySelector('[data-brief-slot="continue"] [data-brief-action-open]')?.textContent).toBe(label);
     const focused = document.querySelector<HTMLButtonElement>('[data-brief-slot="continue"] [data-brief-action-another]');
     expect(document.activeElement).toBe(focused);
     expect(document.querySelector("#brief-global-status")?.textContent).toContain("Updated Continue and Connect.");

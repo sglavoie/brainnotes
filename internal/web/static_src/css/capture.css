@@ -95,3 +95,13 @@
   font-size: 0.82rem;
   overflow-wrap: anywhere;
 }
+
+/* Capture is the first task on Brief. Help appears while composing; the
+   description remains available to assistive technology before focus. */
+.capture-panel .panel-header { gap: 0.3rem 1rem; flex-wrap: wrap; }
+.capture-panel .panel-header h2 { margin: 0; font-size: 1rem; }
+.capture-panel:not(:focus-within) .capture-guidance {
+  position: absolute; width: 1px; height: 1px; padding: 0; overflow: hidden;
+  clip-path: inset(50%); white-space: nowrap;
+}
+.capture-panel .capture-status:empty, .capture-recent:empty { display: none; }

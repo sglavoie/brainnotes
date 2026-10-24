@@ -223,15 +223,15 @@ func bulkManagementMessage(action string, result *noteops.BulkResult) string {
 		message = fmt.Sprintf("Moved %s.", noteCountLabel(changed))
 	case "frontmatter_set", "frontmatter-set", "set_frontmatter":
 		if changed == 0 {
-			message = "Frontmatter unchanged on selected notes."
+			message = "Properties unchanged on selected notes."
 		} else {
-			message = fmt.Sprintf("Updated frontmatter on %s.", noteCountLabel(changed))
+			message = fmt.Sprintf("Updated property on %s.", noteCountLabel(changed))
 		}
 	case "frontmatter_unset", "frontmatter-unset", "unset_frontmatter":
 		if changed == 0 {
-			message = "Frontmatter unchanged on selected notes."
+			message = "Properties unchanged on selected notes."
 		} else {
-			message = fmt.Sprintf("Unset frontmatter on %s.", noteCountLabel(changed))
+			message = fmt.Sprintf("Removed property on %s.", noteCountLabel(changed))
 		}
 	default:
 		message = fmt.Sprintf("Updated %s.", noteCountLabel(changed))

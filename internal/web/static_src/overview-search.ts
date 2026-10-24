@@ -232,7 +232,7 @@ class OverviewSearch extends OverviewSearchBulk {
       this.requestToken += 1;
       setOverviewBusy(this.els.root, false);
       this.pagination.render(null, 0);
-      this.clearResults("No query or filters selected.", "is-empty");
+      this.clearResults("Search by title or text, or choose a filter. Recently modified notes are below.", "is-empty");
       return;
     }
 

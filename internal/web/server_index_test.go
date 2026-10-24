@@ -252,7 +252,7 @@ func TestServer_LibraryIncludesOverviewSearchResultsPanel(t *testing.T) {
 		`data-overview-search-status`,
 		`role="status"`,
 		`aria-live="polite"`,
-		`No query or filters selected.`,
+		`Search by title or text, or choose a filter. Recently modified notes are below.`,
 		`class="overview-result-list"`,
 		`data-overview-search-list`,
 		`hidden`,

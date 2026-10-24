@@ -154,6 +154,7 @@ const replaceSlotContent = (ctx: BriefActionContext, slotResult: BriefSlotResult
   const { root, config, inflightInsight, openedCards, markCardOpened } = ctx;
   const readAvailability = (): SlotAvailability => ({
     stateUnreadable: root.querySelector("[data-brief-state-unreadable]") !== null,
+    openLabel: root.dataset.briefOpenLabel || "Open in editor",
     editorConfigured: root.querySelector("[data-brief-editor-unconfigured]") === null,
     insightConfigured: config.insightEnabled,
   });

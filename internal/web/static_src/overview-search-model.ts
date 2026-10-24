@@ -50,9 +50,9 @@ export const previewHeading = (action: BulkAction): string => {
     case "move":
       return "Move preview";
     case "frontmatter_set":
-      return "Frontmatter set preview";
+      return "Update property preview";
     case "frontmatter_unset":
-      return "Frontmatter unset preview";
+      return "Remove property preview";
     default:
       return "Bulk preview";
   }
@@ -68,9 +68,9 @@ export const bulkActionLabel = (
     case "move":
       return phase === "preview" ? "Preview Move" : "Apply Move";
     case "frontmatter_set":
-      return phase === "preview" ? "Preview Set" : "Apply Set";
+      return phase === "preview" ? "Preview update" : "Update property";
     case "frontmatter_unset":
-      return phase === "preview" ? "Preview Unset" : "Apply Unset";
+      return phase === "preview" ? "Preview removal" : "Remove property";
     default:
       return phase === "preview" ? "Preview" : "Apply";
   }

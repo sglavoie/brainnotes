@@ -103,6 +103,7 @@ test("hosted browsing, keyboard save, and IME composition form one complete work
   expect(brief.status()).toBe(200);
   await expect(page.locator("[data-brief-empty-vault]")).toHaveCount(0);
   await expect(page.locator("[data-brief-root]")).toBeVisible();
+  await expect(page.locator("[data-brief-action-open]").first()).toHaveText("Read note");
   await page.waitForLoadState("networkidle");
 
   await page.goto("/library");

@@ -122,7 +122,7 @@ export const initFrontmatterEditing = (deps: FrontmatterActionDeps = {}): void =
       const focused = focusedWithin(form);
       const restore = disablePanel(panel);
       const returnFocus = captureFocusReturn(focused);
-      setStatus("Updating frontmatter…");
+      setStatus("Updating property…");
       try {
         const resp = await fetcher(action.request.url, action.request.init);
         const outcome = await readFrontmatterOutcome(resp, action.message);
@@ -145,11 +145,11 @@ const readFrontmatterAction = (form: HTMLFormElement): { request: FrontmatterFet
   if (form.hasAttribute("data-frontmatter-set")) {
     const config = readFrontmatterSetConfig(form);
     return validFrontmatterBaseConfig(config)
-      ? { request: buildFrontmatterSetFetchRequest(config), message: "Updated frontmatter." } : null;
+      ? { request: buildFrontmatterSetFetchRequest(config), message: "Updated property." } : null;
   }
   const config = readFrontmatterUnsetConfig(form);
   return validFrontmatterBaseConfig(config)
-    ? { request: buildFrontmatterUnsetFetchRequest(config), message: "Unset frontmatter." } : null;
+    ? { request: buildFrontmatterUnsetFetchRequest(config), message: "Removed property." } : null;
 };
 
 const unconfirmedMessage = "Change not confirmed. Refresh to check before retrying.";

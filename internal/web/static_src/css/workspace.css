@@ -175,3 +175,7 @@
 
 .library-pagination { display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; margin-block: 1rem; flex-wrap: wrap; }
 .library-pagination[hidden] { display: none; }
+
+/* Before a search, offer a starting point without result-only controls. */
+.library-search:not([data-searching="true"]) + .overview-results :is(.panel-header, .library-results-tools) { display: none; }
+.library-activity[data-searching="false"] { margin-top: 0.5rem; }

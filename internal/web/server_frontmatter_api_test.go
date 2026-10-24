@@ -21,7 +21,15 @@ func TestServer_FrontmatterAPI_SetUnsetJournalsAndInvalidatesState(t *testing.T)
 		CSRFToken: "csrf-token",
 	})
 
-	warmResp, err := http.Get(ts.URL + "/n/source") // #nosec G107 -- test-only local URL
+	assertFrontmatterWarmNote(t, ts.URL)
+	assertFrontmatterSetJournal(t, ts.URL, root)
+	assertFrontmatterRefreshedNote(t, ts.URL)
+	assertFrontmatterUnset(t, ts.URL, root)
+}
+
+func assertFrontmatterWarmNote(t *testing.T, serverURL string) {
+	t.Helper()
+	warmResp, err := http.Get(serverURL + "/n/source") // #nosec G107 -- test-only local URL
 	if err != nil {
 		t.Fatalf("GET /n/source: %v", err)
 	}
@@ -30,13 +38,17 @@ func TestServer_FrontmatterAPI_SetUnsetJournalsAndInvalidatesState(t *testing.T)
 		t.Fatalf("warm note response unexpected: status=%d body=%q", warmResp.StatusCode, warmBody)
 	}
 
-	resp := postFrontmatterSetRequest(t, ts.URL, "source", "status", "=", "done", "csrf-token", "")
+}
+
+func assertFrontmatterSetJournal(t *testing.T, serverURL, root string) {
+	t.Helper()
+	resp := postFrontmatterSetRequest(t, serverURL, "source", "status", "=", "done", "csrf-token", "")
 	body := readResponseBody(t, resp)
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("set status: got %d, want %d; body=%q", resp.StatusCode, http.StatusOK, body)
 	}
 	payload := decodeManagementResult(t, body)
-	if !payload.OK || payload.Message != "Updated frontmatter." {
+	if !payload.OK || payload.Message != "Updated property." {
 		t.Fatalf("payload = %#v, want frontmatter update", payload)
 	}
 	if payload.Key != "source" || payload.Path != "/n/source" || payload.RelPath != "Source.md" {
@@ -48,12 +60,22 @@ func TestServer_FrontmatterAPI_SetUnsetJournalsAndInvalidatesState(t *testing.T)
 	if _, err := os.Stat(filepath.Join(root, config.DefaultJournalDir, payload.JournalID, "manifest.json")); err != nil {
 		t.Fatalf("journal manifest missing: %v", err)
 	}
+	assertFrontmatterSetContent(t, root)
+
+}
+
+func assertFrontmatterSetContent(t *testing.T, root string) {
+	t.Helper()
 	updated := readNoteFile(t, filepath.Join(root, "Source.md"))
 	if !strings.Contains(updated, "status: done") || !strings.Contains(updated, "Body marker.") {
 		t.Fatalf("set output unexpected:\n%s", updated)
 	}
 
-	refreshedResp, err := http.Get(ts.URL + "/n/source") // #nosec G107 -- test-only local URL
+}
+
+func assertFrontmatterRefreshedNote(t *testing.T, serverURL string) {
+	t.Helper()
+	refreshedResp, err := http.Get(serverURL + "/n/source") // #nosec G107 -- test-only local URL
 	if err != nil {
 		t.Fatalf("GET refreshed /n/source: %v", err)
 	}
@@ -64,13 +86,17 @@ func TestServer_FrontmatterAPI_SetUnsetJournalsAndInvalidatesState(t *testing.T)
 		t.Fatalf("state was not refreshed after set: status=%d body=%q", refreshedResp.StatusCode, refreshedBody)
 	}
 
-	unsetResp := postFrontmatterUnsetRequest(t, ts.URL, "source", "status", "csrf-token", "")
+}
+
+func assertFrontmatterUnset(t *testing.T, serverURL, root string) {
+	t.Helper()
+	unsetResp := postFrontmatterUnsetRequest(t, serverURL, "source", "status", "csrf-token", "")
 	unsetBody := readResponseBody(t, unsetResp)
 	if unsetResp.StatusCode != http.StatusOK {
 		t.Fatalf("unset status: got %d, want %d; body=%q", unsetResp.StatusCode, http.StatusOK, unsetBody)
 	}
 	unsetPayload := decodeManagementResult(t, unsetBody)
-	if !unsetPayload.OK || unsetPayload.Message != "Unset frontmatter." || strings.TrimSpace(unsetPayload.JournalID) == "" {
+	if !unsetPayload.OK || unsetPayload.Message != "Removed property." || strings.TrimSpace(unsetPayload.JournalID) == "" {
 		t.Fatalf("unset payload = %#v, want unset success with journal", unsetPayload)
 	}
 	afterUnset := readNoteFile(t, filepath.Join(root, "Source.md"))

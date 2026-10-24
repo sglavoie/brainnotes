@@ -103,7 +103,7 @@ describe("focus after async submits", () => {
     document.querySelector("form")?.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     expect(button.disabled).toBe(true);
     blurDisabled();
-    reply.open(jsonResponse({ ok: true, message: "Updated frontmatter." }));
+    reply.open(jsonResponse({ ok: true, message: "Updated property." }));
     await waitForExpect(() => expect(button.disabled).toBe(false));
     expect(document.activeElement).toBe(button);
   });

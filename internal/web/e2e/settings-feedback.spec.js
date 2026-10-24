@@ -122,7 +122,7 @@ test("settings keep other edits through a save and refresh, with feedback beside
   await expect(row.locator("[data-settings-save]")).toBeFocused();
   await expect(other.locator("[data-settings-control]")).toHaveValue("Unfinished folder draft");
   await page.locator("[data-settings-refresh]").click();
-  await expect(row.locator("[data-settings-status]")).toContainText("portable settings");
+  await expect(row.locator("[data-settings-status]")).toContainText("vault settings");
   await expect(other.locator("[data-settings-control]")).toHaveValue("Unfinished folder draft");
   await row.locator("[data-settings-unset]").click();
   await row.locator("[data-settings-confirm]").click();

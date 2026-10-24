@@ -56,7 +56,7 @@ test("Library owns one results list and shows readable highlighted excerpts", as
   await expect(page.getByRole("heading", { name: "Search results", exact: true })).toBeFocused();
 });
 
-test("Brief leads with notes and keeps reasons and AI behind disclosures after Another", async ({ page }) => {
+test("Brief puts capture before notes and keeps reasons and AI behind disclosures after Another", async ({ page }) => {
   await page.goto("/");
   const card = page.locator('[data-brief-slot="continue"] [data-brief-card]');
   await expect(card).toBeVisible();
@@ -64,7 +64,7 @@ test("Brief leads with notes and keeps reasons and AI behind disclosures after A
   await expect(card.locator(".brief-card-explanation")).toBeHidden();
   await expect(card.locator("[data-brief-insight-prompt]")).toBeHidden();
   expect((await card.boundingBox()).y).toBeLessThan((await page.locator(".brief-activity").boundingBox()).y);
-  expect((await card.boundingBox()).y).toBeLessThan((await page.locator(".capture-panel").boundingBox()).y);
+  expect((await page.locator(".capture-panel").boundingBox()).y).toBeLessThan((await card.boundingBox()).y);
   await card.locator(".brief-card-why > summary").focus();
   await page.keyboard.press("Enter");
   await expect(card.locator(".brief-card-explanation")).toBeVisible();

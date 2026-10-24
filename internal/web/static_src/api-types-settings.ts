@@ -1,4 +1,4 @@
-// Portable settings and template files transport ------------------------------
+// Vault settings and template files transport ------------------------------
 
 import type { PropertyConfigDiffLine, PropertyConfigStatus } from "./api-types";
 

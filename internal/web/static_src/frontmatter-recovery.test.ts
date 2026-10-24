@@ -30,7 +30,7 @@ afterEach(() => {
   window.history.replaceState(null, "", "/");
 });
 
-it.each(["Updated frontmatter.", "Frontmatter unchanged."])("confirms %s and offers an explicit refresh", async (message) => {
+it.each(["Updated property.", "Property unchanged."])("confirms %s and offers an explicit refresh", async (message) => {
   const fetcher = vi.fn(async () => json({ ok: true, message }));
   const ui = mount(fetcher);
   submit(ui.forms[0]);
@@ -87,5 +87,5 @@ it("blocks repeated and cross-form submissions until completion, restoring disab
   submit(ui.forms[1]);
   expect(fetcher).toHaveBeenCalledTimes(2);
   finish(json({ ok: true }));
-  await vi.waitFor(() => expect(ui.status.textContent).toBe("Unset frontmatter. Refresh properties"));
+  await vi.waitFor(() => expect(ui.status.textContent).toBe("Removed property. Refresh properties"));
 });
