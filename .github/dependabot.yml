@@ -11,6 +11,9 @@ updates:
     groups:
       go-minor-patch:
         update-types: [minor, patch]
+      go-security:
+        applies-to: security-updates
+        update-types: [minor, patch]
 
   - package-ecosystem: npm
     directory: /
@@ -21,17 +24,13 @@ updates:
       prefix: build
       include: scope
     versioning-strategy: increase
+    # Bundled packages (@codemirror/*, cytoscape) change the committed web
+    # assets: these PRs need `just web-build` before `just ci` passes.
     groups:
-      # Bundled into the committed web assets: these PRs need `just web-build`.
-      web-runtime:
-        patterns: ["@codemirror/*", "cytoscape"]
+      npm-minor-patch:
         update-types: [minor, patch]
-      # Playwright bumps can move visual baselines; keep them reviewable alone.
-      playwright:
-        patterns: ["@playwright/test", "@axe-core/playwright"]
-      dev-tooling:
-        patterns: ["*"]
-        exclude-patterns: ["@codemirror/*", "cytoscape", "@playwright/test", "@axe-core/playwright"]
+      npm-security:
+        applies-to: security-updates
         update-types: [minor, patch]
 
   - package-ecosystem: github-actions
@@ -42,5 +41,8 @@ updates:
     commit-message:
       prefix: ci
     groups:
-      actions:
-        patterns: ["*"]
+      actions-minor-patch:
+        update-types: [minor, patch]
+      actions-security:
+        applies-to: security-updates
+        update-types: [minor, patch]
