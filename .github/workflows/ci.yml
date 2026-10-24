@@ -57,7 +57,7 @@ jobs:
       # configuration. A restored cache only skips re-analysis of unchanged
       # packages; golangci-lint still re-checks anything whose source changed.
       - name: Cache golangci-lint analysis
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~/.cache/golangci-lint
           key: golangci-lint-${{ runner.os }}-${{ hashFiles('go.sum', '.golangci.yml') }}
