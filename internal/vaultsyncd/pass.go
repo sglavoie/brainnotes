@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/sglavoie/brainnotes/internal/vault"
 )
@@ -27,7 +28,27 @@ type companion struct {
 	// rejected receipt needs a person and will not clear on its own, so it must
 	// be said once and not every fifteen seconds.
 	rejected map[string]bool
+	// written is the companion record as it stands on disk — read at the start
+	// of each pass, replaced by every save — and writtenAt is when this process
+	// last saved it. Together they are what lets persist skip a save that would
+	// only move timestamps; see persist. Nil and zero mean "not known", which
+	// always saves.
+	written   *Record
+	writtenAt time.Time
 }
+
+// recordRefresh bounds how stale the run timestamps in the companion record may
+// be allowed to grow on disk while nothing else in it changes.
+//
+// Nothing derives a state from those timestamps — the disconnection inference
+// reads the channel, and failing reads the streak — so they are evidence for a
+// person reading `-check` or the sync panel, not an input. Rewriting them every
+// pass cost a full-cache flush (darwin's F_FULLFSYNC) for the file and another
+// for its directory, three times every fifteen seconds, to keep a "last ran"
+// line accurate to the second. A few minutes is plenty for a line a person
+// reads, and it stays far inside DefaultDisconnectedAfter, so a record that
+// says "ran a while ago" never looks older than a vault that is merely quiet.
+const recordRefresh = 5 * time.Minute
 
 func newCompanion(root string, opts Options) *companion {
 	return &companion{
@@ -112,6 +133,13 @@ func (c *companion) pass(ctx context.Context) *Pass {
 			Message: "the companion record was unusable and has been started again",
 			Detail:  sanitize(loadErr),
 		})
+	}
+	// The record just read is what is on disk, so it is the baseline persist
+	// compares against. An unusable one is no baseline at all: it must be
+	// replaced on the first save, not judged equal to anything.
+	c.written = nil
+	if loadErr == nil {
+		c.written = record.clone()
 	}
 	state := &passState{before: before, record: record}
 	for _, name := range workerOrder {
@@ -258,15 +286,35 @@ func (c *companion) runUnit(ctx context.Context, name WorkerName, state *passSta
 // next* would be trading a whole vault's synchronization for a scheduling
 // detail. The failure is announced, because a backoff that is not durable is a
 // backoff a restart forgets, and that is worth knowing.
+//
+// It still runs after every unit rather than once at the end of the pass,
+// because a failure recorded by the import must survive the export crashing the
+// process: a streak that only reached the disk at the end of a pass that never
+// ended is a backoff a supervisor's restart forgets. What it no longer does is
+// write when nothing but the run timestamps moved — a clean pass on an idle
+// vault — unless the copy on disk is older than recordRefresh. Failures, the
+// evidence, the deadline, the build and the set of workers that have ever run
+// are compared exactly; any difference in them is saved at once.
 func (c *companion) persist(record *Record) {
-	if err := record.save(c.root, c.opts.build()); err != nil {
+	build := c.opts.build()
+	now := c.opts.now()
+	fresh := !c.writtenAt.IsZero() && !now.Before(c.writtenAt) && now.Sub(c.writtenAt) < recordRefresh
+	if fresh && record.sameSchedule(c.written, build) {
+		return
+	}
+	if err := record.save(c.root, build); err != nil {
 		c.emit(Event{
 			Kind:    EventProblem,
 			Subject: "companion record",
 			Message: "the companion record could not be written, so this schedule will not survive a restart",
 			Detail:  sanitize(err),
 		})
+		// What is on disk is no longer known, so the next save must not be
+		// skipped on the strength of a comparison with it.
+		c.written, c.writtenAt = nil, time.Time{}
+		return
 	}
+	c.written, c.writtenAt = record.clone(), now
 }
 
 // invoke runs one worker and attaches its outcome to the unit.

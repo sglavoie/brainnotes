@@ -191,6 +191,56 @@ func (r *Record) save(root, build string) error {
 	return nil
 }
 
+// clone copies the record deeply enough that later updates to it cannot reach
+// the copy: the workers map is the only shared part.
+func (r *Record) clone() *Record {
+	copied := *r
+	copied.Workers = make(map[WorkerName]WorkerRecord, len(r.Workers))
+	for name, worker := range r.Workers {
+		copied.Workers[name] = worker
+	}
+	return &copied
+}
+
+// sameSchedule reports whether saving r with build would write a record that
+// differs from written in nothing but the run timestamps.
+//
+// The timestamps are the one part a status read only *reports*; every other
+// field is an input to something — the backoff, StateFailing, the build skew
+// check — and a change to any of them is compared exactly. A timestamp that
+// goes from never to some time is not "only a timestamp" either: it is the
+// first evidence the worker has run at all, so it counts as a change. A nil
+// written is never the same: nothing is known to be on disk.
+func (r *Record) sameSchedule(written *Record, build string) bool {
+	if written == nil {
+		return false
+	}
+	effective := r.Build
+	if buildinfo.Known(build) {
+		effective = build
+	}
+	if recordVersion != written.Version || effective != written.Build || len(r.Workers) != len(written.Workers) {
+		return false
+	}
+	for name, worker := range r.Workers {
+		other, recorded := written.Workers[name]
+		if !recorded || !worker.sameSchedule(other) {
+			return false
+		}
+	}
+	return true
+}
+
+// sameSchedule is Record.sameSchedule for one worker: equal in everything but
+// when it last ran and last succeeded, and equal in whether it ever has.
+func (w WorkerRecord) sameSchedule(other WorkerRecord) bool {
+	return w.Failures == other.Failures &&
+		w.LastError == other.LastError &&
+		w.NextAttemptAfter.Equal(other.NextAttemptAfter) &&
+		w.LastRunAt.IsZero() == other.LastRunAt.IsZero() &&
+		w.LastSuccessAt.IsZero() == other.LastSuccessAt.IsZero()
+}
+
 // worker reports one worker's record, zero-valued when it has never run.
 func (r *Record) worker(name WorkerName) WorkerRecord {
 	if r.Workers == nil {
