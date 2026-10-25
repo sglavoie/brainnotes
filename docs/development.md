@@ -81,8 +81,10 @@ editing, management pages, conflict and restore comparisons, confirmation, and
 empty/error states in both
 light and dark themes at both desktop and mobile widths. Run these on macOS with
 `npm run test:e2e -- --project=visual-chromium`; after an intentional design
-change, append `--update-snapshots`, inspect the changed images in
-`internal/web/e2e/visual-baselines`, and commit them. CI compares on macOS to
+change, append `--update-snapshots=all` to a run filtered to the affected tests,
+inspect the changed images in `internal/web/e2e/visual-baselines`, and commit
+them. Explicitly updating all selected snapshots also refreshes changes within
+the pixel tolerance, which would otherwise leave stale baselines. CI compares on macOS to
 avoid cross-platform font differences. A weekly and manually runnable
 qualification workflow exercises Chromium, Firefox, and WebKit at both widths.
 
