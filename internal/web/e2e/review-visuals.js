@@ -126,6 +126,8 @@ export const reviewVisuals = (snapshot) => {
 export const fixedRecentNotes = async (page) => {
   // Other browser journeys write to this vault. Pin the recent list's
   // content for visual comparison; screen-polish checks the real list.
+  // Pin timestamps too: screenshot masks hide text but preserve its width,
+  // so the server's local time can change title wrapping and panel heights.
   await page.locator(".recent-list").evaluate((list) => {
     const sample = list.querySelector("li");
     const notes = [
@@ -139,6 +141,7 @@ export const fixedRecentNotes = async (page) => {
       link.textContent = title;
       link.href = href;
       item.querySelector(".recent-note-meta span").textContent = folder;
+      item.querySelector(".recent-note-meta span:last-child").textContent = "2026-02-03 10:05";
       return item;
     }));
   });
