@@ -44,7 +44,7 @@ class PinnedList {
   constructor(private readonly root: HTMLElement, private readonly list: HTMLElement,
     private readonly statusEl: HTMLElement, deps: PinnedListDeps) {
     this.csrfToken = root.getAttribute("data-pinned-csrf") || "";
-    this.fetcher = deps.fetch || fetch;
+    this.fetcher = deps.fetch || ((input, init) => fetch(input, init));
     this.reload = deps.reload || ((): void => window.location.reload());
   }
 

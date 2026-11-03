@@ -135,3 +135,31 @@ test("an unconfirmed pin offers refresh without repeating the write", async ({ p
   await expect(pin).toHaveAttribute("aria-pressed", "false");
   expect(writes).toBe(1);
 });
+
+test("pinned notes can be moved and unpinned with confirmed server responses", async ({ page }) => {
+  for (const key of ["Alpha", "Beta"]) {
+    await page.goto(`/n/${key}`);
+    const button = page.locator("[data-pin-note] [data-pin-button]");
+    if (await button.getAttribute("aria-pressed") === "true") {
+      await button.click();
+      await expect(page.locator("[data-pin-status]")).toHaveText("Unpinned note.");
+    }
+    await button.click();
+    await expect(page.locator("[data-pin-status]")).toHaveText("Pinned note.");
+  }
+
+  await page.goto("/pinned");
+  const rows = page.locator("[data-pinned-item]");
+  const alpha = page.locator('[data-pinned-item][data-pinned-key="alpha"]');
+  const beta = page.locator('[data-pinned-item][data-pinned-key="beta"]');
+  await alpha.locator("[data-pinned-handle]").focus();
+  await page.keyboard.press("ArrowDown");
+  await expect(page.locator("[data-pinned-status]")).toContainText("Moved Alpha to position");
+  await expect(rows.last()).toHaveAttribute("data-pinned-key", "alpha");
+
+  await beta.locator("[data-pin-button]").click();
+  await expect(beta).toHaveCount(0);
+  await expect(page.locator("[data-pinned-status]")).toHaveText("Unpinned note.");
+  await alpha.locator("[data-pin-button]").click();
+  await expect(alpha).toHaveCount(0);
+});
