@@ -299,7 +299,10 @@ func (c *companion) persist(record *Record) {
 	build := c.opts.build()
 	now := c.opts.now()
 	fresh := !c.writtenAt.IsZero() && !now.Before(c.writtenAt) && now.Sub(c.writtenAt) < recordRefresh
-	if fresh && record.sameSchedule(c.written, build) {
+	// An earlier worker can refresh writtenAt while later workers still carry
+	// old timestamps on disk. Bound each worker's unsaved progress separately;
+	// otherwise the import save starves retirement evidence on every pass.
+	if fresh && record.sameSchedule(c.written, build) && record.runsFresh(c.written, recordRefresh) {
 		return
 	}
 	if err := record.save(c.root, build); err != nil {

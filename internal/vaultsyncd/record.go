@@ -241,6 +241,28 @@ func (w WorkerRecord) sameSchedule(other WorkerRecord) bool {
 		w.LastSuccessAt.IsZero() == other.LastSuccessAt.IsZero()
 }
 
+// runsFresh bounds how far each worker's run evidence can advance beyond its
+// durable copy, independently of when another worker caused a save. It compares
+// timestamps rather than the current time: a worker with nothing to do does not
+// acquire a fabricated heartbeat. Backward movement must also be persisted.
+func (r *Record) runsFresh(written *Record, limit time.Duration) bool {
+	if written == nil {
+		return false
+	}
+	for name, worker := range r.Workers {
+		other := written.Workers[name]
+		for _, delta := range []time.Duration{
+			worker.LastRunAt.Sub(other.LastRunAt),
+			worker.LastSuccessAt.Sub(other.LastSuccessAt),
+		} {
+			if delta < 0 || delta >= limit {
+				return false
+			}
+		}
+	}
+	return true
+}
+
 // worker reports one worker's record, zero-valued when it has never run.
 func (r *Record) worker(name WorkerName) WorkerRecord {
 	if r.Workers == nil {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"testing"
+	"time"
 )
 
 // TestAnIdlePassDoesNotRewriteTheCompanionRecord is the cost half of persist: a
@@ -52,6 +53,41 @@ func TestAnIdlePassDoesNotRewriteTheCompanionRecord(t *testing.T) {
 	record, err := LoadRecord(w.root())
 	if err != nil || record.worker(WorkerExport).Failures != 1 {
 		t.Fatalf("export failures on disk = %d, %v; want 1", record.worker(WorkerExport).Failures, err)
+	}
+}
+
+// A refresh after import must not continually postpone the later workers'
+// evidence. Each pass reloads the durable record, so an unsaved retire timestamp
+// is otherwise lost before the next pass can include it in an import save.
+func TestEveryIdleWorkerKeepsFreshDurableTimestamps(t *testing.T) {
+	w := enroll(t)
+	w.write(w.root(), localNote, localBody)
+	w.once(w.root())
+	err := locked(w.root(), func(c *companion) error {
+		for elapsed := time.Duration(0); elapsed < time.Hour; elapsed += DefaultInterval {
+			pass := c.pass(context.Background())
+			record, err := LoadRecord(w.root())
+			if err != nil {
+				t.Fatal(err)
+			}
+			for _, unit := range pass.Units {
+				if !unit.Ran || unit.Error != "" {
+					continue
+				}
+				worker := record.worker(unit.Worker)
+				if age := pass.FinishedAt.Sub(worker.LastRunAt); age >= recordRefresh {
+					t.Fatalf("%s durable last run is %v old after a successful pass", unit.Worker, age)
+				}
+				if age := pass.FinishedAt.Sub(worker.LastSuccessAt); age >= recordRefresh {
+					t.Fatalf("%s durable last success is %v old after a successful pass", unit.Worker, age)
+				}
+			}
+			w.clock.Advance(DefaultInterval)
+		}
+		return nil
+	}, w.options())
+	if err != nil {
+		t.Fatal(err)
 	}
 }
 
