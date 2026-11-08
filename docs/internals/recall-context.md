@@ -8,3 +8,20 @@ Companion to `CLAUDE.md`; read before changing `bn related`, `bn context`, `bn f
 - **Context privacy boundary**: a context packet intentionally contains the complete source body plus selected exact excerpts. `--agent` receives exactly the inspectable Markdown bytes and prints stdout verbatim; the configured executable may transmit them, but `bn` itself adds no provider or network client. Do not reuse the web daily-review claim that bodies are redacted—the two agent inputs are intentionally different.
 - **Context selection invariant**: Markdown and JSON must select the same related notes and source spans even though JSON escaping can be larger. Budget candidate changes against both serializers, never truncate the source body, and keep all excerpts tied to exact `Document.Blocks` locations.
 - **Recall state recovery**: missing state is a valid empty read and is created lazily; missing-note records and expired snoozes remain untouched by reads and are pruned on the next explicit write. Never auto-repair or overwrite corrupt, unsupported-version, invalid-record, or symlinked state.
+
+## Browser reference and connection previews
+
+`GET /api/note/peek` remains read-only. Alongside its short excerpt it returns up
+to twelve plain-text passages, bounded to 8,000 Unicode characters in total.
+An optional served `context` note selects up to two prose passages mentioning
+its title, including passages beyond the note opening. If none match, the opening
+passages remain available. These are lexical matches, not generated inferences.
+References load neither attachments nor agents and write no recall or Brief state.
+
+The connection explorer is shared by the Brief, Related Notes, and Graph. Its
+writing action navigates to `/new?source=…&source=…`; that page validates both
+sources against the served snapshot and prepares folder-qualified wikilinks.
+Nothing is created until the ordinary New note form is submitted. The initial
+body participates in the existing creation receipt and tab-local recovery.
+Reference selection and recent switcher destinations store only bounded route
+identities/titles, scoped to the vault and browser tab; they never alter ranking.

@@ -71,11 +71,12 @@ type frontmatterEntry struct {
 }
 
 type frontmatterValue struct {
-	Kind    string
-	Text    string
-	Anchors []frontmatterAnchor
-	Items   []frontmatterValue
-	Pairs   []frontmatterEntry
+	LinkOnly bool
+	Kind     string
+	Text     string
+	Anchors  []frontmatterAnchor
+	Items    []frontmatterValue
+	Pairs    []frontmatterEntry
 }
 
 type frontmatterAnchor struct {

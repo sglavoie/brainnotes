@@ -18,8 +18,8 @@ the process-launch and media boundaries live are in
 a route, and ask `s.caps` rather than branching on an option flag.
 
 Standalone creation at `GET /new` uses `POST /api/notes/new` with `title`,
-optional `folder`, and required `save_id`. It is a client of the raw Markdown
-source write class: `noteops.NewNoteSource` prepares title frontmatter and
+optional `folder` and initial `body` (up to 20,000 characters), and required `save_id`. It is a client of the raw Markdown
+source write class: `noteops.NewNoteSource` prepares title frontmatter; the optional body is appended verbatim, and
 `applySourceSave` applies the existing configuration-pinned, journaled transaction.
 `ExclusiveCreate` refuses an existing destination even when its bytes match;
 only a recorded replay of the same save ID can succeed again. Local and hosted

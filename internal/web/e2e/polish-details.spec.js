@@ -61,7 +61,8 @@ test("Brief shows useful context and keeps detailed reasons disclosed after Anot
   const card = page.locator('[data-brief-slot="continue"] [data-brief-card]');
   await expect(card).toBeVisible();
   const firstID = await card.getAttribute("data-brief-card-id");
-  await expect(card.locator(".brief-card-explanation")).toBeVisible();
+  await expect(card.locator(".brief-card-context")).toBeVisible();
+  await expect(card.locator(".brief-card-explanation")).toBeHidden();
   await expect(card.locator(".brief-card-path")).toBeHidden();
   await expect(card.locator("[data-brief-insight-prompt]")).toBeHidden();
   expect((await card.boundingBox()).y).toBeLessThan((await page.locator(".brief-activity").boundingBox()).y);
@@ -72,7 +73,8 @@ test("Brief shows useful context and keeps detailed reasons disclosed after Anot
   await expect(card.locator(".brief-ai")).toBeHidden();
   await card.locator("[data-brief-action-another]").click();
   await expect(card).not.toHaveAttribute("data-brief-card-id", firstID);
-  await expect(card.locator(".brief-card-explanation")).toBeVisible();
+  await expect(card.locator(".brief-card-context")).toBeVisible();
+  await expect(card.locator(".brief-card-explanation")).toBeHidden();
   await expect(card.locator(".brief-card-path")).toBeHidden();
   await expect(card.locator("[data-brief-insight-prompt]")).toBeHidden();
   await card.locator(".brief-card-why > summary").click();

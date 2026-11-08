@@ -15,7 +15,7 @@
     <header class="site-header">
       <h1 id="source-editor-heading"><span class="visually-hidden">Editing </span><a href="{{ .NoteRoute }}" data-source-note-return>{{ .NoteTitle }}</a></h1>
       {{template "desktopWorkspaceNav" ""}}
-      {{template "mobileSearchShortcut" ""}}
+      {{template "switcherShortcut" .}}
       <button type="button" class="bn-button capture-launch" data-capture-launch title="Capture a thought (Ctrl/⌘ + Shift + Space)" aria-keyshortcuts="Control+Shift+Space Meta+Shift+Space" aria-label="Capture"><span class="capture-launch-label">Capture</span><span class="capture-launch-icon" aria-hidden="true">✎</span></button>
       <details class="source-editor-workspace">
         <summary>Workspace</summary>
@@ -87,7 +87,7 @@
             <button type="button" class="bn-button source-editor-command" data-source-command="code" title="Inline code (Ctrl/⌘ + E)" aria-keyshortcuts="Control+E Meta+E">Code</button>
             <button type="button" class="bn-button source-editor-command" data-source-command="heading" data-source-heading-level="1" title="Heading (Ctrl/⌘ + Alt + 1)" aria-keyshortcuts="Control+Alt+1 Meta+Alt+1">Heading</button>
             <button type="button" class="bn-button source-editor-command" data-source-command="bullet" title="Bullet list (Ctrl/⌘ + Shift + 8)" aria-keyshortcuts="Control+Shift+8 Meta+Shift+8">List</button>
-            <button type="button" class="bn-button source-editor-command" data-source-command="link" title="Markdown link (Ctrl/⌘ + K)" aria-keyshortcuts="Control+K Meta+K">Link</button>
+            <button type="button" class="bn-button source-editor-command" data-source-command="link" title="Markdown link (Ctrl/⌘ + Alt + K)" aria-keyshortcuts="Control+Alt+K Meta+Alt+K">Link</button>
             <button type="button" class="bn-button source-editor-command" data-source-command="wikilink" title="Wikilink (Ctrl/⌘ + Shift + K)" aria-keyshortcuts="Control+Shift+K Meta+Shift+K">Wikilink</button>
           </div>
         </details>
@@ -259,7 +259,8 @@
           <div><dt>Ctrl/⌘ + E</dt><dd>Inline code</dd></div>
           <div><dt>Ctrl/⌘ + Alt + 1…6</dt><dd>Heading level</dd></div>
           <div><dt>Ctrl/⌘ + Shift + 8</dt><dd>Bullet list</dd></div>
-          <div><dt>Ctrl/⌘ + K</dt><dd>Markdown link</dd></div>
+          <div><dt>Ctrl/⌘ + K</dt><dd>Search notes and actions</dd></div>
+          <div><dt>Ctrl/⌘ + Alt + K</dt><dd>Markdown link</dd></div>
           <div><dt>Ctrl/⌘ + Shift + K</dt><dd>Wikilink</dd></div>
           <div><dt><code>[[</code></dt><dd>Complete a wikilink from the vault</dd></div>
           <div><dt>Tab</dt><dd>Leave the editor for the next control; it never indents</dd></div>

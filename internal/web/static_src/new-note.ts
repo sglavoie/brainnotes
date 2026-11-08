@@ -10,6 +10,7 @@ export const initNewNote = (root: ParentNode = document, deps: NewNoteDeps = {})
   const form = root.querySelector<HTMLFormElement>("[data-new-note]");
   if (!form) return;
   const title = form.querySelector<HTMLInputElement>('[name="title"]')!;
+  const body = form.querySelector<HTMLTextAreaElement>('[name="body"]');
   const folder = form.querySelector<HTMLInputElement>('[name="folder"]')!;
   const button = form.querySelector<HTMLButtonElement>('button[type="submit"]')!;
   const status = form.querySelector<HTMLElement>("[data-new-note-status]")!;
@@ -17,14 +18,15 @@ export const initNewNote = (root: ParentNode = document, deps: NewNoteDeps = {})
   const navigate = deps.navigate ?? ((url: string) => window.location.assign(url));
   const draft = newNoteDraft(form);
   const restored = draft.restore();
-  if (restored) { title.value = restored.title; folder.value = restored.folder; }
+  if (restored) { title.value = restored.title; folder.value = restored.folder; if (body && restored.body !== undefined) body.value = restored.body; }
   let pending: PendingCreation | undefined = restored?.pending;
   let busy = false;
   let committed = false;
-  const values = (): { title: string; folder: string } => ({
+  const values = (): { title: string; folder: string; body?: string } => ({
     title: title.value.trim(), folder: folder.value.trim().replace(/\\/g, "/"),
+    ...(body?.value ? { body: body.value } : {}),
   });
-  const keepDraft = (): void => draft.save({ title: title.value, folder: folder.value, pending });
+  const keepDraft = (): void => draft.save({ title: title.value, folder: folder.value, body: body?.value, pending });
   const preview = (): void => {
     const value = values();
     button.textContent = pending?.signature === JSON.stringify(value) ? "Check creation" : "Create and write";
@@ -45,6 +47,7 @@ export const initNewNote = (root: ParentNode = document, deps: NewNoteDeps = {})
     if (pending?.signature !== signature) pending = { signature, id: newSaveID() };
     keepDraft();
     busy = true;
+    setBodyDisabled(body, true);
     button.disabled = title.disabled = folder.disabled = true;
     status.textContent = "Creating note…";
     try {
@@ -62,6 +65,7 @@ export const initNewNote = (root: ParentNode = document, deps: NewNoteDeps = {})
       status.textContent = unconfirmedMessage;
     } finally {
       busy = false;
+      setBodyDisabled(body, committed);
       preview();
       button.disabled = title.disabled = folder.disabled = committed;
     }
@@ -88,3 +92,5 @@ const showOutcome = (
   }
   return committed;
 };
+
+const setBodyDisabled = (body: HTMLTextAreaElement | null, disabled: boolean): void => { if (body) body.disabled = disabled; };

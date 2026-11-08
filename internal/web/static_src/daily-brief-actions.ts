@@ -1,3 +1,4 @@
+import { openBriefConnection } from "./connection-explorer";
 import { withNoteOrigin } from "./note-origin";
 import { briefEditorDestination, resumeDestination } from "./note-resume";
 import { announceConfirmedWrite } from "./write-notice";
@@ -58,6 +59,10 @@ const readButtonCardID = (button: HTMLButtonElement): string =>
   button.getAttribute("data-brief-card-id") || "";
 
 export const runOpen = async (ctx: BriefActionContext, button: HTMLButtonElement): Promise<void> => {
+  if (!openBriefConnection(button)) await runOpenNote(ctx, button);
+};
+
+const runOpenNote = async (ctx: BriefActionContext, button: HTMLButtonElement): Promise<void> => {
   const slot = readButtonSlot(button);
   const cardID = readButtonCardID(button);
   if (!slot || !cardID || !ctx.config.csrfToken) {

@@ -42,7 +42,7 @@ for (const theme of ["light", "dark"]) {
       element.append(code, table, image);
     });
     await page.emulateMedia({ media: "print" });
-    await expect(page.locator(".site-header h1")).toBeVisible();
+    await expect(page.locator(".reading-title")).toBeVisible();
     await expect(body).toBeVisible();
     for (const selector of [".site-nav", ".site-header-tools", ".note-meta-sidebar", ".note-toc-sidebar",
       ".note-actions", ".note-insight", ".related-notes", "[data-copy-controls]"]) {

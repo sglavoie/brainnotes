@@ -199,6 +199,7 @@ export const renderCard = (
 ): HTMLElement => {
   const cardEl = doc.createElement("div");
   cardEl.className = "brief-card";
+  if (card.Metadata.Bridge) cardEl.dataset.connectionBridge = card.Metadata.Bridge;
   cardEl.setAttribute("data-brief-card", "");
   cardEl.setAttribute("data-brief-card-id", card.ID);
 
@@ -309,7 +310,7 @@ const appendCardExplanation = (doc: Document, cardEl: HTMLElement, slot: BriefSl
     link.href = briefNotePathForRelPath(card.Source.RelPath);
     link.textContent = card.Source.Title || card.Source.RelPath;
     source.append("Alongside ", link);
-    if (card.Metadata.Bridge) source.append(` · through ${card.Metadata.Bridge}`);
+    if (card.Metadata.Bridge) source.append(` · through ${card.Metadata.Bridge.replace(/\.md$/i, "").split("/").pop()}`);
     else if (card.Metadata.Relationship) source.append(` · ${relationshipLabel(card.Metadata.Relationship)}`);
     cardEl.appendChild(source);
   }

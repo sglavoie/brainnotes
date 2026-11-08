@@ -108,13 +108,14 @@ test("main destinations are directly available on desktop and mobile keeps Searc
   await expect(nav).toBeHidden();
   for (const path of ["/", "/n/Reading", "/settings", "/graph", "/edit?key=Writing"]) {
     await page.goto(path);
-    const search = page.getByRole("link", { name: "Search notes", exact: true });
+    const search = page.locator("[data-switcher-launch]");
     await expect(search).toBeInViewport();
     const bounds = await search.boundingBox();
     expect(bounds.width).toBeGreaterThanOrEqual(44);
     expect(bounds.height).toBeGreaterThanOrEqual(44);
     await search.click();
-    await expect(page).toHaveURL(/\/library$/);
+    await expect(page.locator("#switcher-input")).toBeInViewport();
+    await page.keyboard.press("Escape");
   }
   await page.goto("/edit?key=Writing");
   await page.locator(".source-editor-workspace > summary").click();

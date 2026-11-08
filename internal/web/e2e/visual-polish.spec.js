@@ -80,6 +80,7 @@ for (const [theme, width] of [["light", 1280], ["dark", 390], ["light", 390], ["
       await snapshot(page, "reading");
     });
     experienceVisuals(snapshot, width);
+    thinkingVisuals(snapshot);
     test("editor and exact Undo confirmation", async ({ page }) => {
       await page.goto("/edit?key=Survey");
       await expect(page.locator(SURFACE)).toContainText("The water has fallen");
@@ -142,5 +143,29 @@ function experienceVisuals(snapshot, width) {
     await preview.press("Enter");
     await expect(page.locator("#note-peek p")).not.toHaveText("Loading note…");
     await snapshot(page, "note-peek");
+  });
+}
+
+function thinkingVisuals(snapshot) {
+  test("connection, reference and command search", async ({ page }) => {
+    await page.goto("/n/Alpha");
+    await page.locator('[data-related-card="beta"] .connection-launch').click();
+    await expect(page.locator(".connection-note h3")).toHaveCount(2);
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await snapshot(page, "connection");
+    await page.keyboard.press("Escape");
+    const link = page.locator('[data-note-body] a[href^="/n/beta"]').first();
+    await link.focus();
+    await link.press("Alt+ArrowDown");
+    await page.getByRole("button", { name: "Keep beside this note" }).click();
+    await expect(page.locator(".reference-content h3")).toHaveText("Beta");
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await snapshot(page, "side-reference");
+    await page.getByRole("button", { name: "Close reference" }).click();
+    await page.locator("[data-switcher-launch]").click();
+    await page.locator("#switcher-input").fill("Alpha");
+    await expect(page.locator(".command-switcher [role=status]")).toContainText(/\bresults?\b/);
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await snapshot(page, "command-search");
   });
 }

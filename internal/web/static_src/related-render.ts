@@ -1,3 +1,4 @@
+import { connectionButton } from "./connection-explorer";
 import { withLibraryContext } from "./note-navigation";
 import { readableExcerpt } from "./note-excerpt";
 import {
@@ -204,7 +205,7 @@ const renderLaterControl = (doc: Document, result: RelatedResult, serverDate: st
   return details;
 };
 
-const renderRelatedCard = (doc: Document, result: RelatedResult, serverDate: string): HTMLElement => {
+const renderRelatedCard = (doc: Document, result: RelatedResult, serverDate: string, source: string): HTMLElement => {
   const card = doc.createElement("article");
   card.className = "related-card";
   card.setAttribute("data-related-card", result.candidate.key);
@@ -266,12 +267,19 @@ const renderRelatedCard = (doc: Document, result: RelatedResult, serverDate: str
   actions.className = "related-card-actions";
   const useful = actionButton(doc, "Useful", "useful", result.candidate.key);
   useful.setAttribute("aria-pressed", result.useful ? "true" : "false");
-  actions.append(
-    useful,
+  const secondary = doc.createElement("details");
+  secondary.className = "related-secondary-actions";
+  const summary = doc.createElement("summary");
+  summary.textContent = "More actions";
+  const options = doc.createElement("div");
+  options.className = "related-secondary-options";
+  options.append(
     actionButton(doc, "Dismiss", "dismissed", result.candidate.key),
     renderLaterControl(doc, result, serverDate),
     actionButton(doc, "Open in editor", "open_editor", result.candidate.key)
   );
+  secondary.append(summary, options);
+  actions.append(connectionButton({ source, candidate: result.candidate.key, bridge: result.bridge?.key, relationship: relatedRelationshipLabel(result.relationship) }), useful, secondary);
   card.appendChild(actions);
   return card;
 };
@@ -320,7 +328,7 @@ export const renderRelatedResponse = (view: RelatedView, response: RelatedRespon
     container.appendChild(empty);
   } else {
     for (const result of response.results) {
-      container.appendChild(renderRelatedCard(container.ownerDocument, result, response.serverDate));
+      container.appendChild(renderRelatedCard(container.ownerDocument, result, response.serverDate, response.source.key));
     }
   }
   const more = view.moreButtons[response.mode];

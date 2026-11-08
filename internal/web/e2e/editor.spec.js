@@ -321,7 +321,9 @@ test("unsaved text survives Search navigation and a reload and is offered back r
   expect(kept.content).toContain(phrase);
   expect(readFileSync(notePath, "utf8"), "keeping a local copy wrote to the vault").toBe(before);
 
-  await page.getByRole("link", { name: "Search notes", exact: true }).click();
+  await page.locator("[data-switcher-launch]").click();
+  await page.locator("#switcher-input").fill("Library");
+  await page.locator("#switcher-input").press("Enter");
   await expect(page).toHaveURL(/\/library$/);
   await page.goto("/n/Alpha");
   await page.locator("[data-source-editor-launch]").click();

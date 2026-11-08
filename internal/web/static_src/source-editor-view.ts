@@ -150,7 +150,7 @@ const formattingKeymap = (options: SourceViewOptions) => {
     { key: "Mod-b", run: command("bold") },
     { key: "Mod-i", run: command("italic") },
     { key: "Mod-e", run: command("code") },
-    { key: "Mod-k", run: command("link") },
+    { key: "Mod-Alt-k", run: command("link") },
     { key: "Mod-Shift-k", run: command("wikilink") },
     { key: "Mod-Shift-8", run: command("bullet") },
     ...headings,

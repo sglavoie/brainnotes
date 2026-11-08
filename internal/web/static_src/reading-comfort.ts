@@ -40,7 +40,7 @@ const arrangeReadingControls = (): void => {
 };
 
 const quietRepeatedTitle = (): void => {
-  const title = document.querySelector(".note-main > header h1");
+  const title = document.querySelector(".reading-title");
   const first = document.querySelector("[data-note-body] > :first-child");
   if (!title || !first) return;
   const heading = first.matches("h1") ? first : first.querySelector("h1");

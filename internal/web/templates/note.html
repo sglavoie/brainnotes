@@ -12,7 +12,7 @@
       {{end}}
     </ul>
   {{else}}
-    <span class="frontmatter-text">{{.Text}}</span>
+    {{if not .LinkOnly}}<span class="frontmatter-text">{{.Text}}</span>{{end}}
     {{if .Anchors}}
       <span class="frontmatter-anchors">
         {{range .Anchors}}
@@ -71,7 +71,7 @@
       {{end}}
 
       <header class="site-header focused-workspace-header">
-        <h1>{{.Title}}</h1>
+        <a class="reading-home" href="/">Brain Notes</a>
         {{template "workspaceMenu" "note"}}
       </header>
       {{template "siteSync" .}}
@@ -294,6 +294,7 @@
 
         <div class="note-content">
           <section class="note-print-body" aria-label="Note content">
+            <h1 class="reading-title">{{.Title}}</h1>
             {{/* The colon cannot occur in Goldmark's generated heading IDs. */}}
             <div id="bn:note-body" class="note-body" tabindex="-1" data-note-body data-note-context-links>{{.BodyHTML}}</div>
           </section>

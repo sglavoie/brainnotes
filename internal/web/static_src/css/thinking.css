@@ -1,0 +1,65 @@
+/* A quiet writing desk: the content carries the strongest contrast. */
+.reading-home { font-size: 0.9rem; font-weight: 650; color: var(--bn-muted); letter-spacing: 0.025em; }
+.reading-title { font-family: var(--bn-book); font-weight: 500; font-size: clamp(2rem, 3.5vw, 3.2rem); line-height: 1.12; letter-spacing: -0.035em; margin: 0 0 1.5rem; color: var(--bn-text-strong); }
+.note-print-body > .note-body { letter-spacing: 0.005em; }
+/* An empty copy announcement must not add a blank line below each heading.
+   Keep its live region mounted; populated feedback returns to normal flow. */
+.note-section-copy .copy-status:empty { position: absolute; min-height: 0; margin: 0; }
+:root[data-reading-type='book'] .note-print-body > .note-body { font-family: var(--bn-book); line-height: 1.8; }
+.note-print-body .note-body blockquote { border-left-color: var(--bn-accent-subtle-border); font-family: var(--bn-book); font-size: 1.12em; }
+.frontmatter-row { border-top-color: transparent; padding-block: 0.35rem; }
+.frontmatter-row dt { font-weight: 500; font-size: 0.75rem; }
+.frontmatter-row dd { margin-top: 0.15rem; }
+.frontmatter-editor > summary { font-size: 0.75rem; color: var(--bn-muted); }
+.frontmatter-anchors { margin-left: 0; }
+.note-actions { padding-bottom: 0.75rem; border-bottom: 1px solid var(--bn-border); }
+.note-meta-sidebar .panel { padding-top: 0.5rem; }
+.brief-slot { box-shadow: var(--bn-shadow-card); }
+.brief-card-title { font-family: var(--bn-book); font-size: 1.45rem; font-weight: 500; line-height: 1.25; }
+.brief-slot-primary .brief-card-title { font-size: 2rem; font-weight: 500; }
+.brief-card-context { font-size: 0.78rem; }
+.brief-slot .brief-slot-purpose { display: none; }
+.brief-card-excerpt { max-width: 62ch; }
+.brief-secondary-summary { margin-top: 1.5rem; }
+.brief-secondary-summary > summary { cursor: pointer; padding: 0.65rem 0; color: var(--bn-muted); }
+.brief-secondary-summary > .panel { margin-top: 0.7rem; }
+.related-secondary-actions { font-size: 0.85rem; }
+.related-secondary-actions > summary { cursor: pointer; padding: 0.55rem 0.7rem; color: var(--bn-muted); }
+.related-secondary-actions[open] { flex-basis: 100%; }
+.related-secondary-options { display: flex; gap: 0.5rem; flex-wrap: wrap; padding-block: 0.5rem; }
+.related-card-actions { align-items: center; }
+.related-mode-description { display: none; }
+.graph-note-excerpt { line-height: 1.65; margin-block: 0.75rem; }
+.graph-note-connection { font-size: 0.85rem; color: var(--bn-muted); }
+.graph-note-facts > summary { cursor: pointer; font-size: 0.8rem; color: var(--bn-muted); padding-block: 0.6rem; }
+.new-note textarea { box-sizing: border-box; width: 100%; min-height: 9rem; resize: vertical; border: 1px solid var(--bn-border); border-radius: 0.6rem; background: var(--bn-surface); color: var(--bn-text); padding: 0.8rem; font: inherit; line-height: 1.6; }
+@media (max-width: 700px) {
+  .note-page .reading-home { display: none; }
+  .note-page .site-header { margin-bottom: 0.5rem; }
+  .note-page .note-actions { margin-block: 0.5rem; padding-bottom: 0.5rem; }
+  .reading-title { font-size: 2rem; margin-bottom: 1rem; }
+  .note-page .note-layout { row-gap: 0.5rem; }
+  .note-print-body .note-section-heading { margin-top: 0.5rem; }
+  .note-print-body .note-body > .note-repeated-title + .note-section-heading { margin-top: 0; }
+  .brief-slot { padding: 0.85rem; }
+  .brief-slot > .panel-header { margin-bottom: 0.4rem; }
+  .brief-card { gap: 0.35rem; }
+  .brief-slot-primary .brief-card-title { font-size: 1.6rem; }
+  .brief-card-title { font-size: 1.35rem; }
+  .brief-card-excerpt { font-size: 0.92rem; }
+  .brief-panel > .panel-header .brief-intro { display: none; }
+  .brief-secondary-summary .diagnostic-card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .capture-dialog[open], .note-peek:popover-open { animation: desk-enter 150ms ease-out; }
+  .capture-notice:not(:empty), .capture-status.is-success { animation: confirmation-settle 180ms ease-out; }
+  .pin-button { transition: background-color 140ms ease, border-color 140ms ease; }
+  .pin-button[aria-pressed='true'] { animation: pin-settle 160ms ease-out; }
+  .note-print-body { animation: confirmation-settle 180ms ease-out; }
+  :root[data-reading-mode='quiet'] .note-print-body { animation: desk-enter 180ms ease-out; }
+  @keyframes desk-enter { from { transform: translateY(5px); } to { transform: translateY(0); } }
+  @keyframes pin-settle { 50% { transform: scale(1.04); } }
+}
+@media print { .reading-title { margin-bottom: 1rem; } .note-page .site-header { display: none !important; } }
+
+.note-body a, p a:not(.bn-button), .capture-notice a { text-decoration: underline; text-underline-offset: 0.18em; text-decoration-thickness: 1px; }

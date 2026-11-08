@@ -4,7 +4,7 @@ import { initNewNote } from "./new-note";
 
 const mount = (fetcher: typeof fetch, vault = "vault-a") => {
   document.body.innerHTML = `<form data-new-note data-new-note-vault="${vault}" data-create-endpoint="/api/notes/new" data-editor-path="/edit">
-    <input name="title" required><input name="folder"><button type="submit">Create and write</button>
+    <input name="title" required><input name="folder"><textarea name="body"></textarea><button type="submit">Create and write</button>
     <p data-new-note-destination></p><p data-new-note-status></p><p data-new-note-draft-status></p></form>`;
   const navigate = vi.fn();
   initNewNote(document, { fetch: fetcher, navigate });
@@ -12,6 +12,7 @@ const mount = (fetcher: typeof fetch, vault = "vault-a") => {
   return {
     title: form.querySelector<HTMLInputElement>('[name="title"]')!,
     folder: form.querySelector<HTMLInputElement>('[name="folder"]')!,
+    body: form.querySelector<HTMLTextAreaElement>('[name="body"]')!,
     button: form.querySelector("button")!, navigate,
     input: () => form.dispatchEvent(new Event("input", { bubbles: true })),
     submit: () => form.dispatchEvent(new Event("submit", { cancelable: true })),
@@ -29,9 +30,11 @@ it("retains unsent details and a pending identity across reload, then clears the
   const fetcher = vi.fn().mockRejectedValueOnce(new Error("lost")).mockResolvedValueOnce(ok());
   let page = mount(fetcher);
   page.title.value = "Kept"; page.folder.value = "Folder"; page.input();
+  page.body.value = "[[Alpha]] ↔ [[Beta]]\n\nAn unfinished thought."; page.input();
   page = mount(fetcher);
   expect(page.title.value).toBe("Kept");
   expect(page.folder.value).toBe("Folder");
+  expect(page.body.value).toBe("[[Alpha]] ↔ [[Beta]]\n\nAn unfinished thought.");
   expect(fetcher).not.toHaveBeenCalled();
   page.submit();
   await vi.waitFor(() => expect(page.button.disabled).toBe(false));

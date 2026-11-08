@@ -31,13 +31,13 @@ test("reading page stays within its transfer budget", async ({ page, context }, 
   await testInfo.attach("reading-performance", { body: JSON.stringify(measurement, null, 2), contentType: "application/json" });
   console.log(JSON.stringify(measurement));
   expect(scripts[0].bytes).toBeGreaterThan(0);
-  expect(scripts[0].bytes).toBeLessThan(130_000);
+  expect(scripts[0].bytes).toBeLessThan(129_000);
   expect(scripts.map((entry) => entry.path)).toEqual(["/static/app.js"]);
   expect(stylesheets.map((entry) => entry.path)).toEqual(["/static/app.css"]);
   expect(stylesheets[0].bytes).toBeGreaterThan(0);
-  // Capture, note previews, and reading preferences share this uncompressed
-  // stylesheet. Keep the overall 400 KB page budget below unchanged.
-  expect(stylesheets[0].bytes).toBeLessThan(230_000);
+  // Move 1 KB of the existing 360 KB asset allowance from JavaScript to the
+  // shared reading styles. The overall 400 KB page budget remains unchanged.
+  expect(stylesheets[0].bytes).toBeLessThan(231_000);
   expect(navigationBytes).toBeGreaterThan(0);
   expect(totalTransferBytes).toBeLessThan(400_000);
   expect(firstContentfulPaintMilliseconds).not.toBeNull();

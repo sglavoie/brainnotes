@@ -6,7 +6,9 @@ for (const path of ["/new", "/pinned", "/synthesize?source=Alpha"]) {
   test(`shared navigation works on ${path}`, async ({ page }) => {
     await page.setViewportSize({ width: 390, height: 640 });
     await page.goto(path);
-    await page.getByRole("link", { name: "Search notes", exact: true }).click();
+    await page.locator("[data-switcher-launch]").click();
+    await page.locator("#switcher-input").fill("Library");
+    await page.locator("#switcher-input").press("Enter");
     await expect(page).toHaveURL(/\/library$/);
     await expect(page.locator("#search-input")).toBeInViewport();
     await page.goto(path);

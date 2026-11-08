@@ -1,3 +1,4 @@
+import { updateGraphNotePreview } from "./graph-note-preview";
 import { notePathForKey } from "./filters";
 import { type GraphNodeModel, readDegreeValue } from "./graph";
 
@@ -133,6 +134,7 @@ export const renderGraphDetails = (
   const model = selectedModel || hoveredModel;
 
   renderDetailText(refs, model);
+  updateGraphNotePreview(refs.detailsPanel, selectedModel);
   renderIssueDetails(refs.hoverIssues, model);
   if (refs.detailsPanel) {
     refs.detailsPanel.classList.toggle("is-locked", Boolean(selectedModel));

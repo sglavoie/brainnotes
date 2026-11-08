@@ -12,15 +12,15 @@ func TestThemeTokenFoundationContract(t *testing.T) {
 
 	// Light is the base palette declared on :root, with color-scheme light.
 	for _, want := range []string{
-		":root {",
+		":root,\n:root[data-theme=\"light\"] {",
 		"color-scheme: light;",
-		"--bn-bg: #f7f9fc;",
-		"--bn-surface: #ffffff;",
-		"--bn-text: #18202f;",
-		"--bn-muted: #5d687a;",
-		"--bn-border: #cfd8e6;",
-		"--bn-link: #2563eb;",
-		"--bn-focus: #2563eb;",
+		"--bn-bg: #f8f7f3;",
+		"--bn-surface: #fffefa;",
+		"--bn-text: #252a28;",
+		"--bn-muted: #626b62;",
+		"--bn-border: #dedbd2;",
+		"--bn-link: #276650;",
+		"--bn-focus: #276650;",
 		"--bn-scrollbar-thumb: #b9c4d6;",
 		"--bn-scrollbar-thumb-hover: #9aa8c0;",
 	} {
@@ -30,15 +30,15 @@ func TestThemeTokenFoundationContract(t *testing.T) {
 	}
 
 	// System follows prefers-color-scheme: the dark media query re-declares the
-	// dark token values, preserving the original dark palette.
+	// dark token values.
 	darkMedia := cssBlockAfter(t, css, "@media (prefers-color-scheme: dark)")
 	for _, want := range []string{
 		":root {",
 		"color-scheme: dark;",
-		"--bn-bg: #10131a;",
+		"--bn-bg: #171b19;",
 		"--bn-scrollbar-thumb: #3a465c;",
 		"--bn-scrollbar-thumb-hover: #52617a;",
-		"--bn-focus: #5f8fff;",
+		"--bn-focus: #86c6a2;",
 	} {
 		if !strings.Contains(darkMedia, want) {
 			t.Fatalf("system dark theme token CSS missing %q in block:\n%s", want, darkMedia)
@@ -55,6 +55,11 @@ func TestThemeTokenFoundationContract(t *testing.T) {
 			t.Fatalf("explicit theme selector CSS missing %q", want)
 		}
 	}
+
+}
+
+func TestThemeScrollbarAndFocusContract(t *testing.T) {
+	css := readStaticCSS(t)
 
 	// Shared scrollbar styling and the generic focus outline are tokenized.
 	for _, want := range []string{

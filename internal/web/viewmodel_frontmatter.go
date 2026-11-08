@@ -109,11 +109,7 @@ func renderFrontmatterValue(value any, graph *query.Graph) frontmatterValue {
 			Text: "null",
 		}
 	case string:
-		return frontmatterValue{
-			Kind:    "scalar",
-			Text:    typed,
-			Anchors: frontmatterAnchorsForString(typed, graph),
-		}
+		return renderFrontmatterString(typed, graph)
 	case []string:
 		items := make([]frontmatterValue, 0, len(typed))
 		for _, item := range typed {
@@ -210,4 +206,11 @@ func renderFrontmatterMap(typed map[string]any, graph *query.Graph) frontmatterV
 		Kind:  "map",
 		Pairs: pairs,
 	}
+}
+
+func renderFrontmatterString(value string, graph *query.Graph) frontmatterValue {
+	links := wikilink.Parse(strings.TrimSpace(value))
+	anchors := frontmatterAnchorsForString(value, graph)
+	return frontmatterValue{Kind: "scalar", Text: value, Anchors: anchors,
+		LinkOnly: len(links) == 1 && len(anchors) == 1 && links[0].Raw == strings.TrimSpace(value)}
 }

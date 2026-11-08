@@ -30,7 +30,7 @@ test("preview supports keyboard, touch controls, failure recovery and search con
   await trigger.press("Enter");
   const peek = page.locator("#note-peek");
   await expect(peek).toBeVisible();
-  await expect(peek.locator("p")).toHaveText(note.excerpt);
+  await expect(peek.locator("p")).toHaveText(note.excerpt.replace(/\[\[([^\]]+)\]\]/g, "$1"));
   await expectAccessible(page);
   await page.keyboard.press("Escape");
   await expect(peek).toBeHidden();
@@ -129,6 +129,9 @@ test("a dismissed hover preview cannot reappear when its request finishes", asyn
     await route.fulfill({ json: { title: "Late note", excerpt: "This response arrived after dismissal." } });
   });
   await page.goto("/n/Alpha");
+  // The fixture's conflict notice arrives asynchronously and moves the prose.
+  // Hover the settled link, so this tests dismissal rather than pointer drift.
+  await expect(page.locator(".sync-line-review")).toBeVisible();
   await page.locator('[data-note-body] a[href="/n/beta"]').hover();
   await expect(page.locator("#note-peek")).toBeVisible();
   await page.keyboard.press("Escape");

@@ -140,11 +140,15 @@
         <div id="graph-canvas" aria-label="Notes graph" tabindex="0" role="application" aria-describedby="graph-keyboard-help"></div>
         <aside class="graph-sidebar">
           <div class="graph-hover" aria-live="polite">
-          <h2>Node details</h2>
+          <h2>Selected idea</h2>
           <p id="graph-hover-title">Choose a note</p>
+          <p class="graph-note-excerpt" data-graph-note-excerpt>Select a note to read a passage and explore a connection.</p>
+          <div class="graph-note-connection" data-graph-note-connection></div>
+          <details class="graph-note-facts"><summary>Note details</summary>
           <p id="graph-hover-folder"></p>
           <p id="graph-hover-degree"></p>
           <ul id="graph-hover-issues" class="graph-issue-list" aria-label="Node issues" hidden></ul>
+          </details>
           <a id="graph-open-note" class="graph-open-note is-disabled" aria-disabled="true" tabindex="-1">Open note</a>
           </div>
           <label for="graph-node-list">Notes and folders in this view</label>

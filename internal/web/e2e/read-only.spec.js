@@ -78,3 +78,23 @@ test("the read-only Brief browses notes while every document-write door stays cl
   expect(gitRead(manifest.peerVault, "rev-parse", "HEAD").trim()).toBe(beforeHead);
   expect(gitStatus(manifest.peerVault), "read-only browsing changed the served vault").toBe("");
 });
+
+test("replica connection and reference previews offer only reading actions", async ({ page }) => {
+  const before = gitRead(manifest.peerVault, "rev-parse", "HEAD").trim();
+  await page.goto("/n/Alpha");
+  await page.locator("[data-switcher-launch]").click();
+  await expect(page.locator("#switcher-results")).not.toContainText("Create a note");
+  await expect(page.locator("#switcher-results")).not.toContainText("Capture a thought");
+  await page.keyboard.press("Escape");
+  await page.locator('[data-related-card="beta"] .connection-launch').click();
+  await expect(page.locator(".connection-note h3")).toHaveCount(2);
+  await expect(page.locator(".connection-draft")).toHaveCount(0);
+  await page.keyboard.press("Escape");
+  const link = page.locator('[data-note-body] a[href^="/n/beta"]').first();
+  await link.focus();
+  await link.press("Alt+ArrowDown");
+  await page.getByRole("button", { name: "Keep beside this note" }).click();
+  await expect(page.locator(".reference-content")).toContainText("Beta");
+  expect(gitRead(manifest.peerVault, "rev-parse", "HEAD").trim()).toBe(before);
+  expect(gitStatus(manifest.peerVault)).toBe("");
+});

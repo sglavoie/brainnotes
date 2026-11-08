@@ -1,6 +1,6 @@
 import { asRecord } from "./api-internal";
 
-export type NewNoteValues = { title: string; folder: string };
+export type NewNoteValues = { title: string; folder: string; body?: string };
 export type PendingCreation = { signature: string; id: string };
 type Draft = NewNoteValues & { pending?: PendingCreation };
 
@@ -9,6 +9,7 @@ const parseDraft = (raw: string | null): Draft | null => {
   if (!value || typeof value.title !== "string" || typeof value.folder !== "string") return null;
   const pending = asRecord(value.pending);
   const draft: Draft = { title: value.title, folder: value.folder };
+  if (typeof value.body === "string") draft.body = value.body;
   if (pending && typeof pending.signature === "string" && typeof pending.id === "string") {
     draft.pending = { signature: pending.signature, id: pending.id };
   }
@@ -20,7 +21,7 @@ const parseDraft = (raw: string | null): Draft | null => {
 export const newNoteDraft = (form: HTMLElement) => {
   const vault = form.dataset.newNoteVault;
   const suggestion = new URLSearchParams(window.location.search).get("title") || "";
-  const key = `bn.new-note.v1:${JSON.stringify([vault, suggestion])}`;
+  const key = `bn.new-note.v1:${JSON.stringify([vault, suggestion, ...new URLSearchParams(window.location.search).getAll("source")])}`;
   const notice = form.querySelector<HTMLElement>("[data-new-note-draft-status]");
   const report = (text: string): void => { if (notice && notice.textContent !== text) notice.textContent = text; };
   return {

@@ -27,6 +27,8 @@
       <input id="new-note-folder" name="folder" type="text" placeholder="e.g. Projects/Ideas" autocomplete="off" data-folder-suggestions aria-describedby="new-note-folder-hint new-note-destination">
       <p id="new-note-folder-hint">Choose an existing folder or type a new path. Leave blank to save at the top level of your vault. New folders are created as needed.</p>
       <p id="new-note-destination" data-new-note-destination></p>
+      <label for="new-note-body">Your thought (optional)</label>
+      <textarea id="new-note-body" name="body" rows="6" maxlength="20000" placeholder="What would you like to remember?">{{.SuggestedBody}}</textarea>
       <div><button class="bn-button" type="submit">Create and write</button></div>
       <p data-new-note-draft-status role="status"></p>
       <p data-new-note-status role="status" aria-live="polite"></p>
@@ -34,6 +36,7 @@
     </form>
   </main>
   <script src="/static/app.js" defer></script>
+  <script src="/static/workspace-actions.js" defer></script>
 </body>
 </html>
 {{end}}

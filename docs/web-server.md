@@ -335,3 +335,32 @@ Related notes lead with the connection and excerpt. **Why this connection?**
 contains the supporting details; common filler words are omitted from textual
 match explanations. Unconfigured AI appears as an optional setup disclosure.
 Short confirmation and card transitions respect reduced-motion preferences.
+
+## Thinking workspace
+
+Use **Search** in the header or **Ctrl/⌘ + K** from any workspace to find notes,
+recently visited notes in this tab, saved views, and actions. Arrow keys choose a
+result, Enter opens it, and Escape returns focus to your writing. Search covers
+the vault independently of the current Library filters. The editor uses
+**Ctrl/⌘ + Alt + K** for Markdown links; **Ctrl/⌘ + Shift + K** still inserts a wikilink.
+
+**Explore connection** in the Brief, Related Notes, or selected graph note opens
+both notes together. Passages mentioning the other note or connecting note are
+preferred; otherwise the opening prose is shown. The connecting note is a link,
+and each source title opens the full note. Previewing a connection does not
+record an open or change the notes. On writable servers, **Write a thought about
+this connection** opens New note with both source links included. Add a title and
+your thought, then choose **Create and write**. Unfinished writing and an
+unconfirmed creation receipt survive reload in this tab.
+
+A link preview's **Keep beside this note** action keeps a reference visible while
+you read or write. It remains open across navigation in this tab and vault; close
+it with **Close reference** or Escape while focus is inside it. Desktop uses a
+side panel; phones use a panel below the reading area. References show bounded
+plain-text passages, with a full-note link for longer notes. No attachments or
+agents are loaded by a reference preview.
+
+The Brief keeps capture and recommendations first. **Vault overview** expands
+health, pinned notes and recently modified notes. Reading uses a distinct title
+aligned with the prose, compact property presentation, and the existing Quiet
+reading and Book type preferences. Interaction motion respects reduced motion.

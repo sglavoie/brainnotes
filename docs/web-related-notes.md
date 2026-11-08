@@ -19,6 +19,10 @@ If a load fails, **Retry related notes** repeats that mode's failed request,
 including the requested number of results after **Show more**. Existing results
 stay visible while retrying. Switching tabs keeps each mode's recovery separate.
 
+**Explore connection** opens both notes and their passages together. **Useful**
+remains beside it; **More actions** contains Dismiss, Later and Open in editor.
+The connection preview itself writes nothing.
+
 Feedback is directed from the note being viewed to the candidate. **Useful**
 adds a positive ranking signal. **Dismiss** and **Later** suppress that pair in
 all three modes; Later offers tomorrow, next week, or a strict future local date

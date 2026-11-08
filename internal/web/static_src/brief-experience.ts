@@ -11,13 +11,7 @@ export const enhanceBriefCards = (root: ParentNode): void => {
     const card = slot.querySelector<HTMLElement>("[data-brief-card]");
     if (!card) continue;
     enhancePurpose(slot);
-    const excerpt = card.querySelector<HTMLElement>(".brief-card-excerpt");
-    if (excerpt) excerpt.textContent = readableExcerpt(excerpt.textContent || "");
-    const explanation = card.querySelector<HTMLElement>(".brief-card-explanation");
-    if (explanation && slot.dataset.briefSlot !== "connect") {
-      explanation.classList.add("brief-card-context");
-      card.querySelector(".brief-card-title")?.after(explanation);
-    }
+    enhanceCardCopy(card, slot.dataset.briefSlot || "");
     if (slot.dataset.briefSlot === "continue") enhanceResume(card);
   }
 };
@@ -41,4 +35,23 @@ const enhanceResume = (card: HTMLElement): void => {
   if (context) context.textContent = `Last passage in this tab · ${resume.label}`;
   const excerpt = card.querySelector<HTMLElement>(".brief-card-excerpt");
   if (excerpt && resume.excerpt) excerpt.textContent = readableExcerpt(resume.excerpt);
+};
+
+const enhanceCardCopy = (card: HTMLElement, slot: string): void => {
+  enhanceBridgeTitle(card);
+  const excerpt = card.querySelector<HTMLElement>(".brief-card-excerpt");
+  if (excerpt) excerpt.textContent = readableExcerpt(excerpt.textContent || "");
+  if (slot === "connect" || card.querySelector(".brief-card-context")) return;
+  const context = document.createElement("p");
+  context.className = "brief-card-context";
+  context.textContent = slot === "continue" ? "Your latest writing" : "Something to revisit";
+  card.querySelector(".brief-card-title")?.after(context);
+};
+
+const enhanceBridgeTitle = (card: HTMLElement): void => {
+  const bridge = card.dataset.connectionBridge;
+  const connection = card.querySelector(".brief-connection-source");
+  if (bridge && connection?.lastChild?.nodeType === Node.TEXT_NODE) {
+    connection.lastChild.textContent = ` · through ${bridge.replace(/\.md$/i, "").split("/").pop()}`;
+  }
 };

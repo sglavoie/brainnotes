@@ -1,3 +1,4 @@
+import { initFolderSuggestions } from "./folder-suggestions";
 // Loaded only by this workspace; shared reading does not initialize it.
 import { initLibrarySearch } from "./library-search";
 import { initLibrarySearchLink } from "./library-search-link";
@@ -12,3 +13,5 @@ initLibrarySort();
 initOverviewSearchResults();
 initFacets();
 initQueryBar();
+
+if (document.documentElement.dataset.readOnly !== "true") initFolderSuggestions();

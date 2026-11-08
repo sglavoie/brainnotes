@@ -21,7 +21,7 @@ func TestServer_NoteView200(t *testing.T) {
 		t.Fatalf("status: got %d, want %d", resp.StatusCode, http.StatusOK)
 	}
 	for _, want := range []string{
-		`<h1>Source</h1>`,
+		`<h1 class="reading-title">Source</h1>`,
 		`href="/n/target"`,
 		`<main class="note-main">`,
 		`data-note-back-results hidden>Back to results</a>`,

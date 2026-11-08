@@ -1,3 +1,4 @@
+import { keepReference } from "./side-reference";
 import { readableExcerpt } from "./note-excerpt";
 
 const linkSelector = '[data-note-body] a[href^="/n/"], .backlink-summary a[href^="/n/"], .related-card-title a, .overview-result-link[href^="/n/"]';
@@ -29,7 +30,17 @@ class NotePeek {
     this.closeButton.className = "bn-button";
     this.closeButton.textContent = "Close preview";
     this.closeButton.addEventListener("click", () => this.close(true));
-    this.panel.append(this.title, this.excerpt, this.openLink, this.closeButton);
+    const keep = document.createElement("button");
+    keep.type = "button";
+    keep.className = "bn-button";
+    keep.textContent = "Keep beside this note";
+    keep.addEventListener("click", () => {
+      const link = this.active;
+      if (!link) return;
+      this.close(false);
+      keepReference(link.href, link);
+    });
+    this.panel.append(this.title, this.excerpt, this.openLink, keep, this.closeButton);
     document.body.append(this.panel);
     this.panel.addEventListener("pointerenter", () => window.clearTimeout(this.timer));
     this.panel.addEventListener("pointerleave", () => this.scheduleClose());

@@ -293,7 +293,7 @@
             <h3>{{.Connect.Label}}</h3>
           </div>
           {{if .Connect.Card}}
-            <div class="brief-card" data-brief-card data-brief-card-id="{{.Connect.Card.ID}}">
+            <div class="brief-card" data-brief-card data-brief-card-id="{{.Connect.Card.ID}}" data-connection-bridge="{{.Connect.Card.Bridge}}">
               <h4 class="brief-card-title">
                 {{if .Connect.Card.CandidatePath}}
                   <a href="{{.Connect.Card.CandidatePath}}">{{.Connect.Card.CandidateTitle}}</a>
