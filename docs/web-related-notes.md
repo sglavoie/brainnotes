@@ -8,8 +8,11 @@ lazy until their tabs are activated. **Balanced** is the broad mix from
 `bn related`, **Rediscover** limits the set to older or not-recently-opened graph
 neighbors, and **Connect** favors text- or metadata-supported notes that are not
 already directly linked. Each tab expands independently in groups of five to a
-hard cap of twenty. Cards show the candidate path, a bounded prose-first excerpt,
-relationship, optional bridge, and up to three human reasons. Numeric scores and
+hard cap of twenty. Cards lead with the title, relationship, a bounded prose-first
+excerpt, and an optional bridge. The path and up to three human reasons are
+available under **Why this connection?**. Common filler words are omitted from
+text-match explanations. Preview a candidate before opening it with the eye
+button, or hover over its title. Numeric scores and
 ranking weights are intentionally not sent to or rendered by the browser.
 
 If a load fails, **Retry related notes** repeats that mode's failed request,

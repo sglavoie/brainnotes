@@ -19,6 +19,7 @@ import (
 type SelectionCorpusOptions struct {
 	MetadataProperties []string
 	ExcludeFolders     []string
+	ExcludePaths       []string
 	ExcludeTypes       []string
 }
 
@@ -108,6 +109,10 @@ func BuildSelectionCorpus(
 		return SelectionCorpus{}, err
 	}
 	typeExclusions := normalizeTypeExclusions(options.ExcludeTypes)
+	pathExclusions := make(map[string]bool, len(options.ExcludePaths))
+	for _, path := range options.ExcludePaths {
+		pathExclusions[filepath.ToSlash(filepath.Clean(path))] = true
+	}
 
 	documents, err := recall.ExtractCorpus(absRoot, notes, recall.ExtractOptions{
 		MetadataProperties: options.MetadataProperties,
@@ -116,34 +121,23 @@ func BuildSelectionCorpus(
 		return SelectionCorpus{}, err
 	}
 
-	sourceByPath := make(map[string]selectionSourceNote, len(notes))
-	for _, note := range notes {
-		if note == nil {
-			continue
-		}
-		relPath, err := selectionRelativePath(absRoot, note.Path)
-		if err != nil {
-			return SelectionCorpus{}, err
-		}
-		info, err := os.Stat(note.Path)
-		if err != nil {
-			return SelectionCorpus{}, fmt.Errorf("brief: stat note %q: %w", note.Path, err)
-		}
-		typeValues, err := noteTypeValues(note)
-		if err != nil {
-			return SelectionCorpus{}, err
-		}
-		sourceByPath[relPath] = selectionSourceNote{
-			note:       note,
-			modifiedAt: info.ModTime().UTC(),
-			typeValues: typeValues,
-		}
+	sourceByPath, err := selectionSources(absRoot, notes)
+	if err != nil {
+		return SelectionCorpus{}, err
 	}
 
+	return selectCorpusDocuments(documents, sourceByPath, graph, folderExclusions, pathExclusions, typeExclusions)
+}
+
+func selectCorpusDocuments(documents []recall.Document, sourceByPath map[string]selectionSourceNote, graph *query.Graph,
+	folderExclusions []string, pathExclusions map[string]bool, typeExclusions map[string]struct{}) (SelectionCorpus, error) {
 	selectedDocuments := make([]recall.Document, 0, len(documents))
 	notesOut := make([]CorpusNote, 0, len(documents))
 	excerpts := make(map[string]string, len(documents))
 	for _, document := range documents {
+		if pathExclusions[document.Path] {
+			continue
+		}
 		source, ok := sourceByPath[document.Path]
 		if !ok {
 			return SelectionCorpus{}, fmt.Errorf("brief: document %q missing source note", document.Path)
@@ -158,10 +152,7 @@ func BuildSelectionCorpus(
 			continue
 		}
 
-		createdAt := document.CreatedAt
-		if !createdAt.IsZero() {
-			createdAt = createdAt.UTC()
-		}
+		createdAt := document.CreatedAt.UTC()
 		inbound := 0
 		outbound := 0
 		if graph != nil {
@@ -197,6 +188,34 @@ func BuildSelectionCorpus(
 		graph:     graph,
 		excerpts:  excerpts,
 	}, nil
+}
+
+func selectionSources(absRoot string, notes []*vault.Note) (map[string]selectionSourceNote, error) {
+	sourceByPath := make(map[string]selectionSourceNote, len(notes))
+	for _, note := range notes {
+		if note == nil {
+			continue
+		}
+		relPath, err := selectionRelativePath(absRoot, note.Path)
+		if err != nil {
+			return nil, err
+		}
+		info, err := os.Stat(note.Path)
+		if err != nil {
+			return nil, fmt.Errorf("brief: stat note %q: %w", note.Path, err)
+		}
+		typeValues, err := noteTypeValues(note)
+		if err != nil {
+			return nil, err
+		}
+		sourceByPath[relPath] = selectionSourceNote{
+			note:       note,
+			modifiedAt: info.ModTime().UTC(),
+			typeValues: typeValues,
+		}
+	}
+
+	return sourceByPath, nil
 }
 
 // NewDeterministicSelector builds a selector bound to a prepared selection corpus.

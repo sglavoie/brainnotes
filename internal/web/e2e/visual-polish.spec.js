@@ -79,6 +79,7 @@ for (const [theme, width] of [["light", 1280], ["dark", 390], ["light", 390], ["
       await page.locator("#measurements-and-uncertainties").evaluate((heading) => heading.scrollIntoView());
       await snapshot(page, "reading");
     });
+    experienceVisuals(snapshot, width);
     test("editor and exact Undo confirmation", async ({ page }) => {
       await page.goto("/edit?key=Survey");
       await expect(page.locator(SURFACE)).toContainText("The water has fallen");
@@ -122,3 +123,24 @@ test("short-screen editor opens on prose with long frontmatter and an attachment
   await page.evaluate(() => document.fonts.ready);
   await expect(page).toHaveScreenshot("editor-short-320.png", { animations: "disabled", caret: "hide", maxDiffPixelRatio: 0.001 });
 });
+
+function experienceVisuals(snapshot, width) {
+  test("quiet reading, capture and note preview", async ({ page }) => {
+    await page.goto("/n/Survey");
+    if (width < 700) await page.locator(".note-actions-more > summary").click();
+    await page.locator("button[data-reading-mode]").click();
+    await page.locator("button[data-reading-type]").click();
+    if (width < 700) await page.locator(".note-actions-more > summary").click();
+    await snapshot(page, "quiet-reading");
+    await page.locator("[data-capture-launch]").click();
+    await page.locator("[data-capture-dialog] [data-capture-input]").fill("An idea to come back to: compare the river sketches.");
+    await snapshot(page, "global-capture");
+    await page.keyboard.press("Escape");
+    await page.goto("/library?q=field&status=reference&sort=title");
+    const preview = page.locator(".note-peek-trigger").first();
+    await preview.focus();
+    await preview.press("Enter");
+    await expect(page.locator("#note-peek p")).not.toHaveText("Loading note…");
+    await snapshot(page, "note-peek");
+  });
+}

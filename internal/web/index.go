@@ -204,12 +204,12 @@ func (s *Server) buildRootPageData(snapshot vaultSnapshot) (rootPageData, error)
 		slotsByKind[slot.Slot] = slot
 	}
 	continueSlot := rootBriefSlotViewFor(brief.SlotContinue, slotsByKind[brief.SlotContinue],
-		editorConfigured, editorStatusMsg, insightConfigured, insightStatusMsg, stateUnreadable)
+		true, "", insightConfigured, insightStatusMsg, stateUnreadable)
 	rediscoverSlot := rootBriefSlotViewFor(
 		brief.SlotRediscover,
 		slotsByKind[brief.SlotRediscover],
-		editorConfigured,
-		editorStatusMsg,
+		true,
+		"",
 		insightConfigured,
 		insightStatusMsg,
 		stateUnreadable,
@@ -217,8 +217,8 @@ func (s *Server) buildRootPageData(snapshot vaultSnapshot) (rootPageData, error)
 	connectSlot := rootBriefSlotViewFor(
 		brief.SlotConnect,
 		slotsByKind[brief.SlotConnect],
-		editorConfigured,
-		editorStatusMsg,
+		true,
+		"",
 		insightConfigured,
 		insightStatusMsg,
 		stateUnreadable,

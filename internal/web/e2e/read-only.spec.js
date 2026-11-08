@@ -19,6 +19,10 @@ test("the read-only Brief browses notes while every document-write door stays cl
   await expect(page.locator("[data-brief-root]")).toBeVisible();
   await expect(page.locator(".brief-ai").first()).toBeHidden();
   expect(await page.evaluate(() => document.documentElement.dataset.readOnly)).toBe("true");
+  await expect(page.locator("[data-capture-launch], [data-capture-dialog]")).toHaveCount(0);
+  const peek = await request.get("/api/note/peek?key=Alpha");
+  expect(peek.status()).toBe(200);
+  expect((await peek.json()).excerpt).toContain("Alpha body");
   await expect(page.getByRole("link", { name: "Settings", exact: true })).toHaveCount(0);
 
   const open = page.locator("[data-brief-action-open]").first();

@@ -264,32 +264,36 @@ func metadataValuesByProperty(values []recall.MetadataValue) map[string][]string
 	return out
 }
 
-// RepresentativeExcerpt returns the first non-empty prose, heading, or table
-// block in that order, falling back to the title. The result is bounded to the
+// RepresentativeExcerpt prefers a substantive prose passage over short list
+// introductions, then falls back to prose, heading, table or title. The result is bounded to the
 // Daily Brief card excerpt limit without splitting Unicode code points.
 func RepresentativeExcerpt(document recall.Document) string {
-	pick := func(kind recall.BlockKind) string {
-		for _, block := range document.Blocks {
-			if block.Kind != kind {
-				continue
-			}
-			text := strings.TrimSpace(block.Text)
-			if text != "" {
-				return BoundCardExcerpt(text)
-			}
+	for _, block := range document.Blocks {
+		text := strings.TrimSpace(block.Text)
+		if block.Kind == recall.BlockProse && len([]rune(text)) >= 40 && !strings.HasSuffix(text, ":") {
+			return BoundCardExcerpt(text)
 		}
-		return ""
 	}
-	if excerpt := pick(recall.BlockProse); excerpt != "" {
+
+	if excerpt := firstExcerptOfKind(document, recall.BlockProse); excerpt != "" {
 		return excerpt
 	}
-	if excerpt := pick(recall.BlockHeading); excerpt != "" {
+	if excerpt := firstExcerptOfKind(document, recall.BlockHeading); excerpt != "" {
 		return excerpt
 	}
-	if excerpt := pick(recall.BlockTable); excerpt != "" {
+	if excerpt := firstExcerptOfKind(document, recall.BlockTable); excerpt != "" {
 		return excerpt
 	}
 	return BoundCardExcerpt(document.Title)
+}
+
+func firstExcerptOfKind(document recall.Document, kind recall.BlockKind) string {
+	for _, block := range document.Blocks {
+		if block.Kind == kind && strings.TrimSpace(block.Text) != "" {
+			return BoundCardExcerpt(block.Text)
+		}
+	}
+	return ""
 }
 
 func sortRediscoverCandidates(candidates []rediscoverCandidate) {

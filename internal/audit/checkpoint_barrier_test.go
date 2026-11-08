@@ -111,7 +111,7 @@ var barrierDoors = []barrierDoor{
 		why:   "block, watch, and push retry records mutate operational Git state outside the safety lock",
 	},
 	{
-		file:  "internal/vaultgit/manager.go",
+		file:  "internal/vaultgit/manager_autosave.go",
 		recv:  "Manager",
 		fn:    "ExternalCommitDue",
 		calls: joinsBarrier,

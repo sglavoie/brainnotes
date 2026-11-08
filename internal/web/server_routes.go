@@ -14,6 +14,7 @@ func (srv *Server) routes(staticRoot fs.FS) http.Handler {
 	staticHandler := http.StripPrefix("/static/", http.FileServer(http.FS(staticRoot)))
 	mux.Handle("/static/", noCacheStatic(staticHandler))
 	mux.HandleFunc(noteRoutePrefix, srv.handleNote)
+	mux.HandleFunc("/api/note/peek", srv.handleNotePeek)
 	mux.HandleFunc("/broken", srv.handleBroken)
 	mux.HandleFunc("/api/facets", srv.handleFacets)
 	mux.HandleFunc("/api/ready", srv.handleReady)

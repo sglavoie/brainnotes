@@ -14,7 +14,7 @@ func buildReasons(
 	recall recallMatch,
 ) []Reason {
 	reasons := make([]Reason, 0, 4)
-	if lexical.Score > 0 {
+	if lexical.Score > 0 && lexicalReasonDetail(lexical.Terms) != "" {
 		reasons = append(reasons, Reason{
 			Kind:         ReasonText,
 			Contribution: lexical.Score * TextScoreWeight,
@@ -74,8 +74,17 @@ func reasonOrder(kind ReasonKind) int {
 
 func lexicalReasonDetail(terms []TermContribution) string {
 	values := make([]string, 0, min(3, len(terms)))
-	for _, term := range terms[:min(3, len(terms))] {
+	for _, term := range terms {
+		if strings.Contains(" a an and are as at be been but by for from had has have he her his i in is it its me my not of on or our she so than that the their them there these they this to was we were which who will with you your ", " "+strings.ToLower(term.Term)+" ") {
+			continue
+		}
 		values = append(values, term.Term)
+		if len(values) == 3 {
+			break
+		}
+	}
+	if len(values) == 0 {
+		return ""
 	}
 	return "shared terms: " + strings.Join(values, ", ")
 }

@@ -1,0 +1,29 @@
+{{define "captureDialog"}}
+<dialog class="capture-dialog" data-capture-dialog aria-labelledby="capture-dialog-heading">
+  <header class="capture-dialog-header">
+    <h2 id="capture-dialog-heading">Keep that thought</h2>
+    <button class="bn-button" type="button" data-capture-close aria-label="Close capture">Close</button>
+  </header>
+  <div data-capture-dialog-content>
+    <section data-capture-root data-capture-csrf="{{.CSRFToken}}" data-capture-vault="{{.VaultID}}"
+      data-capture-target="{{.CaptureRelPath}}" data-capture-heading="{{.CaptureHeading}}"
+      data-capture-configured="{{.CaptureConfigured}}">
+      {{if .CaptureConfigured}}
+      <p class="capture-hint">To {{.CaptureRelPath}}</p>
+      {{else}}
+      <p><a href="/settings#setting-capture-inbox_note">Set up your capture inbox</a> to keep quick thoughts here.</p>
+      {{end}}
+      <label class="visually-hidden" for="global-capture-input">Capture a thought</label>
+      <textarea id="global-capture-input" class="capture-input" data-capture-input rows="4" maxlength="2000"
+        placeholder="Capture a thought…" aria-describedby="global-capture-hint" {{if not .CaptureConfigured}}disabled{{end}}></textarea>
+      <p class="capture-hint" id="global-capture-hint">Type [[ to link a note. Ctrl/⌘ + Enter to capture. Escape keeps your draft.</p>
+      <button class="bn-button bn-primary" data-capture-submit type="button" {{if not .CaptureConfigured}}disabled{{end}}>Capture</button>
+      <p data-capture-status class="capture-status" role="status" aria-live="polite"></p>
+      <div class="bn-live-region" role="status" aria-live="polite"><p data-capture-draft-status hidden></p></div>
+      <a data-capture-view-inbox hidden>Open inbox</a>
+      <ul class="capture-recent" data-capture-recent aria-label="Captured in this session"></ul>
+    </section>
+  </div>
+</dialog>
+<div class="capture-notice" data-capture-notice role="status" aria-live="polite"></div>
+{{end}}

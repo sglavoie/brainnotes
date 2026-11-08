@@ -56,26 +56,27 @@ test("Library owns one results list and shows readable highlighted excerpts", as
   await expect(page.getByRole("heading", { name: "Search results", exact: true })).toBeFocused();
 });
 
-test("Brief puts capture before notes and keeps reasons and AI behind disclosures after Another", async ({ page }) => {
+test("Brief shows useful context and keeps detailed reasons disclosed after Another", async ({ page }) => {
   await page.goto("/");
   const card = page.locator('[data-brief-slot="continue"] [data-brief-card]');
   await expect(card).toBeVisible();
   const firstID = await card.getAttribute("data-brief-card-id");
-  await expect(card.locator(".brief-card-explanation")).toBeHidden();
+  await expect(card.locator(".brief-card-explanation")).toBeVisible();
+  await expect(card.locator(".brief-card-path")).toBeHidden();
   await expect(card.locator("[data-brief-insight-prompt]")).toBeHidden();
   expect((await card.boundingBox()).y).toBeLessThan((await page.locator(".brief-activity").boundingBox()).y);
   expect((await page.locator(".capture-panel").boundingBox()).y).toBeLessThan((await card.boundingBox()).y);
   await card.locator(".brief-card-why > summary").focus();
   await page.keyboard.press("Enter");
-  await expect(card.locator(".brief-card-explanation")).toBeVisible();
-  await card.locator(".brief-ai > summary").click();
-  await expect(card.locator("[data-brief-insight-prompt]")).toBeVisible();
+  await expect(card.locator(".brief-card-path")).toBeVisible();
+  await expect(card.locator(".brief-ai")).toBeHidden();
   await card.locator("[data-brief-action-another]").click();
   await expect(card).not.toHaveAttribute("data-brief-card-id", firstID);
-  await expect(card.locator(".brief-card-explanation")).toBeHidden();
+  await expect(card.locator(".brief-card-explanation")).toBeVisible();
+  await expect(card.locator(".brief-card-path")).toBeHidden();
   await expect(card.locator("[data-brief-insight-prompt]")).toBeHidden();
   await card.locator(".brief-card-why > summary").click();
-  await expect(card.locator(".brief-card-explanation")).toBeVisible();
+  await expect(card.locator(".brief-card-path")).toBeVisible();
 });
 
 test("uncertain save keeps the draft and offers safe retry with distinct success feedback", async ({ page }) => {

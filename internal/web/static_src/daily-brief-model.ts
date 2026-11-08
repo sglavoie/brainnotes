@@ -69,6 +69,10 @@ export const unavailableTitle = (slot: BriefSlotKind): string => {
 
 export const relationshipLabel = (relationship: string): string => {
   switch ((relationship || "").toLowerCase()) {
+    case "direct":
+      return "Direct link";
+    case "two-hop":
+      return "Two links away";
     case "inbound":
       return "Inbound link";
     case "outbound":

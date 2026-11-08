@@ -1,4 +1,5 @@
 import { EditorView } from "@codemirror/view";
+import { rememberNoteResume } from "./note-resume";
 
 export const bodyStartLine = (text: string): number => {
   const header = /^(?:\uFEFF)?---[ \t]*\r?\n[\s\S]*?\r?\n(?:---|\.\.\.)[ \t]*(?:\r?\n|$)/.exec(text);
@@ -63,6 +64,17 @@ export const bindSourcePosition = (view: EditorView, host: HTMLElement): (() => 
   };
   preview.addEventListener("scroll", remember);
   view.scrollDOM.addEventListener("scroll", rememberEditor);
+  const rememberSession = (): void => {
+    const cursor = view.state.doc.lineAt(view.state.selection.main.head);
+    const before = view.state.doc.sliceString(0, cursor.from);
+    const headings = [...before.matchAll(/^#{1,6}\s+(.+)$/gm)];
+    rememberNoteResume(panel?.dataset.sourceKey || "", {
+      sourceLine: Math.max(1, cursor.number - bodyLine() + 1),
+      label: headings.at(-1)?.[1] || "Your last writing position", excerpt: cursor.text,
+      heading: "", offset: 0, ratio: 0,
+    });
+  };
+  window.addEventListener("pagehide", rememberSession);
   const observer = new MutationObserver(() => {
     const next = panes.dataset.sourceActive;
     if (next !== active) {
@@ -85,6 +97,7 @@ export const bindSourcePosition = (view: EditorView, host: HTMLElement): (() => 
     revealEditor(passage);
   }
   return () => {
+    window.removeEventListener("pagehide", rememberSession);
     observer.disconnect(); cancelAnimationFrame(frame);
     preview.removeEventListener("scroll", remember);
     view.scrollDOM.removeEventListener("scroll", rememberEditor);

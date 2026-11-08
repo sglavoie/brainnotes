@@ -17,5 +17,18 @@ server local".
 
 ## Related documentation
 
+The Brief UI explicitly requests `target=browser` for its existing `open` action.
+This records the same activity as Open, then returns `/edit?key=…` for Continue
+when `documentWrites` is available, or a rendered `/n/…` route otherwise. API
+callers omitting the target retain the existing editor-launch behavior. The
+frontend constructs the editor route from its key; other Open consumers retain
+their `/n/`-only destination guard.
+
+`GET /api/note/peek?key=…` is allowlisted for replicas. It resolves only notes in
+the served snapshot and returns a bounded plain-text excerpt, title, and note
+route. It records no activity or recall state, and inherits private/no-store
+headers. Global capture is rendered only when `documentWrites` is available and
+uses the existing CSRF-protected, receipt-backed `/api/capture` operation.
+
 - [Web write classes](web-write-classes.md) — what a mutating route must do once the mode has allowed it.
 - [Locking](locking.md) — the storage-location guard and transaction model underneath every write.

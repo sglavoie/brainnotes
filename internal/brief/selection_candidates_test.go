@@ -41,6 +41,10 @@ func TestRepresentativeExcerptSelectionAndBounds(t *testing.T) {
 			want: "Table",
 		},
 		{name: "title fallback", document: recall.Document{Title: " Title "}, want: "Title"},
+		{name: "skip a list introduction", document: recall.Document{Blocks: []recall.MarkdownBlock{
+			{Kind: recall.BlockProse, Text: "Every Sunday:"},
+			{Kind: recall.BlockProse, Text: "Review the ideas collected this week and choose one to develop further."},
+		}}, want: "Review the ideas collected this week and choose one to develop further."},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {

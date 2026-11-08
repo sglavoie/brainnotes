@@ -115,6 +115,7 @@ class Capture {
     // Capture returns to the input even from Capture itself, ready for the next line.
     const returnFocus = captureFocusReturn(this.input, [this.submit]);
     this.setStatus("Capturing…", "is-loading");
+    let confirmed: CaptureResult | undefined;
     const waiting = window.setTimeout(() =>
       this.setStatus("Waiting for capture confirmation… Your text is kept here.", "is-loading"), 500);
     try {
@@ -134,6 +135,7 @@ class Capture {
         return;
       }
       this.captured(result);
+      confirmed = result;
     } catch {
       this.unconfirmed();
     } finally {
@@ -142,6 +144,7 @@ class Capture {
       this.submit.disabled = false;
       this.updateCount();
       returnFocus();
+      if (confirmed) this.root.dispatchEvent(new CustomEvent("bn:capture-complete", { bubbles: true, detail: confirmed }));
     }
   }
 }

@@ -35,7 +35,9 @@ test("reading page stays within its transfer budget", async ({ page, context }, 
   expect(scripts.map((entry) => entry.path)).toEqual(["/static/app.js"]);
   expect(stylesheets.map((entry) => entry.path)).toEqual(["/static/app.css"]);
   expect(stylesheets[0].bytes).toBeGreaterThan(0);
-  expect(stylesheets[0].bytes).toBeLessThan(220_000);
+  // Capture, note previews, and reading preferences share this uncompressed
+  // stylesheet. Keep the overall 400 KB page budget below unchanged.
+  expect(stylesheets[0].bytes).toBeLessThan(230_000);
   expect(navigationBytes).toBeGreaterThan(0);
   expect(totalTransferBytes).toBeLessThan(400_000);
   expect(firstContentfulPaintMilliseconds).not.toBeNull();

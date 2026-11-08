@@ -11,9 +11,12 @@
 {{if readOnly}}<script>document.documentElement.dataset.readOnly = "true";</script>{{end}}
 {{if not processLaunch}}<script>document.documentElement.dataset.noProcessLaunch = "true";</script>{{end}}
 <script>
+  document.documentElement.dataset.vaultId = {{vaultID}};
   (function () {
     try {
       var stored = window.localStorage.getItem("bn.theme");
+      document.documentElement.dataset.readingMode = window.localStorage.getItem("bn.reading-mode") || "";
+      document.documentElement.dataset.readingType = window.localStorage.getItem("bn.reading-type") || "";
       if (stored === "light" || stored === "dark") {
         document.documentElement.dataset.theme = stored;
       } else {
@@ -115,7 +118,6 @@
     <a href="/library"{{if eq . "library"}} aria-current="page"{{end}}>Library</a>
     <a href="/pinned"{{if eq . "pinned"}} aria-current="page"{{end}}>Pinned</a>
     <a href="/graph"{{if eq . "graph"}} aria-current="page"{{end}}>Graph</a>
-    {{if ne . "library"}}<a href="/library" class="desktop-search-link">Search notes</a>{{end}}
   </nav>
 {{end}}
 
@@ -123,6 +125,7 @@
   <div class="focused-workspace-tools">
   {{template "desktopWorkspaceNav" .}}
   {{if ne . "library"}}{{template "mobileSearchShortcut" .}}{{end}}
+  {{if not readOnly}}<button type="button" class="bn-button capture-launch" data-capture-launch title="Capture a thought (Ctrl/⌘ + Shift + Space)" aria-keyshortcuts="Control+Shift+Space Meta+Shift+Space" aria-label="Capture"><span class="capture-launch-label">Capture</span><span class="capture-launch-icon" aria-hidden="true">✎</span></button>{{end}}
   {{if and (not readOnly) (ne . "new")}}<a class="bn-button new-note-action{{if and (ne . "library") (ne . "brief")}} bn-secondary{{end}}" href="/new" aria-label="New note" title="New note"><span class="new-note-label">New note</span><span class="new-note-symbol" aria-hidden="true">+</span></a>{{end}}
   <details class="source-editor-workspace">
     <summary>Workspace</summary>
@@ -135,6 +138,7 @@
     </div>
   </details>
   </div>
+  {{if not readOnly}}{{template "captureDialog" captureContext}}{{end}}
 {{end}}
 
 {{define "mobileSearchShortcut"}}

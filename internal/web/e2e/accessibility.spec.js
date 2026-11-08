@@ -83,12 +83,12 @@ test("search failure and pending write reminder remain accessible", async ({ pag
   await expectNoAxeViolations(page);
 });
 
-test("main destinations and Search are directly available on desktop", async ({ page }) => {
+test("main destinations are directly available on desktop and mobile keeps Search", async ({ page }) => {
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.goto("/n/Reading");
   const nav = page.getByRole("navigation", { name: "Main destinations" });
   await expect(nav).toBeVisible();
-  await expect(nav.getByRole("link", { name: "Search notes", exact: true })).toHaveAttribute("href", "/library");
+  await expect(nav.getByRole("link", { name: "Library", exact: true })).toHaveAttribute("href", "/library");
   await expect(nav.getByRole("link", { name: "Brief" })).toBeVisible();
   await page.locator(".source-editor-workspace > summary").click();
   await expect(nav).toBeHidden();

@@ -96,6 +96,10 @@
           </button>
         </div>
 
+        <div class="reading-controls" role="group" aria-label="Reading preferences">
+          <button type="button" class="bn-button" data-reading-mode aria-pressed="false">Quiet reading</button>
+          <button type="button" class="bn-button" data-reading-type aria-pressed="false">Book type</button>
+        </div>
         <details class="note-actions-more">
           <summary class="bn-button copy-button">Actions</summary>
           <div class="note-more-options">
@@ -294,6 +298,7 @@
             <div id="bn:note-body" class="note-body" tabindex="-1" data-note-body data-note-context-links>{{.BodyHTML}}</div>
           </section>
 
+          {{if .InsightConfigured}}
           <section
             class="panel note-insight"
             data-note-insight
@@ -327,6 +332,13 @@
             </section>
           </section>
 
+          {{else}}
+          <details class="note-optional-ai">
+            <summary>Optional: Ask AI</summary>
+            <p>{{.InsightStatusMsg}}</p>
+            {{if processLaunch}}<a href="/settings">Set up AI in Settings</a>{{end}}
+          </details>
+          {{end}}
           <section
             class="panel related-notes"
             data-related-notes

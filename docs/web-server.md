@@ -292,10 +292,46 @@ the input and Capture button visible on entry on phones. Keyboard and wikilink
 hints appear while the capture form has focus.
 
 Recommended notes follow capture; maintenance stays farther down the page.
-Each card shows its title, excerpt, and **Another** action. The other action is
-**Open in editor** on local servers and **Read note** on hosted servers and
-read-only replicas. A note title always opens the browser reader, even when an
-external editor is not configured. **Why this note?**
+Each card shows its title, excerpt, and **Another** action. **Continue** offers
+**Resume writing** in the browser on writable servers, or **Read note** on a
+replica. **Rediscover** offers **Revisit note**; **Connect** names both notes and
+their relationship, with **Explore connection** opening the candidate. These
+actions work without an external editor. A note title opens the browser reader.
+The configured capture inbox is excluded from Brief recommendations. Excerpts
+prefer substantive passages over short introductions such as “Every Sunday:”.
+**Why this note?**
 reveals its location and recommendation reasons; **Ask AI** expands the prompt.
 Both start closed again when Another loads a replacement. Activity counts and
 optional tool setup follow the recommendations.
+
+The Continue card can show the last passage visited in this browser tab. Resuming
+writing returns to that source line. These bounded hints are scoped to the vault
+and tab; they are separate from draft recovery and do not change the note or its
+recommendation ranking. If browser storage is unavailable, the ordinary excerpt
+and navigation still work.
+
+## Reading and quick interactions
+
+**Quiet reading** hides the metadata, contents, and secondary reading panels;
+**Book type** uses a serif face for prose. Both preferences persist in this browser.
+On phones, these controls live under **Actions** to leave room for the note.
+A leading heading that repeats the page title is visually suppressed without
+editing the Markdown. Printing retains a single title and the note body.
+
+Hover deliberately over a note link to preview an excerpt. The eye button also
+opens the preview by touch or keyboard; **Alt + Down** works on a focused link.
+**Escape** closes it, and **Open note** preserves the originating Library search.
+Previews are available in note bodies, backlinks, related notes, and Library
+results. They do not record an open or send content to an agent.
+
+On writable servers, **Capture** or **Ctrl/⌘ + Shift + Space** opens a small
+capture dialog over the current workspace, including unsaved writing. Escape
+keeps the capture draft; **Ctrl/⌘ + Enter** submits it. A confirmed capture closes
+the dialog, restores focus, and offers an inbox link. Failed or unconfirmed
+captures retain the text and the existing safe retry behavior. On the Brief, the
+dialog uses the same live form as the inline capture area.
+
+Related notes lead with the connection and excerpt. **Why this connection?**
+contains the supporting details; common filler words are omitted from textual
+match explanations. Unconfigured AI appears as an optional setup disclosure.
+Short confirmation and card transitions respect reduced-motion preferences.

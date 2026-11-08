@@ -177,14 +177,17 @@ func NewServer(cfg *config.Config, v *vault.Vault, opts Options) (*Server, error
 		return nil, err
 	}
 	caps := capabilitiesFor(mode)
+	var srv *Server
 
 	// The two template predicates are capabilities, not modes: a template asks
 	// what it may render, so a fourth profile never needs a template edit.
 	tpl, err := template.New("").Funcs(template.FuncMap{
-		"readOnly":      func() bool { return !caps.documentWrites },
-		"processLaunch": func() bool { return caps.processLaunch },
-		"browserOpen":   func() bool { return caps.browserOpen },
-		"serveMode":     func() string { return string(caps.mode) },
+		"readOnly":       func() bool { return !caps.documentWrites },
+		"processLaunch":  func() bool { return caps.processLaunch },
+		"browserOpen":    func() bool { return caps.browserOpen },
+		"serveMode":      func() string { return string(caps.mode) },
+		"captureContext": func() rootPageData { return srv.captureContext() },
+		"vaultID":        func() string { return srv.vaultID },
 	}).ParseFS(embeddedFiles, "templates/*.html")
 	if err != nil {
 		return nil, fmt.Errorf("web: parse templates: %w", err)
@@ -221,7 +224,7 @@ func NewServer(cfg *config.Config, v *vault.Vault, opts Options) (*Server, error
 		return nil, fmt.Errorf("web: vault git safety: %w", err)
 	}
 
-	srv := &Server{
+	srv = &Server{
 		caps:              caps,
 		rootRedactor:      rootRedactor,
 		replicaStatusFile: opts.ReplicaStatusFile,

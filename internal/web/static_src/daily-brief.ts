@@ -1,4 +1,5 @@
 import { confirmAction } from "./action-confirm";
+import { briefOpenLabel, enhanceBriefCards } from "./brief-experience";
 import {
   type BriefItemResult,
   type BriefRollingActivity,
@@ -121,6 +122,7 @@ const setSlotBusy = (root: HTMLElement, slot: BriefSlotKind, busy: boolean): voi
     return;
   }
   slotEl.setAttribute("aria-busy", busy ? "true" : "false");
+  if (busy) slotEl.style.minHeight = `${slotEl.getBoundingClientRect().height}px`;
   slotEl.classList.toggle("is-busy", busy);
   for (const button of queryAllElements(slotEl, "[data-brief-action]", HTMLButtonElement)) {
     const defaultDisabled = button.getAttribute("data-brief-disabled-default") === "true";
@@ -150,12 +152,19 @@ const markCardOpened = (root: HTMLElement, slot: BriefSlotKind, cardID: string):
   openButton.classList.add("is-opened");
 };
 
+const enhanceReplacedSlot = (root: HTMLElement, slot: HTMLElement, insightEnabled: boolean): void => {
+  if (!root.hasAttribute("data-brief-browser-primary")) return;
+  enhanceBriefCards(root);
+  const ai = slot.querySelector<HTMLElement>(".brief-ai");
+  if (ai) ai.hidden = !insightEnabled;
+};
+
 const replaceSlotContent = (ctx: BriefActionContext, slotResult: BriefSlotResult): void => {
   const { root, config, inflightInsight, openedCards, markCardOpened } = ctx;
   const readAvailability = (): SlotAvailability => ({
     stateUnreadable: root.querySelector("[data-brief-state-unreadable]") !== null,
-    openLabel: root.dataset.briefOpenLabel || "Open in editor",
-    editorConfigured: root.querySelector("[data-brief-editor-unconfigured]") === null,
+    openLabel: root.hasAttribute("data-brief-browser-primary") ? briefOpenLabel(slotResult.Slot) : root.dataset.briefOpenLabel || "Open in editor",
+    editorConfigured: root.hasAttribute("data-brief-browser-primary") || root.querySelector("[data-brief-editor-unconfigured]") === null,
     insightConfigured: config.insightEnabled,
   });
   const slot = normalizeSlot(slotResult.Slot);
@@ -179,6 +188,9 @@ const replaceSlotContent = (ctx: BriefActionContext, slotResult: BriefSlotResult
 
   if (slotResult.Card) {
     slotEl.appendChild(renderCard(root.ownerDocument, readAvailability(), slot, slotResult.Card));
+    enhanceReplacedSlot(root, slotEl, config.insightEnabled);
+    slotEl.classList.remove("is-replaced");
+    window.requestAnimationFrame(() => slotEl.classList.add("is-replaced"));
     if (openedCards.has(slotResult.Card.ID)) {
       markCardOpened(slot, slotResult.Card.ID);
     }

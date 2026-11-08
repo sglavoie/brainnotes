@@ -88,6 +88,7 @@ func TestBuildSelectionCorpusAppliesExclusionsAndSubstantiveFilter(t *testing.T)
 	t.Parallel()
 	root := t.TempDir()
 	now := time.Date(2026, time.August, 4, 10, 0, 0, 0, time.UTC)
+	writeSelectionNote(t, root, "Inbox.md", "# Inbox\n\nA recent capture should not displace substantive notes.", now)
 	writeSelectionNote(t, root, "Keep.md", `---
 type: note
 tags: [alpha, beta]
@@ -117,6 +118,7 @@ type: note
 	corpus, err := BuildSelectionCorpus(root, loaded, graph, SelectionCorpusOptions{
 		MetadataProperties: []string{"tags", "type"},
 		ExcludeFolders:     []string{"Archive"},
+		ExcludePaths:       []string{"Inbox.md"},
 		ExcludeTypes:       []string{"journal"},
 	})
 	if err != nil {

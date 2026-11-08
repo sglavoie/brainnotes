@@ -70,18 +70,7 @@ func TestEveryIdleWorkerKeepsFreshDurableTimestamps(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			for _, unit := range pass.Units {
-				if !unit.Ran || unit.Error != "" {
-					continue
-				}
-				worker := record.worker(unit.Worker)
-				if age := pass.FinishedAt.Sub(worker.LastRunAt); age >= recordRefresh {
-					t.Fatalf("%s durable last run is %v old after a successful pass", unit.Worker, age)
-				}
-				if age := pass.FinishedAt.Sub(worker.LastSuccessAt); age >= recordRefresh {
-					t.Fatalf("%s durable last success is %v old after a successful pass", unit.Worker, age)
-				}
-			}
+			assertDurableWorkerTimes(t, record, pass)
 			w.clock.Advance(DefaultInterval)
 		}
 		return nil
@@ -123,4 +112,20 @@ func recordFile(t *testing.T, root string) os.FileInfo {
 		t.Fatalf("stat the companion record: %v", err)
 	}
 	return info
+}
+
+func assertDurableWorkerTimes(t *testing.T, record *Record, pass *Pass) {
+	t.Helper()
+	for _, unit := range pass.Units {
+		if !unit.Ran || unit.Error != "" {
+			continue
+		}
+		worker := record.worker(unit.Worker)
+		if age := pass.FinishedAt.Sub(worker.LastRunAt); age >= recordRefresh {
+			t.Fatalf("%s durable last run is %v old after a successful pass", unit.Worker, age)
+		}
+		if age := pass.FinishedAt.Sub(worker.LastSuccessAt); age >= recordRefresh {
+			t.Fatalf("%s durable last success is %v old after a successful pass", unit.Worker, age)
+		}
+	}
 }

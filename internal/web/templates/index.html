@@ -93,7 +93,8 @@
 
     <section {{if and readOnly (not .IsEmptyVault)}}id="workspace-content" tabindex="-1"{{end}}
       class="panel brief-panel"
-      data-brief-open-label="{{if browserOpen}}Read note{{else}}Open in editor{{end}}"
+      data-brief-open-label="Read note"
+      data-brief-browser-primary
       data-brief-root
       data-brief-date="{{.DateISO}}"
       data-brief-view-endpoint="{{.BriefViewEndpoint}}"
@@ -141,7 +142,7 @@
                 data-brief-card-id="{{.Continue.Card.ID}}"
                 data-brief-slot="{{.Continue.Slot}}"
                 {{if not .Continue.Card.OpenEnabled}}disabled{{end}}
-              >{{if browserOpen}}Read note{{else}}Open in editor{{end}}</button>
+              >{{if readOnly}}Read note{{else}}Resume writing{{end}}</button>
               <button
                 class="bn-button brief-action-button"
                 type="button"
@@ -164,7 +165,7 @@
                 </ul>
               {{end}}
             </details>
-            <details class="brief-ai">
+            <details class="brief-ai" {{if not .InsightConfigured}}hidden{{end}}>
               <summary>Ask AI</summary>
               <div class="brief-insight-prompt-field">
                 <label class="brief-insight-prompt-label" for="brief-insight-prompt-{{.Continue.Slot}}-{{.Continue.Card.ID}}">Ask AI about this note</label>
@@ -226,7 +227,7 @@
                   data-brief-card-id="{{.Rediscover.Card.ID}}"
                   data-brief-slot="{{.Rediscover.Slot}}"
                   {{if not .Rediscover.Card.OpenEnabled}}disabled{{end}}
-                >{{if browserOpen}}Read note{{else}}Open in editor{{end}}</button>
+                >Revisit note</button>
                 <button
                   class="bn-button brief-action-button"
                   type="button"
@@ -249,7 +250,7 @@
                   </ul>
                 {{end}}
               </details>
-              <details class="brief-ai">
+              <details class="brief-ai" {{if not .InsightConfigured}}hidden{{end}}>
                 <summary>Ask AI</summary>
                 <div class="brief-insight-prompt-field">
                   <label class="brief-insight-prompt-label" for="brief-insight-prompt-{{.Rediscover.Slot}}-{{.Rediscover.Card.ID}}">Ask AI about this note</label>
@@ -304,6 +305,7 @@
                   {{.Connect.Card.SourceTitle}}
                 {{end}}
               </h4>
+              <p class="brief-connection-source">Alongside <a href="{{.Connect.Card.SourcePath}}">{{.Connect.Card.SourceTitle}}</a>{{if .Connect.Card.Bridge}} · through {{.Connect.Card.Bridge}}{{else if .Connect.Card.RelationshipLabel}} · {{.Connect.Card.RelationshipLabel}}{{end}}</p>
               {{if .Connect.Card.Excerpt}}<blockquote class="brief-card-excerpt">{{.Connect.Card.Excerpt}}</blockquote>{{end}}
               <div class="brief-card-actions">
                 <button
@@ -314,7 +316,7 @@
                   data-brief-card-id="{{.Connect.Card.ID}}"
                   data-brief-slot="{{.Connect.Slot}}"
                   {{if not .Connect.Card.OpenEnabled}}disabled{{end}}
-                >{{if browserOpen}}Read note{{else}}Open in editor{{end}}</button>
+                >Explore connection</button>
                 <button
                   class="bn-button brief-action-button"
                   type="button"
@@ -343,7 +345,7 @@
                   </ul>
                 {{end}}
               </details>
-              <details class="brief-ai">
+              <details class="brief-ai" {{if not .InsightConfigured}}hidden{{end}}>
                 <summary>Ask AI</summary>
                 <div class="brief-insight-prompt-field">
                   <label class="brief-insight-prompt-label" for="brief-insight-prompt-{{.Connect.Slot}}-{{.Connect.Card.ID}}">Ask AI about this note</label>

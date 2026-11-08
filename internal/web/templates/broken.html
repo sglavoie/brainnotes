@@ -18,11 +18,13 @@
           <p class="page-subtitle">Unresolved wikilinks and where they appear.</p>
         </div>
         <div class="site-header-tools">
+          {{if not readOnly}}<button type="button" class="bn-button capture-launch" data-capture-launch title="Capture a thought (Ctrl/⌘ + Shift + Space)" aria-keyshortcuts="Control+Shift+Space Meta+Shift+Space" aria-label="Capture"><span class="capture-launch-label">Capture</span><span class="capture-launch-icon" aria-hidden="true">✎</span></button>{{end}}
           {{template "themeControl" .}}
           {{template "headerSearch" .}}
         </div>
       </header>
       {{template "siteNav" ""}}
+      {{if not readOnly}}{{template "captureDialog" captureContext}}{{end}}
 
       <section id="workspace-content" tabindex="-1" class="panel">
         <form class="filter-form" method="get" action="/broken">

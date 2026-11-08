@@ -1,4 +1,5 @@
 import { type BriefCard, type BriefSlotKind } from "./api";
+import { readableExcerpt } from "./note-excerpt";
 import {
   briefNotePathForRelPath,
   insightPromptMaxLength,
@@ -208,7 +209,7 @@ export const renderCard = (
   if (card.Excerpt) {
     const excerpt = doc.createElement("blockquote");
     excerpt.className = "brief-card-excerpt";
-    excerpt.textContent = card.Excerpt;
+    excerpt.textContent = readableExcerpt(card.Excerpt);
     cardEl.appendChild(excerpt);
   }
 
@@ -300,6 +301,18 @@ const appendCardExplanation = (doc: Document, cardEl: HTMLElement, slot: BriefSl
   explanation.className = "brief-card-explanation";
   explanation.textContent = card.Explanation;
   cardEl.appendChild(explanation);
+
+  if (slot === "connect" && card.Candidate) {
+    const source = doc.createElement("p");
+    source.className = "brief-connection-source";
+    const link = doc.createElement("a");
+    link.href = briefNotePathForRelPath(card.Source.RelPath);
+    link.textContent = card.Source.Title || card.Source.RelPath;
+    source.append("Alongside ", link);
+    if (card.Metadata.Bridge) source.append(` · through ${card.Metadata.Bridge}`);
+    else if (card.Metadata.Relationship) source.append(` · ${relationshipLabel(card.Metadata.Relationship)}`);
+    cardEl.appendChild(source);
+  }
 
   const relationship = relationshipLabel(card.Metadata.Relationship);
   if (slot === "connect" && relationship) {

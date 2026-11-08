@@ -1,4 +1,5 @@
 import { withNoteOrigin } from "./note-origin";
+import { briefEditorDestination, resumeDestination } from "./note-resume";
 import { announceConfirmedWrite } from "./write-notice";
 import {
   buildBriefInsightForm,
@@ -67,7 +68,9 @@ export const runOpen = async (ctx: BriefActionContext, button: HTMLButtonElement
   ctx.setSlotsBusy([slot], true);
   ctx.setSlotStatus(slot, "Opening note…", "is-loading");
   try {
-    const body = buildBriefItemForm({ cardID, action: "open", token: ctx.config.csrfToken }).toString();
+    const form = buildBriefItemForm({ cardID, action: "open", token: ctx.config.csrfToken });
+    if (ctx.root.hasAttribute("data-brief-browser-primary")) form.set("target", "browser");
+    const body = form.toString();
     const resp = await ctx.fetcher(ctx.config.itemEndpoint, jsonPostRequest(ctx.config.csrfToken, body));
     const payload = await readResponsePayload(resp);
     if (!resp.ok) {
@@ -83,9 +86,9 @@ export const runOpen = async (ctx: BriefActionContext, button: HTMLButtonElement
     ctx.updateActivity(result.activity);
     ctx.openedCards.add(cardID);
     ctx.markCardOpened(slot, cardID);
-    const destination = noteNavigationDestination(payload);
+    const destination = briefDestination(ctx.root, result);
     if (destination) {
-      window.location.assign(withNoteOrigin(destination));
+      window.location.assign(withNoteOrigin(resumeDestination(destination)));
       return;
     }
     ctx.setSlotStatus(slot, "Opened in editor. Refresh after saving changes.", "is-success");
@@ -95,6 +98,12 @@ export const runOpen = async (ctx: BriefActionContext, button: HTMLButtonElement
   } finally {
     ctx.setSlotsBusy([slot], false);
   }
+};
+
+const briefDestination = (root: HTMLElement, result: BriefItemResult): string => {
+  const reading = noteNavigationDestination(result);
+  if (reading || !root.hasAttribute("data-brief-browser-primary")) return reading;
+  return briefEditorDestination(result.destination || "");
 };
 
 export const runAnother = async (

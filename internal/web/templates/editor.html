@@ -16,6 +16,7 @@
       <h1 id="source-editor-heading"><span class="visually-hidden">Editing </span><a href="{{ .NoteRoute }}" data-source-note-return>{{ .NoteTitle }}</a></h1>
       {{template "desktopWorkspaceNav" ""}}
       {{template "mobileSearchShortcut" ""}}
+      <button type="button" class="bn-button capture-launch" data-capture-launch title="Capture a thought (Ctrl/⌘ + Shift + Space)" aria-keyshortcuts="Control+Shift+Space Meta+Shift+Space" aria-label="Capture"><span class="capture-launch-label">Capture</span><span class="capture-launch-icon" aria-hidden="true">✎</span></button>
       <details class="source-editor-workspace">
         <summary>Workspace</summary>
         <div class="source-editor-workspace-content">
@@ -30,6 +31,7 @@
       </details>
     </header>
     {{template "siteSync" .}}
+    {{template "captureDialog" captureContext}}
 
     <section id="workspace-content" tabindex="-1"
       class="panel source-editor"

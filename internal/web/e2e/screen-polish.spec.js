@@ -142,7 +142,7 @@ for (const [width, height] of [[320, 568], [390, 640]]) {
     await expect(page.locator("#capture-hint")).toBeInViewport({ ratio: 1 });
     expect((await page.locator("#capture-hint").boundingBox()).width).toBeGreaterThan(100);
     await expect(submit).toBeInViewport({ ratio: 1 });
-    await expect(page.locator("[data-brief-action-open]").first()).toHaveText("Open in editor");
+    await expect(page.locator("[data-brief-action-open]").first()).toHaveText("Resume writing");
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
   });
 

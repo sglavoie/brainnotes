@@ -85,21 +85,7 @@ func duplicateTitleTasks(notes []loadedNote, graph *query.Graph) []Task {
 		return nil
 	}
 
-	notesByTitle := map[string][]loadedNote{}
-	displayByTitle := map[string]string{}
-	for _, item := range notes {
-		if graph.KeyForNote(item.note) == "" {
-			continue
-		}
-		titleKey := strings.ToLower(item.note.Title())
-		if titleKey == "" {
-			continue
-		}
-		notesByTitle[titleKey] = append(notesByTitle[titleKey], item)
-		if displayByTitle[titleKey] == "" || item.note.Title() < displayByTitle[titleKey] {
-			displayByTitle[titleKey] = item.note.Title()
-		}
-	}
+	notesByTitle, displayByTitle := groupNotesByTitle(notes, graph)
 
 	keys := make([]string, 0, len(notesByTitle))
 	for key, group := range notesByTitle {
@@ -129,4 +115,24 @@ func duplicateTitleTasks(notes []loadedNote, graph *query.Graph) []Task {
 		))
 	}
 	return tasks
+}
+
+func groupNotesByTitle(notes []loadedNote, graph *query.Graph) (map[string][]loadedNote, map[string]string) {
+	notesByTitle := map[string][]loadedNote{}
+	displayByTitle := map[string]string{}
+	for _, item := range notes {
+		if graph.KeyForNote(item.note) == "" {
+			continue
+		}
+		titleKey := strings.ToLower(item.note.Title())
+		if titleKey == "" {
+			continue
+		}
+		notesByTitle[titleKey] = append(notesByTitle[titleKey], item)
+		if displayByTitle[titleKey] == "" || item.note.Title() < displayByTitle[titleKey] {
+			displayByTitle[titleKey] = item.note.Title()
+		}
+	}
+
+	return notesByTitle, displayByTitle
 }

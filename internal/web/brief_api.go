@@ -3,6 +3,7 @@ package web
 import (
 	"errors"
 	"net/http"
+	"net/url"
 	"path/filepath"
 	"strings"
 	"time"
@@ -108,7 +109,30 @@ func (s *Server) handleBriefItem(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if action == "open" && r.Form.Get("target") == "browser" {
+		s.executeBriefBrowserOpen(w, runtime, resolved)
+		return
+	}
 	s.executeBriefAction(w, runtime, resolved, action)
+}
+
+// The workspace's primary action always works in the browser. Existing API
+// callers retain their explicit external-editor Open behavior.
+func (s *Server) executeBriefBrowserOpen(w http.ResponseWriter, runtime briefRuntime, resolved resolvedBriefCard) {
+	rel := openTargetRelPathForCard(resolved.card)
+	destination := mustManagementNotePath(rel)
+	if resolved.slot == brief.SlotContinue && s.caps.documentWrites {
+		destination = editorRoutePath + "?key=" + url.QueryEscape(managementRouteKeyForRelPath(rel))
+	}
+	activity, err := runtime.service.RecordOpen(resolved.card.ID)
+	if err != nil {
+		writeManagementError(w, noteops.WrapError(noteops.CodeInternal, "record brief open", err))
+		return
+	}
+	writeManagementJSON(w, http.StatusOK, briefItemResponse{
+		OK: true, Action: "open", Destination: destination, CardID: resolved.card.ID,
+		Slot: resolved.slot, Activity: activity,
+	})
 }
 
 func (s *Server) executeBriefAction(w http.ResponseWriter, runtime briefRuntime, resolved resolvedBriefCard, action string) {
@@ -168,6 +192,7 @@ func (s *Server) newBriefRuntime(snapshot vaultSnapshot) (briefRuntime, error) {
 		MetadataProperties: append([]string(nil), cfg.Related.MetadataProperties...),
 		ExcludeFolders:     append([]string(nil), cfg.Brief.ExcludeFolders...),
 		ExcludeTypes:       append([]string(nil), cfg.Brief.ExcludeTypes...),
+		ExcludePaths:       []string{cfg.Capture.InboxNote},
 	})
 	if err != nil {
 		return briefRuntime{}, err

@@ -1,4 +1,5 @@
 import { withLibraryContext } from "./note-navigation";
+import { readableExcerpt } from "./note-excerpt";
 import {
   RELATED_MAX_LIMIT,
   addRelatedCalendarDays,
@@ -223,7 +224,7 @@ const renderRelatedCard = (doc: Document, result: RelatedResult, serverDate: str
   const relationship = doc.createElement("p");
   relationship.className = "related-card-relationship";
   relationship.textContent = relatedRelationshipLabel(result.relationship);
-  card.append(heading, path, relationship);
+  card.append(heading, relationship);
 
   if (result.bridge) {
     const bridge = doc.createElement("p");
@@ -232,13 +233,13 @@ const renderRelatedCard = (doc: Document, result: RelatedResult, serverDate: str
     bridgeLink.href = withLibraryContext(result.bridge.route);
     bridgeLink.textContent = result.bridge.title || result.bridge.path;
     bridgeLink.setAttribute("data-related-view-candidate", result.bridge.key);
-    bridge.append("Via ", bridgeLink);
+    bridge.append("Connected through ", bridgeLink);
     card.appendChild(bridge);
   }
   if (result.excerpt !== "") {
     const excerpt = doc.createElement("blockquote");
     excerpt.className = "related-card-excerpt";
-    excerpt.textContent = result.excerpt;
+    excerpt.textContent = readableExcerpt(result.excerpt);
     card.appendChild(excerpt);
   }
   if (result.reasons.length > 0) {
@@ -253,7 +254,12 @@ const renderRelatedCard = (doc: Document, result: RelatedResult, serverDate: str
       item.append(label, detail);
       reasons.appendChild(item);
     }
-    card.appendChild(reasons);
+    const why = doc.createElement("details");
+    why.className = "related-card-why";
+    const summary = doc.createElement("summary");
+    summary.textContent = "Why this connection?";
+    why.append(summary, path, reasons);
+    card.appendChild(why);
   }
 
   const actions = doc.createElement("div");

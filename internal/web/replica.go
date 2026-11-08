@@ -82,7 +82,7 @@ func replicaReadPath(path string) bool {
 	case "/", "/library", "/pinned", "/properties", "/health", "/broken", "/graph",
 		"/api/ready", "/api/facets", "/api/search", "/api/query/validate", "/api/query/completions",
 		"/api/graph.json", "/api/properties", "/api/properties/detail", "/api/views",
-		"/api/related", "/api/cockpit", "/api/config/status",
+		"/api/related", "/api/note/peek", "/api/cockpit", "/api/config/status",
 		// The status route and not the rest of the synchronization surface. On a
 		// replica it answers about that replica's own freshness and never reads the
 		// vault's synchronization state — see replicaSyncStatus — so the /sync page,

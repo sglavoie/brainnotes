@@ -12,11 +12,12 @@ it("retains browser destinations without changing local-editor responses", () =>
 
 it("navigates to the rendered note after recording a replica open", async () => {
   const assign = vi.fn();
-  vi.stubGlobal("window", {location: {assign}});
+  vi.stubGlobal("window", {location: {assign, origin: "http://localhost"}});
   const button = document.createElement("button");
   button.setAttribute("data-brief-slot", "continue");
   button.setAttribute("data-brief-card-id", "card-1");
   const ctx = {
+    root: document.createElement("section"),
     config: {csrfToken: "test", itemEndpoint: "/api/brief/item"},
     fetcher: vi.fn(async () => new Response(JSON.stringify({ok: true, action: "open", destination: "/n/Note"}), {headers: {"Content-Type": "application/json"}})),
     setGlobalStatus: vi.fn(), setSlotStatus: vi.fn(), setSlotsBusy: vi.fn(),

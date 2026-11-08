@@ -28,15 +28,12 @@ func TestServer_NoteView200(t *testing.T) {
 		`data-copy-note-url`,
 		`data-note-sidebar-details open>`,
 		`<div class="note-content">`,
-		`data-note-insight`,
-		`data-note-insight-endpoint="/api/note/insight"`,
-		`data-note-insight-key="source"`,
-		`data-note-insight-enabled="false"`,
+		`class="note-optional-ai"`,
+		`Optional: Ask AI`,
 		`data-related-notes`,
 		`data-related-source-key="source"`,
 		`data-related-endpoint="/api/related"`,
 		`data-related-item-endpoint="/api/related/item"`,
-		`data-note-insight-prompt`,
 		`maxlength="2000"`,
 		`<a class="note-skip-link" href="#bn:note-body">Skip to note</a>`,
 		`<div id="bn:note-body" class="note-body" tabindex="-1" data-note-body data-note-context-links>`,
@@ -49,7 +46,10 @@ func TestServer_NoteView200(t *testing.T) {
 	if strings.Contains(body, "<script>alert(1)</script>") {
 		t.Fatalf("unsafe raw HTML rendered in note body, got %q", body)
 	}
-	insightIndex := strings.Index(body, `data-note-insight`)
+	if strings.Contains(body, `data-note-insight-prompt`) {
+		t.Fatal("an unconfigured agent must not render an unusable prompt")
+	}
+	insightIndex := strings.Index(body, `class="note-optional-ai"`)
 	bodyIndex := strings.Index(body, `aria-label="Note content"`)
 	if insightIndex < 0 || bodyIndex < 0 || insightIndex <= bodyIndex {
 		t.Fatalf("Ask AI panel must render below note body: insight=%d body=%d", insightIndex, bodyIndex)

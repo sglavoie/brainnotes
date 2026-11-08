@@ -24,7 +24,7 @@ test("Library sort preserves the query and cap and changes the actual results", 
 test("Contents follows reading without changing focus or the URL", async ({ page }) => {
   await page.goto("/n/Reading");
   const body = page.locator("[data-note-body]");
-  const insight = page.locator("[data-note-insight]");
+  const insight = page.locator(".note-optional-ai");
   expect((await body.boundingBox()).y).toBeLessThan((await insight.boundingBox()).y);
   const first = page.locator('.note-toc-list a').first();
   const second = page.locator('.note-toc-list a').nth(1);

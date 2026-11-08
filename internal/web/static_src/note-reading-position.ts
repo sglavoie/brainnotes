@@ -1,3 +1,5 @@
+import { rememberNoteResume } from "./note-resume";
+
 type ReadingPosition = { heading: string; offset: number; ratio: number; sourceLine?: number };
 const parameter = "read_at";
 
@@ -42,6 +44,16 @@ export const initReadingPosition = (): void => {
     }
     return;
   }
+  window.addEventListener("pagehide", () => {
+    const position = capture(body);
+    const passage = [...body.querySelectorAll<HTMLElement>("[data-source-line]")]
+      .find((block) => Number(block.dataset.sourceLine) === position.sourceLine);
+    rememberNoteResume(decodeURIComponent(window.location.pathname.slice(3)), {
+      ...position, sourceLine: position.sourceLine || 1,
+      label: document.getElementById(position.heading)?.textContent?.replace(/#\s*$/, "").trim() || "Your last reading position",
+      excerpt: passage?.textContent?.trim() || "",
+    });
+  });
   for (const link of document.querySelectorAll<HTMLAnchorElement>("[data-source-editor-launch]")) {
     const update = (): void => {
       const url = new URL(link.href);

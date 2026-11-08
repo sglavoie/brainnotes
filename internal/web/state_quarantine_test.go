@@ -48,14 +48,7 @@ func newBlockingLoader(t *testing.T, blocked ...string) (load noteLoader, callCo
 
 func TestVaultState_PartialSnapshotWhenLoaderBlocks(t *testing.T) {
 	root := t.TempDir()
-	healthyPath := filepath.Join(root, "Healthy.md")
-	blockedPath := filepath.Join(root, "Blocked.md")
-	if err := os.WriteFile(healthyPath, []byte("---\ntitle: Healthy\n---\nBody\n"), 0o644); err != nil {
-		t.Fatalf("write healthy: %v", err)
-	}
-	if err := os.WriteFile(blockedPath, []byte("---\ntitle: Blocked\n---\nBody\n"), 0o644); err != nil {
-		t.Fatalf("write blocked: %v", err)
-	}
+	blockedPath := writeQuarantineFixture(t, root)
 	_, v := testVaultOpen(t, root, "127.0.0.1:0")
 
 	state, err := newVaultState(v, time.Second)
@@ -95,14 +88,7 @@ func TestVaultState_PartialSnapshotWhenLoaderBlocks(t *testing.T) {
 
 func TestVaultState_QuarantineSkipsWithoutRetry(t *testing.T) {
 	root := t.TempDir()
-	healthyPath := filepath.Join(root, "Healthy.md")
-	blockedPath := filepath.Join(root, "Blocked.md")
-	if err := os.WriteFile(healthyPath, []byte("---\ntitle: Healthy\n---\nBody\n"), 0o644); err != nil {
-		t.Fatalf("write healthy: %v", err)
-	}
-	if err := os.WriteFile(blockedPath, []byte("---\ntitle: Blocked\n---\nBody\n"), 0o644); err != nil {
-		t.Fatalf("write blocked: %v", err)
-	}
+	blockedPath := writeQuarantineFixture(t, root)
 	_, v := testVaultOpen(t, root, "127.0.0.1:0")
 
 	state, err := newVaultState(v, time.Second)
@@ -180,4 +166,18 @@ func TestVaultState_QuarantinePreservedAcrossInvalidate(t *testing.T) {
 	if len(refreshed.notes) != 1 || refreshed.notes[0].Title() != "Healthy" {
 		t.Fatalf("refreshed notes = %#v, want only Healthy", refreshed.notes)
 	}
+}
+
+func writeQuarantineFixture(t *testing.T, root string) string {
+	t.Helper()
+	healthyPath := filepath.Join(root, "Healthy.md")
+	blockedPath := filepath.Join(root, "Blocked.md")
+	if err := os.WriteFile(healthyPath, []byte("---\ntitle: Healthy\n---\nBody\n"), 0o644); err != nil {
+		t.Fatalf("write healthy: %v", err)
+	}
+	if err := os.WriteFile(blockedPath, []byte("---\ntitle: Blocked\n---\nBody\n"), 0o644); err != nil {
+		t.Fatalf("write blocked: %v", err)
+	}
+
+	return blockedPath
 }
