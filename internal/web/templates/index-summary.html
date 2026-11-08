@@ -1,0 +1,69 @@
+{{define "indexSummary"}}
+    <section class="panel">
+      <div class="panel-header">
+        <h2>Health snapshot</h2>
+      </div>
+      <p>{{if gt .Health.TotalIssueCount 0}}{{.Health.TotalIssueCount}} issues need attention.{{else}}No known issues in the current snapshot.{{end}} <a href="{{.HealthPath}}">Open Health</a></p>
+      <div class="diagnostic-card-grid health-snapshot-grid" aria-label="Health snapshot metrics">
+        <a class="metric-card diagnostic-card" href="{{.HealthPath}}#diagnostic-broken-targets">
+          <span class="diagnostic-card-label">Broken targets</span>
+          <span class="metric-value">{{.Health.BrokenTargetCount}}</span>
+        </a>
+        <a class="metric-card diagnostic-card" href="{{.HealthPath}}#diagnostic-orphans">
+          <span class="diagnostic-card-label">Orphans</span>
+          <span class="metric-value">{{.Health.OrphanCount}}</span>
+        </a>
+        <a class="metric-card diagnostic-card" href="{{.HealthPath}}#diagnostic-frontmatter-errors">
+          <span class="diagnostic-card-label">Frontmatter errors</span>
+          <span class="metric-value">{{.Health.ParseErrorCount}}</span>
+        </a>
+        <a class="metric-card diagnostic-card" href="{{.HealthPath}}#diagnostic-skipped-notes">
+          <span class="diagnostic-card-label">Skipped notes</span>
+          <span class="metric-value">{{.Health.SkippedNoteCount}}</span>
+        </a>
+      </div>
+      <p><a href="{{.LibraryPath}}">Library workflows</a> · <a href="{{.GraphPath}}">Graph view</a></p>
+    </section>
+
+    <section class="panel">
+      <div class="panel-header">
+        <h2>Pinned</h2>
+      </div>
+      {{if .Pinned}}
+        <ol class="pinned-list">
+          {{range .Pinned}}
+            <li class="pinned-list-item" data-pinned-item data-pinned-key="{{.Key}}">
+              <a class="pinned-note-title" href="{{.Path}}">{{.Title}}</a>
+              <span class="pinned-note-meta">
+                <span class="pinned-note-folder">{{if .Folder}}{{.Folder}}{{else}}/{{end}}</span>
+              </span>
+            </li>
+          {{end}}
+        </ol>
+        <p><a href="{{.PinnedPath}}">See all pinned notes</a></p>
+      {{else}}
+        <p>No pinned notes yet. <a href="{{.PinnedPath}}">Pinned</a> collects the notes you keep at hand.</p>
+      {{end}}
+    </section>
+
+    <section class="panel">
+      <div class="panel-header">
+        <h2>Recently modified</h2>
+      </div>
+      {{if .Recent}}
+        <ul class="recent-list">
+          {{range .Recent}}
+            <li class="recent-list-item">
+              <a class="recent-note-title" href="{{.Path}}">{{.Title}}</a>
+              <div class="recent-note-meta">
+                <span>{{if .Folder}}{{.Folder}}{{else}}/{{end}}</span>
+                <span>{{.Updated}}</span>
+              </div>
+            </li>
+          {{end}}
+        </ul>
+      {{else}}
+        <p>No notes found.</p>
+      {{end}}
+    </section>
+{{end}}

@@ -7481,7 +7481,7 @@ code {
   background: var(--bn-surface);
   overflow: auto;
 }
-
+/* internal/web/static_src/css/source-editor-recovery.css */
 /*
  * The recovery panel. It is warning-coloured rather than danger-coloured on
  * purpose: nothing has gone wrong and nothing is at risk of being lost by
@@ -7633,7 +7633,7 @@ code {
   font-size: 0.9rem;
   cursor: pointer;
 }
-
+/* internal/web/static_src/css/source-editor-tools.css */
 .source-editor-shortcuts {
   color: var(--bn-text-subtle);
   font-size: 0.88rem;
@@ -9456,6 +9456,7 @@ summary { cursor: pointer; min-height: var(--bn-control-height); box-sizing: bor
     margin-bottom: 0.35rem;
   }
 }
+/* internal/web/static_src/css/responsive-mobile.css */
 
 @media (max-width: 640px) {
   .source-editor-main > .sync-line:not(:empty) { margin-bottom: 0.2rem; font-size: 0.78rem; }

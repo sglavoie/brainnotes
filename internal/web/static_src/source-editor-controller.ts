@@ -1,3 +1,4 @@
+import { wireEditor } from "./source-editor-bindings";
 import { setSourceStatus } from "./source-status";
 import type { StatusKind } from "./status";
 import { createEditorTitle } from "./source-editor-title";
@@ -17,7 +18,7 @@ import type { SourceDraftStore } from "./source-draft";
 import type { SourceEditorConfig, SourceEditorElements } from "./source-editor-elements";
 import type { SourceSurface, SourceSurfaceFactory } from "./source-surface";
 import { errorMessage, runSave } from "./source-editor-save";
-import { showConflict, wireConflict, renderConflictComparison } from "./source-editor-conflict";
+import { showConflict, renderConflictComparison } from "./source-editor-conflict";
 
 // The editor's behaviour, written against the abstract surface.
 //
@@ -218,27 +219,6 @@ const insertAtCursor = (surface: SourceSurface | null, text: string): void => {
   surface.focus();
 };
 
-// Everything that points at the finished controller, which is why it runs last
-// and in one place: the key bindings hand back the unbind destroy() owes the
-// document, and the pane listener keeps the preview from rendering text nobody
-// is looking at.
-const wireEditor = (
-  ownerDocument: Document,
-  elements: SourceEditorElements,
-  state: EditorState,
-  controller: SourceEditorController,
-  ctx: SaveContext
-): (() => void) => {
-  wireControls(elements, controller);
-  wireConflict(elements, state, controller, ctx);
-  ctx.panes.onSelect((pane) => {
-    if (pane === "preview") {
-      ctx.preview.flush(state.surface?.getValue() ?? "");
-    }
-  });
-  return bindGlobalKeys(ownerDocument, controller);
-};
-
 // createKeeper states the seam between the editor and the draft machinery in
 // one place: five things the keeper may ask of this editor, and not one of them
 // is a save. `restore` is the only one that changes what is on screen, and it
@@ -276,52 +256,6 @@ const createKeeper = (
     navigate: deps.navigate ?? ((url) => view?.location.assign(url)),
     claims: deps.claims,
   });
-};
-
-// The save shortcut is bound on the document rather than only in the editor's
-// keymap, because the toolbar, the tabs and the conflict buttons are all
-// focusable and Ctrl/⌘+S from any of them has to mean the same thing — and it
-// has to preventDefault, or the browser offers to save the HTML page instead.
-// Capture phase for the same reason: nothing else may claim it first.
-const bindGlobalKeys = (
-  ownerDocument: Document,
-  controller: SourceEditorController
-): (() => void) => {
-  const onKeyDown = (event: KeyboardEvent): void => {
-    // Alt and Shift are excluded rather than ignored: Ctrl/⌘+Alt+S and
-    // Ctrl/⌘+Shift+S are bound elsewhere — by browsers, by extensions, by the
-    // operating system — and this listener runs in the capture phase, so
-    // treating them as Save would swallow a chord that was never meant for the
-    // page and silently do something else with it.
-    if (
-      event.key.toLowerCase() !== "s" ||
-      !(event.metaKey || event.ctrlKey) ||
-      event.altKey ||
-      event.shiftKey
-    ) {
-      return;
-    }
-    event.preventDefault();
-    void controller.save();
-  };
-
-  const onBeforeUnload = (event: BeforeUnloadEvent): void => {
-    if (!controller.dirty()) {
-      return;
-    }
-    // The text exists only in this tab. The browser decides what to show; all a
-    // page can do is ask for the prompt, and both spellings are needed because
-    // browsers disagree about which one arms it.
-    event.preventDefault();
-    event.returnValue = "";
-  };
-
-  ownerDocument.addEventListener("keydown", onKeyDown, true);
-  ownerDocument.defaultView?.addEventListener("beforeunload", onBeforeUnload);
-  return () => {
-    ownerDocument.removeEventListener("keydown", onKeyDown, true);
-    ownerDocument.defaultView?.removeEventListener("beforeunload", onBeforeUnload);
-  };
 };
 
 const mountSurface = (
@@ -464,22 +398,6 @@ const restoreDraft = (
   // setValue is not an edit, so nothing else will say the restored text is
   // unsaved; "Ready to edit." would otherwise stay over a dirty editor.
   refreshEditStatus(elements, state, ctx.setStatus);
-};
-
-const wireControls = (
-  elements: SourceEditorElements,
-  controller: SourceEditorController
-): void => {
-  for (const button of elements.commands) {
-    button.addEventListener("click", () => {
-      const command = button.getAttribute("data-source-command") as SourceFormatCommand | null;
-      if (command) {
-        controller.runCommand(command, { headingLevel: Number(button.getAttribute("data-source-heading-level")) || 1 });
-      }
-    });
-  }
-  elements.save?.addEventListener("click", () => void controller.save());
-  elements.find?.addEventListener("click", () => controller.openSearch());
 };
 
 const statusHeld = (elements: SourceEditorElements, state: EditorState): boolean => {

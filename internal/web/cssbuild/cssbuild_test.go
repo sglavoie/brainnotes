@@ -40,8 +40,8 @@ func TestCommittedStylesheetMatchesSources(t *testing.T) {
 }
 
 // TestCascadeAnchorsKeepTheirPositions pins the two ends of the cascade. Every
-// part reads the custom properties tokens.css declares, and responsive.css only
-// narrows components by coming after them, so an import reordered past either
+// part reads the custom properties tokens.css declares, and the responsive parts
+// only narrow components by coming after them, so an import reordered past either
 // end is a silent visual regression rather than a build failure.
 func TestCascadeAnchorsKeepTheirPositions(t *testing.T) {
 	parts, err := manifestParts(filepath.Join(repoRoot(t), filepath.FromSlash(SourceDir)))
@@ -52,8 +52,8 @@ func TestCascadeAnchorsKeepTheirPositions(t *testing.T) {
 	if parts[0] != "tokens.css" {
 		t.Errorf("first import = %q, want tokens.css", parts[0])
 	}
-	if last := parts[len(parts)-1]; last != "responsive.css" {
-		t.Errorf("last import = %q, want responsive.css", last)
+	if tail := strings.Join(parts[len(parts)-2:], ","); tail != "responsive.css,responsive-mobile.css" {
+		t.Errorf("last imports = %q, want responsive.css,responsive-mobile.css", tail)
 	}
 }
 

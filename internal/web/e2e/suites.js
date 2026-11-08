@@ -7,6 +7,7 @@ export const browserSuites = {
     "screen-polish.spec.js",
     "continuity-refinement.spec.js",
     "editor.spec.js",
+    "editor-preview.spec.js",
     "workspace-polish.spec.js",
     "reading-performance.spec.js",
     "settings-feedback.spec.js",

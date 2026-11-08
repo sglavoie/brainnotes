@@ -12,7 +12,7 @@ is to make it fail on demand against a function no name match could see.
 
 Everything happens in a throwaway module under the system temporary directory.
 Nothing here reads or writes a vault, and the only things borrowed from this
-repository are `.golangci.yml` and the `justfile` — copied rather than
+repository are `.golangci.yml` and the `justfile` with its imports — copied rather than
 re-declared, so the self-test runs the thresholds and the *actual gate recipe*
 this repository uses, not a re-implementation of them that could drift.
 
@@ -166,6 +166,8 @@ def create_sandbox(sandbox):
     # re-implements the gate's filter proves nothing about the recipe that runs.
     shutil.copyfile(REPO / ".golangci.yml", sandbox / ".golangci.yml")
     shutil.copyfile(REPO / "justfile", sandbox / "justfile")
+    (sandbox / "scripts").mkdir(exist_ok=True)
+    shutil.copyfile(REPO / "scripts/metrics.just", sandbox / "scripts/metrics.just")
     write_probe(sandbox, BRANCHES_UNDER_THRESHOLD)
     (sandbox / "internal" / "cli" / "probe_test.go").write_text(
         TEST_FILE_FIXTURE, encoding="utf-8"
