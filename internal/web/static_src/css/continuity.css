@@ -1,0 +1,59 @@
+/* Keep the content close to the action that led to it. */
+.property-summary { margin: 0.6rem 0; font-size: 0.85rem; }
+.property-summary > div { margin-bottom: 0.65rem; }
+.property-summary dt { color: var(--bn-muted); font-size: 0.75rem; }
+.property-summary dd { margin: 0.15rem 0 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.property-summary :is(ul, li) { margin: 0; padding: 0; list-style: none; }
+.note-properties > summary { cursor: pointer; color: var(--bn-link); padding-block: 0.65rem; font-size: 0.85rem; }
+.frontmatter-panel:has(.note-properties[open]) > .property-summary { display: none; }
+.note-properties[open] > summary { border-bottom: 1px solid var(--bn-border); }
+
+.library-filters .library-search-options { margin-top: 0.5rem; }
+.overview-results { margin-top: 0.5rem; padding-top: 0.25rem; }
+.library-results-overview { gap: 0.5rem 1rem; margin: 0 0 0.45rem; }
+.library-results-overview > .overview-results-status { flex: 1 1 12rem; }
+.library-results-tools { align-items: center; gap: 0.5rem; }
+.overview-results:has([data-overview-bulk]:not([hidden])) .library-results-tools { flex-basis: 100%; }
+
+/* These headers respond to their workspace width, including a side reference. */
+.has-reference .note-main, .has-reference .source-editor-main { container: writing-workspace / inline-size; }
+@container writing-workspace (max-width: 70rem) {
+  .desktop-workspace-nav { display: none; }
+  .focused-workspace-tools { gap: 0.4rem; }
+  .switcher-shortcut, .capture-launch-label, .focused-workspace-tools > .new-note-action .new-note-label { display: none; }
+  .capture-launch-icon, .focused-workspace-tools > .new-note-action .new-note-symbol { display: inline; font-size: 1.25rem; }
+  .switcher-launch, .capture-launch, .focused-workspace-tools > .new-note-action { min-width: 2.75rem; min-height: 2.75rem; padding-inline: 0.5rem; justify-content: center; }
+}
+
+.index-main > .capture-panel { padding-block: 0.65rem; }
+.index-main > .capture-panel .panel-header { margin-bottom: 0.3rem; }
+.index-main > .capture-panel .capture-field { margin-top: 0.3rem; }
+.index-main > .capture-panel .capture-input { min-height: 2.75rem; height: 2.75rem; }
+.index-main > .capture-panel:focus-within .capture-input,
+.index-main > .capture-panel .capture-input:not(:placeholder-shown) { min-height: 5rem; }
+.capture-dialog .capture-input { min-height: 6rem; }
+.index-main > .capture-panel .capture-status { display: block; min-height: 1.2em; margin-block: 0.25rem 0; }
+
+.note-actions { position: relative; }
+.note-actions [data-pin-note] { display: flex; align-items: center; order: 1; width: auto; }
+.note-actions .pin-button { min-width: 4rem; }
+.note-actions .pin-note-status { position: absolute; top: calc(100% + 0.4rem); right: 0; width: max-content; max-width: min(22rem, 80vw); z-index: var(--bn-z-popover); }
+.note-actions .pin-note-status:not(:empty) { padding: 0.5rem 0.65rem; background: var(--bn-surface); border: 1px solid var(--bn-border); border-radius: 0.5rem; box-shadow: var(--bn-shadow-card); }
+.note-actions .pin-note-status:empty { display: none; }
+.connection-saved { border-top: 1px solid var(--bn-accent-subtle-border); padding-top: 1rem; }
+.connection-saved h3 { font-family: var(--bn-book); font-size: 1.4rem; font-weight: 500; margin-block: 0.5rem; }
+.connection-saved-thought { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.75; max-height: 15rem; overflow-y: auto; }
+.connection-saved-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+.connection-save-hint, .workspace-memory-hint { color: var(--bn-muted); font-size: 0.85rem; }
+.workspace-memory { margin-top: 0.75rem; }
+.workspace-memory button { cursor: pointer; }
+@media (max-width: 700px) {
+  .note-actions .pin-note-status { left: 0; right: auto; }
+  .library-results-tools { flex-basis: 100%; }
+  .library-results-overview > .overview-results-status { flex-basis: 8rem; }
+  .library-sort select { max-width: 10rem; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  :is(.source-editor-status, .capture-status, .pin-note-status).is-success,
+  .capture-notice:not(:empty), .connection-saved { animation: confirmation-settle 160ms ease-out; }
+}

@@ -20,6 +20,7 @@ export const initReadingComfort = (): void => {
       update();
     });
   }
+  initPropertyDisclosure();
   quietRepeatedTitle();
 
 };
@@ -37,4 +38,17 @@ const quietRepeatedTitle = (): void => {
   for (const link of document.querySelectorAll<HTMLAnchorElement>(".note-toc-list a")) {
     if (decodeURIComponent(link.hash.slice(1)) === heading.id) link.parentElement?.setAttribute("hidden", "");
   }
+};
+
+const initPropertyDisclosure = (): void => {
+  const details = document.querySelector<HTMLDetailsElement>("[data-note-properties]");
+  if (!details) return;
+  const key = "bn.reading-properties";
+  try { details.open = localStorage.getItem(key) === "expanded"; } catch { /* Compact by default. */ }
+  const remember = (): void => {
+    try { localStorage.setItem(key, details.open ? "expanded" : "compact"); } catch { /* Still usable. */ }
+  };
+  details.addEventListener("toggle", remember);
+  // Native toggle events are queued; keep a quick navigation from losing the choice.
+  window.addEventListener("pagehide", remember);
 };

@@ -14,6 +14,7 @@ test("a confirmed property edit appears after explicit refresh, retaining Librar
   await page.waitForLoadState("networkidle");
   const originalURL = page.url();
   const panel = page.locator("[data-frontmatter-panel]");
+  await panel.locator("[data-note-properties] > summary").click();
   const form = panel.locator('[data-frontmatter-set][data-frontmatter-property="status"][data-frontmatter-op="="]');
   const value = panel.locator('.frontmatter-row:has([data-frontmatter-property="status"]) .frontmatter-text');
   await expect(value).toHaveText("draft");

@@ -43,6 +43,7 @@ test("open Library controls and reading actions remain accessible", async ({ pag
 
   await page.goto("/n/Reading");
   await page.locator(".note-actions-more > summary").click();
+  await page.locator("[data-note-properties] > summary").click();
   await page.locator(".frontmatter-editor > summary").first().click();
   await expectNoAxeViolations(page);
 });

@@ -150,6 +150,15 @@
               <p class="frontmatter-edit-status" data-frontmatter-status role="status" aria-live="polite"></p>
             </div>
             {{if .Frontmatter}}
+              <dl class="property-summary" aria-label="Property summary">
+                {{range $index, $property := .Frontmatter}}{{if lt $index 2}}
+                  <div><dt>{{$property.Key}}</dt><dd>{{template "frontmatterValue" $property.Value}}</dd></div>
+                {{end}}{{end}}
+              </dl>
+            {{end}}
+            <details class="note-properties" data-note-properties>
+              <summary>All properties ({{len .Frontmatter}})</summary>
+            {{if .Frontmatter}}
               <dl class="frontmatter-rows">
                 {{range .Frontmatter}}
                   <div class="frontmatter-row">
@@ -228,6 +237,7 @@
                 {{end}}
               </datalist>
             {{end}}
+            </details>
           </section>
 
           <section class="panel{{if not .Backlinks}} note-links-empty{{end}}">
@@ -378,6 +388,7 @@
       </div>
     </main>
     <script src="/static/app.js" defer></script>
+    {{if .InsightConfigured}}<script src="/static/note-insight-page.js" defer></script>{{end}}
   </body>
 </html>
 {{end}}

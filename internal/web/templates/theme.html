@@ -133,6 +133,11 @@
     <div class="source-editor-workspace-content">
       <div class="site-header-tools">
         {{template "themeControl" .}}
+      <div class="workspace-memory">
+        <p class="workspace-memory-hint">Reading places, recent notes, and your side reference are remembered in this browser.</p>
+        <button type="button" class="bn-button" data-forget-workspace>Forget remembered places</button>
+        <p role="status" aria-live="polite"></p>
+      </div>
         {{if and (ne . "library") (ne . "graph")}}{{template "headerSearch" .}}{{end}}
       </div>
       {{template "workspaceNav" .}}

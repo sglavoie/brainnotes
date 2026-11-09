@@ -1,3 +1,4 @@
+import { initWorkspaceMemory } from "./workspace-memory";
 import { initCommandSwitcher } from "./command-switcher";
 import { initSideReference } from "./side-reference";
 import { initCapture } from "./capture";
@@ -12,7 +13,6 @@ import { initNotePeek } from "./note-peek";
 import { initNoteNavigation } from "./note-navigation";
 import { initNoteMobileSidebars } from "./note-mobile-sidebars";
 import { initNoteLayout } from "./note-layout";
-import { initNoteInsight } from "./note-insight";
 import { initNotePinAction } from "./note-pin";
 import { initTrashNoteAction } from "./note-trash";
 import { initTrashUndo } from "./note-trash-undo";
@@ -26,6 +26,7 @@ import { initPendingWriteOutcomes } from "./write-outcome-check";
 (function () {
   const readOnly = document.documentElement.dataset.readOnly === "true";
   initTheme();
+  initWorkspaceMemory();
   initWorkspacePopovers();
   initCommandSwitcher();
   if (!readOnly) {
@@ -36,7 +37,6 @@ import { initPendingWriteOutcomes } from "./write-outcome-check";
     initNotePinAction();
     initTrashNoteAction();
     initTrashUndo();
-    initNoteInsight();
     initFrontmatterEditing();
   }
   // The synchronization line is on every page in every mode: a replica that

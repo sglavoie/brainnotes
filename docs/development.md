@@ -46,7 +46,9 @@ The generated JavaScript is committed so Go-only builds do not need Node. The
 editor and Sync pages load `editing.js` for CodeMirror; note reading loads only
 `app.js`. Each workspace loads its own small page bundle. Recent-history tools
 load with Library, Properties and Settings; connection-writing tools load only
-when someone chooses to write about a connection.
+when someone chooses to write about a connection. Note-specific AI tools load
+only when the note page offers a configured agent; ordinary reading keeps its
+360 KB combined script/style and 400 KB whole-page transfer budgets.
 New note, Pinned, and broken-link repair share `workspace-actions.js`; folder
 suggestions load only on the creation, editor, and Library screens.
 `internal/cli/web-build-args.json` is the shared entry manifest for local builds,
@@ -150,6 +152,11 @@ manual screen reader pass, use the
 vault. Record the exact build, device, OS, browser, assistive technology,
 observed results, and failures with release evidence. Automation cannot verify
 spoken order or announcement quality.
+
+`return-to-thought.spec.js` checks compact property preferences, Library result
+placement, capture expansion, passage/reference restoration in a fresh tab,
+forgetting remembered places, stable reference headers, and inline connection
+creation after a lost response.
 
 `screen-polish.spec.js` checks usable mobile Properties filters, actual properties
 on entry, reading content near the top, Library action placement, Health's real

@@ -48,8 +48,11 @@ export const initNotePinAction = (deps: NotePinActionDeps = {}): void => {
   const config = readNotePinConfig(container);
   const fetcher = deps.fetch || fetch;
 
+  let confirmationTimer = 0;
   const setStatus = (message: string, kind: NotePinStatusKind = ""): void => {
-    setStatusText(statusEl, message || " ", kind, ["is-success", "is-error"]);
+    window.clearTimeout(confirmationTimer);
+    setStatusText(statusEl, message, kind, ["is-success", "is-error"]);
+    if (kind === "is-success") confirmationTimer = window.setTimeout(() => setStatus(""), 3000);
   };
 
   const applyState = (pinned: boolean): void => {

@@ -1,5 +1,5 @@
 import { EditorView } from "@codemirror/view";
-import { rememberNoteResume } from "./note-resume";
+import { readNoteResume, rememberNoteResume } from "./note-resume";
 
 export const bodyStartLine = (text: string): number => {
   const header = /^(?:\uFEFF)?---[ \t]*\r?\n[\s\S]*?\r?\n(?:---|\.\.\.)[ \t]*(?:\r?\n|$)/.exec(text);
@@ -24,7 +24,9 @@ const revealPreview = (preview: HTMLElement, passage: Passage): void => {
 
 const initialLine = (): number | null => {
   try {
-    const position = JSON.parse(new URLSearchParams(location.search).get("read_at") || "null");
+    const raw = new URLSearchParams(location.search).get("read_at");
+    const key = document.querySelector<HTMLElement>("[data-source-editor]")?.dataset.sourceKey || "";
+    const position = raw ? JSON.parse(raw) : readNoteResume(key);
     return Number.isSafeInteger(position?.sourceLine) && position.sourceLine > 0 ? position.sourceLine : null;
   } catch { return null; }
 };
@@ -64,14 +66,18 @@ export const bindSourcePosition = (view: EditorView, host: HTMLElement): (() => 
   };
   preview.addEventListener("scroll", remember);
   view.scrollDOM.addEventListener("scroll", rememberEditor);
+  let forgotten = false;
+  const forget = (): void => { forgotten = true; };
+  document.addEventListener("bn:forget-workspace", forget);
   const rememberSession = (): void => {
+    if (forgotten) return;
     const cursor = view.state.doc.lineAt(view.state.selection.main.head);
     const before = view.state.doc.sliceString(0, cursor.from);
     const headings = [...before.matchAll(/^#{1,6}\s+(.+)$/gm)];
     rememberNoteResume(panel?.dataset.sourceKey || "", {
       sourceLine: Math.max(1, cursor.number - bodyLine() + 1),
       label: headings.at(-1)?.[1] || "Your last writing position", excerpt: cursor.text,
-      heading: "", offset: 0, ratio: 0,
+      heading: "", offset: 0, ratio: 0, writing: true,
     });
   };
   window.addEventListener("pagehide", rememberSession);
@@ -98,6 +104,7 @@ export const bindSourcePosition = (view: EditorView, host: HTMLElement): (() => 
   }
   return () => {
     window.removeEventListener("pagehide", rememberSession);
+    document.removeEventListener("bn:forget-workspace", forget);
     observer.disconnect(); cancelAnimationFrame(frame);
     preview.removeEventListener("scroll", remember);
     view.scrollDOM.removeEventListener("scroll", rememberEditor);

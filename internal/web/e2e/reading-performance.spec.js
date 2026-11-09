@@ -31,13 +31,15 @@ test("reading page stays within its transfer budget", async ({ page, context }, 
   await testInfo.attach("reading-performance", { body: JSON.stringify(measurement, null, 2), contentType: "application/json" });
   console.log(JSON.stringify(measurement));
   expect(scripts[0].bytes).toBeGreaterThan(0);
-  expect(scripts[0].bytes).toBeLessThan(122_000);
+  expect(scripts[0].bytes).toBeLessThan(119_000);
   expect(scripts.map((entry) => entry.path)).toEqual(["/static/app.js"]);
   expect(stylesheets.map((entry) => entry.path)).toEqual(["/static/app.css"]);
   expect(stylesheets[0].bytes).toBeGreaterThan(0);
-  // History now lives in its workspace bundles, freeing 7 KB for reading and
-  // writing styles. Keep the combined 360 KB asset and 400 KB page budgets.
-  expect(stylesheets[0].bytes).toBeLessThan(238_000);
+  // Optional note AI now loads only on configured pages. Allocate 3 KB of its
+  // script saving to the reading styles, preserving the 360 KB combined asset
+  // budget and the 400 KB whole-page budget.
+  expect(stylesheets[0].bytes).toBeLessThan(241_000);
+  expect(scripts[0].bytes + stylesheets[0].bytes).toBeLessThan(360_000);
   expect(navigationBytes).toBeGreaterThan(0);
   expect(totalTransferBytes).toBeLessThan(400_000);
   expect(firstContentfulPaintMilliseconds).not.toBeNull();

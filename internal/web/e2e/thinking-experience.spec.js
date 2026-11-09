@@ -81,9 +81,14 @@ test("connection opens two passages and creates a recoverable draft with both so
   await page.locator(".related-card .connection-launch").first().click();
   await dialog.getByRole("button", { name: "Write a thought about this connection" }).click();
   await expect(body).toHaveValue(/Practice becomes useful/);
-  await page.getByRole("button", { name: "Create and write" }).click();
-  await expect(page.locator(".cm-content")).toContainText("Practice becomes useful");
-  await expect(page.locator(".cm-content")).toContainText(sources.trim().split("\n").filter(Boolean).join(""));
+  await page.getByRole("button", { name: "Save thought", exact: true }).click();
+  await expect(dialog.locator(".connection-saved")).toContainText("Practice becomes useful");
+  await expect(dialog.locator(".connection-note h3")).toHaveCount(2);
+  await accessible(page);
+  await dialog.getByRole("link", { name: "Open note", exact: true }).click();
+  await expect(page.locator("[data-note-body]")).toContainText("Practice becomes useful");
+  const sourceTitles = sources.match(/\[\[([^\]]+)\]\]/g).map((link) => link.slice(2, -2));
+  for (const title of sourceTitles) await expect(page.locator("[data-note-body]")).toContainText(title);
 });
 
 test("reference and switcher fit a small phone and respect reduced motion", async ({ page }) => {

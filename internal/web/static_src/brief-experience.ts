@@ -32,7 +32,7 @@ const enhanceResume = (card: HTMLElement): void => {
   const resume = readNoteResume(decodeURIComponent(new URL(link.href).pathname.slice(3)));
   if (!resume) return;
   const context = card.querySelector<HTMLElement>(".brief-card-context");
-  if (context) context.textContent = `Last passage in this tab · ${resume.label}`;
+  if (context) context.textContent = `Your last passage · ${resume.label}`;
   const excerpt = card.querySelector<HTMLElement>(".brief-card-excerpt");
   if (excerpt && resume.excerpt) excerpt.textContent = readableExcerpt(resume.excerpt);
 };

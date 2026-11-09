@@ -23,8 +23,10 @@ Library shows one results list as you type; Enter moves focus to its heading.
 The matching count and result actions sit together above the list.
 An active search uses a compact phone layout with two-line excerpts to leave more
 room for results.
-**Filters** opens the filter picker; active constraints remain visible when it is
-closed. **Search actions** contains Copy search link and Save as view.
+**Filters** opens the filter picker and the optional **Query expression** disclosure;
+active constraints remain visible when it is closed. Expressions from a saved view
+or URL open both disclosures so the active query stays visible. **Search actions**
+contains Copy search link and Save as view.
 While a search updates, previous results remain visible with an updating treatment;
 a loading announcement appears only if the request takes longer than 350 ms.
 Superseded requests are cancelled. Text composition finishes before a search runs.
@@ -95,7 +97,9 @@ See [query expressions and saved views](web-server-query-bar.md) for syntax.
 ## Read and follow connections
 
 A note shows its rendered body, properties, backlinks, outgoing links, and
-Contents. Properties initially show their values. Choose **Edit** beside a
+Contents. Properties initially show a compact summary of the first two values.
+**All properties** reveals the complete values and editing controls; the expanded
+or compact preference is remembered in this browser. Choose **Edit** beside a
 property to reveal **Update property**, **Remove property**, and list controls.
 **Add property** opens the new-property form. Read-only replicas show values without edit controls.
 
@@ -353,7 +357,7 @@ Short confirmation and card transitions respect reduced-motion preferences.
 ## Thinking workspace
 
 Use **Search** in the header or **Ctrl/⌘ + K** from any workspace to find notes,
-recently visited notes in this tab, saved views, and actions. Arrow keys choose a
+recently visited notes in this browser, saved views, and actions. Arrow keys choose a
 result, Enter opens it, and Escape returns focus to your writing. Search covers
 the vault independently of the current Library filters. The editor uses
 **Ctrl/⌘ + Alt + K** for Markdown links; **Ctrl/⌘ + Shift + K** still inserts a wikilink.
@@ -364,9 +368,13 @@ preferred; otherwise the opening prose is shown. The connecting note is a link,
 and each source title opens the full note. Previewing a connection does not
 record an open or change the notes. On writable servers, **Write a thought about
 this connection** opens a writing area beneath the passages. Write first, then
-choose **Save thought…** to name the note and **Create and write** to save. Both
-source links are included automatically. Unfinished writing and an unconfirmed
-creation receipt are kept in this tab; reopen the same connection after reloading to
+choose **Save thought…** to review an editable title suggested from the first
+sentence, then **Save thought** to save. Both source links are included automatically.
+After confirmed creation, the saved thought appears beneath the source pair.
+**Keep exploring** returns to the same place with focus on the connection you
+opened; **Open note** opens the new note. An uncertain response keeps the form
+and offers **Check creation** using the same request. Unfinished writing and an
+unconfirmed creation receipt are kept in this tab; reopen the same connection after reloading to
 recover them. Short link-list passages include nearby substantive prose, and the
 matching reference is highlighted.
 
@@ -375,8 +383,8 @@ or **Keep beside**, opens the selected note as a reference while preserving unsa
 writing.
 
 A link preview's **Keep beside this note** action keeps a reference visible while
-you read or write. It remains open across navigation in this tab and vault; close
-it with **Close reference** or Escape while focus is inside it. Desktop uses a
+you read or write. It remains open across navigation and browser sessions for this
+vault; close it with **Close reference** or Escape while focus is inside it. Desktop uses a
 side panel with a draggable divider (also adjustable with arrow keys); its width is
 remembered in this browser. Opening and resizing it preserves the visible reading
 passage. Phones use a panel below the reading area that can collapse to a small
@@ -384,7 +392,16 @@ strip. References show bounded plain-text passages, with a full-note link for
 longer notes. No attachments or
 agents are loaded by a reference preview.
 
-The Brief keeps capture and recommendations first. **Vault overview** expands
+Reading and writing places are remembered for up to 32 recent notes in this
+browser, scoped to the vault. Reopening a note resumes the last passage; an
+explicit section link or editor return position takes precedence. The Brief's
+Continue card uses the remembered passage too. **Workspace → Forget remembered
+places** clears these positions, recent search notes, and the side reference for
+this vault, without clearing drafts or pending creation receipts. If browser
+storage is unavailable, normal reading and writing remain available.
+
+The Brief's capture field starts as one line and expands on focus or when it
+contains a draft. Capture and recommendations remain first. **Vault overview** expands
 health, pinned notes and recently modified notes. Reading uses a distinct title
 aligned with the prose, compact property presentation, and the existing Quiet
 reading and Book type preferences. Interaction motion respects reduced motion.

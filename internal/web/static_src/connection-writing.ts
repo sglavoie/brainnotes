@@ -1,3 +1,4 @@
+import { showSavedThought, suggestThoughtTitle } from "./connection-completion";
 import { initNewNote } from "./new-note";
 
 // Reuse the server-validated sources and ordinary creation receipt/recovery.
@@ -31,7 +32,8 @@ const openWriting = ({ host, sources, signal }: ConnectionWritingRequest): void 
     thought.value = "";
     thought.maxLength = Math.max(0, 20000 - form.dataset.newNotePrefix.length);
     host.replaceChildren(form);
-    initNewNote(host);
+    form.dataset.newNoteSubmitLabel = "Save thought";
+    initNewNote(host, { navigate: (url) => showSavedThought(form, url) });
     arrangeWriting(form);
   }).catch(() => {
     if (signal.aborted) return;
@@ -62,9 +64,14 @@ const arrangeWriting = (form: HTMLFormElement): void => {
   save.type = "button"; save.className = "bn-button bn-primary"; save.textContent = "Save thought…";
   save.hidden = !naming.hidden;
   save.addEventListener("click", () => {
+    if (!title.value.trim()) title.value = suggestThoughtTitle(body.value);
+    title.dispatchEvent(new Event("input", { bubbles: true }));
     naming.hidden = false; submit.hidden = false; save.hidden = true; title.focus();
   });
-  body.after(save);
+  const hint = document.createElement("p");
+  hint.className = "connection-save-hint";
+  hint.textContent = "Creates a note linked to both sources.";
+  body.after(save, hint);
   body.focus({ preventScroll: true });
   body.setSelectionRange(body.value.length, body.value.length);
 };

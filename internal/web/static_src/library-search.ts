@@ -30,7 +30,11 @@ export const initLibrarySearch = (): void => {
     if (indicator) indicator.textContent = expr ? "· active" : "· optional";
     // An expression arriving through a saved view or browser history must be
     // visible. Do not close the disclosure while someone is drafting a query.
-    if (expression && expr) expression.open = true;
+    if (expression && expr) {
+      expression.open = true;
+      const filters = expression.closest<HTMLDetailsElement>(".library-filters");
+      if (filters) filters.open = true;
+    }
   };
   refresh();
   window.addEventListener(browserQueryChangeEventName, refresh);

@@ -28,6 +28,15 @@
       </div>
       <button class="bn-button facet-clear-all" type="button" data-facet-clear-all hidden>Clear filters</button>
     </div>
+    {{if eq .Mode "search"}}
+      <div class="library-search-options">
+      <details class="library-expression" data-library-expression>
+        <summary>Query expression <span data-library-expression-indicator></span></summary>
+        <p class="library-expression-help">Search text, filters, and expressions apply together. Notes must match every active constraint. Press Enter in search to move to the results.</p>
+        {{template "queryBar" ""}}
+      </details>
+      </div>
+    {{end}}
     {{if or (eq .Mode "search") (eq .Mode "graph")}}</details>{{end}}
     <p data-facet-status role="status" aria-live="polite"></p>
     <button class="bn-button facet-clear-all" type="button" data-facet-retry hidden>Retry filters</button>

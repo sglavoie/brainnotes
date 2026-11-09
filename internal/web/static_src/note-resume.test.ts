@@ -3,9 +3,9 @@ import { beforeEach, expect, it } from "vitest";
 import { briefEditorDestination, readNoteResume, rememberNoteResume, resumeDestination } from "./note-resume";
 import { readableExcerpt } from "./note-excerpt";
 
-beforeEach(() => { sessionStorage.clear(); document.documentElement.dataset.vaultId = "vault-one"; });
+beforeEach(() => { sessionStorage.clear(); localStorage.clear(); document.documentElement.dataset.vaultId = "vault-one"; });
 
-it("keeps passage hints scoped to the vault and tab, bounded to recent notes", () => {
+it("keeps passage hints scoped to the vault across browser sessions, bounded to recent notes", () => {
   const position = { sourceLine: 10, heading: "section", label: "A heading", excerpt: "words", offset: 0, ratio: 0.2 };
   rememberNoteResume("Folder/Été.md", position);
   expect(readNoteResume("folder/été")).toEqual(position);
@@ -28,4 +28,13 @@ it("constructs only an editor route and rejects arbitrary navigation", () => {
 it("reads wiki aliases without treating excerpt text as markup", () => {
   expect(readableExcerpt("See [[Books/Deep Work#Focus|the book]] and [[Ideas.md]]. <img src=x>"))
     .toBe("See the book and Ideas. <img src=x>");
+});
+
+
+it("migrates session hints and survives a new browser session", () => {
+  const position = { sourceLine: 10, heading: "section", label: "A heading", excerpt: "words", offset: 0, ratio: 0.2 };
+  sessionStorage.setItem("bn.resume.v1:vault-one", JSON.stringify({ alpha: position }));
+  expect(readNoteResume("Alpha")).toEqual(position);
+  sessionStorage.clear();
+  expect(readNoteResume("Alpha")).toEqual(position);
 });

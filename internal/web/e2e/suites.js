@@ -2,6 +2,7 @@
 export const browserSuites = {
   "pr": [
     "experience.spec.js",
+    "return-to-thought.spec.js",
     "thinking-experience.spec.js",
     "writing-desk.spec.js",
     "accessibility.spec.js",

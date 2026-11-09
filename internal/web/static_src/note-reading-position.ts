@@ -1,6 +1,6 @@
-import { rememberNoteResume } from "./note-resume";
+import { readNoteResume, rememberNoteResume } from "./note-resume";
 
-type ReadingPosition = { heading: string; offset: number; ratio: number; sourceLine?: number };
+type ReadingPosition = { heading: string; offset: number; ratio: number; sourceLine?: number; writing?: boolean };
 const parameter = "read_at";
 
 const capture = (body: HTMLElement): ReadingPosition => {
@@ -32,6 +32,27 @@ const parsePosition = (raw: string | null): ReadingPosition | null => {
   } catch { return null; }
 };
 
+const rememberReadingPosition = (body: HTMLElement): void => {
+  let forgotten = false;
+  document.addEventListener("bn:forget-workspace", () => { forgotten = true; });
+  window.addEventListener("pagehide", () => {
+    if (forgotten) return;
+    const position = capture(body);
+    const passage = [...body.querySelectorAll<HTMLElement>("[data-source-line]")]
+      .find((block) => Number(block.dataset.sourceLine) === position.sourceLine);
+    rememberNoteResume(decodeURIComponent(window.location.pathname.slice(3)), {
+      ...position, sourceLine: position.sourceLine || 1,
+      label: document.getElementById(position.heading)?.textContent?.replace(/#\s*$/, "").trim() || "Your last reading position",
+      excerpt: passage?.textContent?.trim() || "",
+    });
+  });
+};
+
+const initialPosition = (raw: string | null): ReadingPosition | null => {
+  if (raw) return parsePosition(raw);
+  return readNoteResume(decodeURIComponent(window.location.pathname.slice(3)));
+};
+
 // Carry position in the editor URL so separate tabs and renamed notes retain it.
 export const initReadingPosition = (): void => {
   const body = document.querySelector<HTMLElement>("[data-note-body]");
@@ -44,16 +65,7 @@ export const initReadingPosition = (): void => {
     }
     return;
   }
-  window.addEventListener("pagehide", () => {
-    const position = capture(body);
-    const passage = [...body.querySelectorAll<HTMLElement>("[data-source-line]")]
-      .find((block) => Number(block.dataset.sourceLine) === position.sourceLine);
-    rememberNoteResume(decodeURIComponent(window.location.pathname.slice(3)), {
-      ...position, sourceLine: position.sourceLine || 1,
-      label: document.getElementById(position.heading)?.textContent?.replace(/#\s*$/, "").trim() || "Your last reading position",
-      excerpt: passage?.textContent?.trim() || "",
-    });
-  });
+  rememberReadingPosition(body);
   for (const link of document.querySelectorAll<HTMLAnchorElement>("[data-source-editor-launch]")) {
     const update = (): void => {
       const url = new URL(link.href);
@@ -62,7 +74,7 @@ export const initReadingPosition = (): void => {
     };
     for (const event of ["pointerdown", "focus", "click", "contextmenu"]) link.addEventListener(event, update);
   }
-  const position = parsePosition(raw);
+  const position = initialPosition(raw);
   if (!position || window.location.hash) return;
   let cancelled = false;
   const cancel = (): void => { cancelled = true; };
@@ -72,11 +84,8 @@ export const initReadingPosition = (): void => {
     for (const event of events) document.removeEventListener(event, cancel);
     if (cancelled) return;
     const heading = document.getElementById(position.heading);
-    const top = heading && body.contains(heading)
-      ? window.scrollY + heading.getBoundingClientRect().top - position.offset
-      : position.ratio * (document.documentElement.scrollHeight - window.innerHeight);
-    window.scrollTo({ top: Math.max(0, top), behavior: "instant" });
     const passage = [...body.querySelectorAll<HTMLElement>("[data-source-line]")].find((block) => Number(block.dataset.sourceLine) === position.sourceLine);
+    window.scrollTo({ top: Math.max(0, restoreTop(body, heading, passage, position)), behavior: "instant" });
     (passage || heading)?.classList.add("resume-passage");
     const url = new URL(window.location.href);
     url.searchParams.delete(parameter);
@@ -94,4 +103,10 @@ export const carryReadingPosition = (target: string): string => {
     url.searchParams.set(parameter, raw!);
     return url.pathname + url.search + url.hash;
   } catch { return target; }
+};
+
+const restoreTop = (body: HTMLElement, heading: HTMLElement | null, passage: HTMLElement | undefined, position: ReadingPosition): number => {
+  if (heading && body.contains(heading)) return window.scrollY + heading.getBoundingClientRect().top - position.offset;
+  if (passage && position.writing === true) return window.scrollY + passage.getBoundingClientRect().top - 96;
+  return position.ratio * (document.documentElement.scrollHeight - window.innerHeight);
 };

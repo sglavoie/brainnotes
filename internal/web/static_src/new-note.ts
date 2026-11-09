@@ -30,7 +30,7 @@ export const initNewNote = (root: ParentNode = document, deps: NewNoteDeps = {})
   const keepDraft = (): void => draft.save({ title: title.value, folder: folder.value, body: prefix + (body?.value || ""), pending });
   const preview = (): void => {
     const value = values();
-    button.textContent = pending?.signature === JSON.stringify(value) ? "Check creation" : "Create and write";
+    button.textContent = pending?.signature === JSON.stringify(value) ? "Check creation" : (form.dataset.newNoteSubmitLabel || "Create and write");
     const name = value.title.replace(/\.md$/i, "");
     destination.textContent = name
       ? `Destination: ${value.folder ? value.folder + "/" : ""}${name}.md`

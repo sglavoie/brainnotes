@@ -1,3 +1,4 @@
+import { readWorkspaceMemory, writeWorkspaceMemory } from "./workspace-memory";
 import { preserveReadingPlace, referenceControls } from "./reference-layout";
 import { noteKeyFromPath, readNoteReference, renderReference } from "./note-reference";
 
@@ -10,12 +11,11 @@ export const keepReference = (path: string, returnTarget?: HTMLElement): void =>
 
 export const initSideReference = (): void => {
   try {
-    const key = sessionStorage.getItem(storageKey());
+    const key = readWorkspaceMemory("reference");
     if (key) { panel ||= new SideReference(); void panel.open(key); }
   } catch { /* Reading works without persistence. */ }
 };
 
-const storageKey = (): string => `bn.reference:${document.documentElement.dataset.vaultId}`;
 
 class SideReference {
   private readonly root = document.createElement("aside");
@@ -25,6 +25,7 @@ class SideReference {
   private returnTarget?: HTMLElement;
 
   constructor() {
+    document.addEventListener("bn:forget-workspace", () => this.hide(false));
     this.root.className = "side-reference";
     this.root.setAttribute("aria-label", "Reference note");
     this.root.hidden = true;
@@ -59,7 +60,7 @@ class SideReference {
     });
     this.content.textContent = "Loading reference…";
     if (returnTarget) this.close.focus({ preventScroll: true });
-    try { sessionStorage.setItem(storageKey(), key); } catch { /* Optional persistence. */ }
+    try { writeWorkspaceMemory("reference", key); } catch { /* Optional persistence. */ }
     try {
       const note = await readNoteReference(key, request.signal);
       if (!request.signal.aborted) { renderReference(this.content, note); this.content.scrollTop = 0; }
@@ -78,14 +79,14 @@ class SideReference {
     this.content.append(retry);
   }
 
-  private hide(): void {
+  private hide(restoreFocus = true): void {
     this.request?.abort();
     preserveReadingPlace(() => {
       this.root.hidden = true;
       document.body.classList.remove("has-reference", "reference-collapsed");
     });
-    try { sessionStorage.removeItem(storageKey()); } catch { /* Optional persistence. */ }
+    try { writeWorkspaceMemory("reference", null); } catch { /* Optional persistence. */ }
     const target = this.returnTarget?.isConnected ? this.returnTarget : document.querySelector<HTMLElement>("[data-note-body], .cm-content");
-    target?.focus({ preventScroll: true });
+    if (restoreFocus) target?.focus({ preventScroll: true });
   }
 }

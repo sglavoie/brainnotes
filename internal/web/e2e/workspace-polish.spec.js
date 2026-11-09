@@ -38,6 +38,7 @@ test("Library combines constraints and removal preserves the remaining query", a
   const url = new URL(page.url());
   expect(Object.fromEntries(url.searchParams)).toEqual({ q: "Reading", status: "draft", sort: "title", limit: "10" });
   await expect(search.locator("[data-library-expression]")).not.toHaveAttribute("open");
+  await search.locator(".library-filters > summary").click();
   await search.locator("[data-library-expression] > summary").click();
   await expect(page.locator("#query-bar-input")).toBeVisible();
   await page.locator("#query-bar-input").fill("status:draft");

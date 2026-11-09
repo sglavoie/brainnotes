@@ -165,7 +165,15 @@ function thinkingVisuals(snapshot) {
     await page.getByRole("button", { name: "Write a thought about this connection" }).click();
     await page.getByLabel("Your thought", { exact: true }).fill("These observations suggest a better question for the next visit.");
     await snapshot(page, "connection-writing");
-    await page.keyboard.press("Escape");
+    await page.getByRole("button", { name: "Save thought…", exact: true }).click();
+    // Fixed success keeps this visual state from changing subsequent fixtures;
+    // return-to-thought.spec.js exercises the real write and receipt recovery.
+    await page.route("**/api/notes/new", (route) => route.fulfill({ json: { ok: true, key: "A better question" } }));
+    await page.getByLabel("Title", { exact: true }).fill("A better question");
+    await page.getByRole("button", { name: "Save thought", exact: true }).click();
+    await expect(page.locator(".connection-saved")).toContainText("Thought saved");
+    await snapshot(page, "connection-saved");
+    await page.getByRole("button", { name: "Keep exploring" }).click();
     const link = page.locator('[data-note-body] a[href^="/n/beta"]').first();
     await link.focus();
     await link.press("Alt+ArrowDown");

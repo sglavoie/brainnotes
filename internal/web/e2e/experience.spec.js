@@ -115,7 +115,7 @@ test("Continue resumes the passage last visited in this tab", async ({ page }) =
   await editor.click();
   await editor.press("ControlOrMeta+End");
   await page.goto("/");
-  await expect(page.locator('[data-brief-slot="continue"] .brief-card-context')).toContainText("Last passage in this tab");
+  await expect(page.locator('[data-brief-slot="continue"] .brief-card-context')).toContainText("Your last passage");
   await page.locator('[data-brief-slot="continue"] [data-brief-action-open]').click();
   await expect(page).toHaveURL(/read_at=/);
   const position = JSON.parse(new URL(page.url()).searchParams.get("read_at"));

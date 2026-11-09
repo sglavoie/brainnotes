@@ -1,14 +1,14 @@
+import { readWorkspaceMemory, writeWorkspaceMemory } from "./workspace-memory";
 import { searchExcerptText } from "./text-highlight";
 import { normalizeSearchResults, searchResultPath } from "./api-search";
 import { fetchSavedViews } from "./saved-views-requests";
 import { savedViewHref } from "./saved-views-model";
 
 export type SwitcherEntry = { label: string; detail: string; excerpt?: string; path?: string; action?: string };
-const recentKey = (): string => `bn.switcher.recent:${document.documentElement.dataset.vaultId}`;
 
 export const recentEntries = (): SwitcherEntry[] => {
   try {
-    const parsed: unknown = JSON.parse(sessionStorage.getItem(recentKey()) || "[]");
+    const parsed: unknown = JSON.parse(readWorkspaceMemory("switcher.recent") || "[]");
     if (!Array.isArray(parsed)) return [];
     return parsed.filter((entry): entry is SwitcherEntry => typeof entry?.label === "string" && typeof entry?.path === "string" && entry.path.startsWith("/n/")).slice(0, 8);
   } catch { return []; }
@@ -19,7 +19,7 @@ export const rememberCurrentNote = (): void => {
   if (!title || !window.location.pathname.startsWith("/n/")) return;
   const path = window.location.pathname;
   const entries = [{ label: title, path, detail: "Recent note" }, ...recentEntries().filter((entry) => entry.path?.toLocaleLowerCase() !== path.toLocaleLowerCase())].slice(0, 8);
-  try { sessionStorage.setItem(recentKey(), JSON.stringify(entries)); } catch { /* Optional history. */ }
+  try { writeWorkspaceMemory("switcher.recent", JSON.stringify(entries)); } catch { /* Optional history. */ }
 };
 
 export const workspaceEntries = (): SwitcherEntry[] => {

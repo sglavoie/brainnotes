@@ -1,16 +1,18 @@
-export type NoteResume = { sourceLine: number; label: string; excerpt: string; heading: string; offset: number; ratio: number };
-const storageKey = (): string => `bn.resume.v1:${document.documentElement.dataset.vaultId || ""}`;
+import { readWorkspaceMemory, writeWorkspaceMemory } from "./workspace-memory";
+export type NoteResume = { sourceLine: number; label: string; excerpt: string; heading: string; offset: number; ratio: number; writing?: boolean };
 const keyFor = (key: string): string => key.normalize("NFC").toLowerCase().replace(/\.md$/i, "");
 
 const readEntries = (): Record<string, NoteResume> => {
-  try { return JSON.parse(window.sessionStorage.getItem(storageKey()) || "{}"); } catch { return {}; }
+  try { return JSON.parse(readWorkspaceMemory("resume.v1") || "{}"); } catch { return {}; }
 };
+
+const validRatio = (ratio: number): boolean => Number.isFinite(ratio) && ratio >= 0 && ratio <= 1;
 
 export const readNoteResume = (key: string): NoteResume | null => {
   const value = readEntries()?.[keyFor(key)];
   return value && Number.isSafeInteger(value.sourceLine) && value.sourceLine > 0 &&
     typeof value.label === "string" && typeof value.excerpt === "string" &&
-    typeof value.heading === "string" && Number.isFinite(value.offset) && Number.isFinite(value.ratio)
+    typeof value.heading === "string" && Number.isFinite(value.offset) && validRatio(value.ratio)
     ? value : null;
 };
 
@@ -21,7 +23,7 @@ export const rememberNoteResume = (key: string, value: NoteResume): void => {
     delete entries[keyFor(key)];
     const recent = Object.fromEntries(Object.entries(entries).slice(-31));
     recent[keyFor(key)] = { ...value, label: value.label.slice(0, 160), excerpt: value.excerpt.slice(0, 320) };
-    window.sessionStorage.setItem(storageKey(), JSON.stringify(recent));
+    writeWorkspaceMemory("resume.v1", JSON.stringify(recent));
   } catch { /* Resuming is optional; existing draft recovery remains independent. */ }
 };
 

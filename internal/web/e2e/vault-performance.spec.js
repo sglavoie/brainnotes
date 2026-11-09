@@ -46,6 +46,7 @@ test("large vault Library search and filtering remain responsive", async ({ page
     samples.push(Date.now() - start);
   }
   const filterStart = Date.now();
+  await page.locator(".library-filters > summary").click();
   await page.locator("[data-library-expression] > summary").click();
   await page.locator("[data-query-bar-input]").fill("status:draft");
   await expect(page.locator("[data-overview-search-status]")).toContainText(`of ${testInfo.project.metadata.noteCount > 10000 ? 5000 : 500}`);

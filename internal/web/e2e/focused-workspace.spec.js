@@ -53,7 +53,8 @@ for (const path of ["/n/Reading", "/library", "/edit?key=Reading"]) {
 test("reading shows values and opens only the selected property editor", async ({ page }) => {
   await page.goto("/n/Reading");
   const panel = page.locator("[data-frontmatter-panel]");
-  await expect(panel.locator('.frontmatter-text').filter({ hasText: /^draft$/ })).toBeVisible();
+  await panel.locator("[data-note-properties] > summary").click();
+  await expect(panel.locator('.frontmatter-rows .frontmatter-text').filter({ hasText: /^draft$/ })).toBeVisible();
   await expect(panel.locator("form:visible")).toHaveCount(0);
   await panel.getByLabel("Edit status", { exact: true }).focus();
   await page.keyboard.press("Enter");
