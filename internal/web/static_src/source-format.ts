@@ -7,6 +7,8 @@
 // Vitest rather than only in a browser, where every assertion would cost a
 // page load.
 
+import { formatBlock, isBlockFormat } from "./source-block-format";
+
 export type SourceSelection = {
   from: number;
   to: number;
@@ -27,6 +29,9 @@ export type SourceFormatCommand =
   | "code"
   | "heading"
   | "bullet"
+  | "numbered"
+  | "task"
+  | "quote"
   | "link"
   | "wikilink";
 
@@ -45,7 +50,6 @@ const INLINE_MARKERS: Record<"bold" | "italic" | "code", string> = {
 };
 
 const HEADING_PREFIX = /^(#{1,6}) /;
-const BULLET_PREFIX = /^(\s*)([-*+]) /;
 
 export type SourceFormatOptions = {
   // headingLevel is 1..6 and only read by the heading command. Applying the
@@ -61,6 +65,7 @@ export const formatSource = (
   options: SourceFormatOptions = {}
 ): SourceEdit => {
   const range = clampSelection(doc, selection);
+  if (isBlockFormat(command)) return formatBlock(doc, lineRange(doc, range), command);
   switch (command) {
     case "bold":
     case "italic":
@@ -68,8 +73,6 @@ export const formatSource = (
       return toggleInline(doc, range, INLINE_MARKERS[command]);
     case "heading":
       return toggleHeading(doc, range, headingLevel(options.headingLevel));
-    case "bullet":
-      return toggleBullet(doc, range);
     case "link":
       return insertLink(doc, range);
     case "wikilink":
@@ -133,25 +136,6 @@ const toggleHeading = (doc: string, range: SourceSelection, level: number): Sour
   });
 };
 
-// toggleBullet turns the touched lines into a list, or back out of one. It is
-// all-or-nothing across the selection: a run where some lines are already
-// bulleted becomes wholly bulleted, because the alternative — flipping each
-// line independently — inverts a partly-marked list instead of finishing it.
-const toggleBullet = (doc: string, range: SourceSelection): SourceEdit => {
-  const lines = linesInRange(doc, range);
-  const allBulleted = lines.every((line) => line.trim() === "" || BULLET_PREFIX.test(line));
-  return rewriteLines(doc, range, (line) => {
-    if (line.trim() === "") {
-      return line;
-    }
-    const existing = BULLET_PREFIX.exec(line);
-    if (allBulleted && existing) {
-      return existing[1] + line.slice(existing[0].length);
-    }
-    return existing ? line : `- ${line}`;
-  });
-};
-
 // insertLink writes a Markdown link and leaves the selection on the part that
 // still needs typing: the destination when there was text to link, the text
 // when there was not.
@@ -206,15 +190,10 @@ const clampSelection = (doc: string, selection: SourceSelection): SourceSelectio
 // selecting one whole line with a trailing newline would format two.
 export const lineRange = (doc: string, selection: SourceSelection): SourceSelection => {
   const range = clampSelection(doc, selection);
-  const start = doc.lastIndexOf("\n", range.from - 1) + 1;
+  const start = range.from === 0 ? 0 : doc.lastIndexOf("\n", range.from - 1) + 1;
   const endSearchFrom = range.to > range.from ? range.to - 1 : range.to;
   const newline = doc.indexOf("\n", endSearchFrom);
   return { from: start, to: newline === -1 ? doc.length : newline };
-};
-
-const linesInRange = (doc: string, selection: SourceSelection): string[] => {
-  const span = lineRange(doc, selection);
-  return doc.slice(span.from, span.to).split("\n");
 };
 
 // rewriteLines replaces the touched lines and selects the result. Selecting the

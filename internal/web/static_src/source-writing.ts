@@ -15,7 +15,7 @@ export const initWritingPreferences = (panel: HTMLElement, panes: SourcePanes): 
     try { const value = localStorage.getItem(key); return value && allowed.includes(value) ? value : fallback; }
     catch { return fallback; }
   };
-  layout.value = restore("bn.writing-layout", ["write", "split", "preview", "source"], "write");
+  layout.value = restore("bn.writing-layout", ["write", "focus", "split", "preview", "source"], "write");
   font.value = document.documentElement.dataset.readingType === "book" ? "prose" : "sans";
   // Monospace is an editor-only preference; prose and sans share reading type.
   if (restore("bn.writing-font", ["mono"], "") === "mono") font.value = "mono";
@@ -24,7 +24,8 @@ export const initWritingPreferences = (panel: HTMLElement, panes: SourcePanes): 
     else format?.append(preferences);
   };
   const apply = (): void => {
-    container.dataset.writingLayout = layout.value === "source" ? "write" : layout.value;
+    container.dataset.writingLayout = ["source", "focus"].includes(layout.value) ? "write" : layout.value;
+    panel.closest<HTMLElement>(".source-editor-main")?.classList.toggle("is-writing-focus", layout.value === "focus");
     panel.dataset.writingFont = font.value;
     panel.dataset.writingSource = String(layout.value === "source" || font.value === "mono");
     panel.dispatchEvent(new Event("bn:writing-presentation"));

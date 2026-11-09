@@ -1,3 +1,19 @@
+.source-writing-footer {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem 1rem;
+  color: var(--bn-text-subtle);
+  font-size: 0.8rem;
+}
+.source-writing-footer label { display: inline-flex; align-items: center; gap: 0.4rem; min-height: 2.75rem; cursor: pointer; }
+.source-editor-format[open] .source-editor-commands { max-height: min(60dvh, 24rem); overflow-y: auto; }
+.source-editor-main.is-writing-focus > .site-header,
+.is-writing-focus .source-editor-manage:not([open]),
+.is-writing-focus .source-editor-shortcuts:not([open]),
+.is-writing-focus .source-editor-attach-hint { display: none; }
+
 /*
  * Attachments.
  *

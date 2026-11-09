@@ -177,6 +177,22 @@ writing mode. Moving the cursor into it or finding it reveals the exact source;
 inside Format alongside Type. Write centers the same reading measure and keeps Save in the
 toolbar. Narrow screens retain Edit/Preview tabs, with the type choice inside Format.
 
+**Focus**, in the View menu, centers your writing and hides the workspace header
+and closed management sections. Save, draft recovery, conflicts, and sync notices
+remain available. Choose Write (or another view) to bring the surrounding tools
+back; the view is remembered in this browser.
+
+**Format** also offers numbered lists, task lists, quotes, and heading levels 2
+and 3. List commands convert existing list markers and preserve indentation;
+applying the same format to a fully formatted selection removes it. Enter
+continues Markdown lists and quotes; Enter on an empty item ends the list.
+
+Below the editor, a word count updates after you pause typing and shows a separate
+count for selected text. It counts words in Markdown source, including links and
+code, excluding frontmatter and standalone punctuation. **Spellcheck** enables
+your browser's spelling support and remembers your choice here. Available
+languages and spelling suggestions depend on your browser settings.
+
 Below the writing surface, **This note and this vault** contains History and
 **Rename note**, which reveals the title field and Rename button. Rename changes the
 filename and incoming wikilinks; Save changes the source text. The folder fields

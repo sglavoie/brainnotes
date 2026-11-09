@@ -1,4 +1,5 @@
 import { codeTypography } from "./source-code-type";
+import { writingTools } from "./source-writing-tools";
 import { titlePresentation } from "./source-presentation";
 import { proseSyntax, restoredPassage } from "./source-prose";
 import {
@@ -73,6 +74,7 @@ export const createSourceSurfaceFactory = (
           markdown({ base: markdownLanguage }),
           syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
           codeTypography,
+          writingTools(host),
           proseSyntax,
           titlePresentation(host),
           restoredPassage,

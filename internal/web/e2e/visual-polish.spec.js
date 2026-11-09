@@ -74,7 +74,18 @@ for (const [theme, width] of [["light", 1280], ["dark", 390], ["light", 390], ["
     test("editor and exact Undo confirmation", async ({ page }) => {
       await page.goto("/edit?key=Survey");
       await expect(page.locator(SURFACE)).toContainText("The water has fallen");
+      await expect(page.locator("[data-writing-count]")).not.toBeEmpty();
       await snapshot(page, "editor");
+      const format = page.locator(".source-editor-format > summary");
+      await format.click();
+      await snapshot(page, "writing-format");
+      if (width > 960) await format.click();
+      await page.getByLabel("Writing layout").selectOption("focus");
+      if (width <= 960) await format.click();
+      await snapshot(page, "focus-view");
+      if (width <= 960) await format.click();
+      await page.getByLabel("Writing layout").selectOption("write");
+      if (width <= 960) await format.click();
       if (width > 960) {
         await page.getByLabel("Writing layout").selectOption("write");
         await page.getByLabel("Writing type").selectOption("prose");

@@ -90,12 +90,17 @@
             <button type="button" class="bn-button source-editor-command" data-source-command="code" title="Inline code (Ctrl/⌘ + E)" aria-keyshortcuts="Control+E Meta+E">Code</button>
             <button type="button" class="bn-button source-editor-command" data-source-command="heading" data-source-heading-level="1" title="Heading (Ctrl/⌘ + Alt + 1)" aria-keyshortcuts="Control+Alt+1 Meta+Alt+1">Heading</button>
             <button type="button" class="bn-button source-editor-command" data-source-command="bullet" title="Bullet list (Ctrl/⌘ + Shift + 8)" aria-keyshortcuts="Control+Shift+8 Meta+Shift+8">List</button>
+            <button type="button" class="bn-button source-editor-command" data-source-command="numbered">Numbered list</button>
+            <button type="button" class="bn-button source-editor-command" data-source-command="task">Task list</button>
+            <button type="button" class="bn-button source-editor-command" data-source-command="quote">Quote</button>
+            <button type="button" class="bn-button source-editor-command" data-source-command="heading" data-source-heading-level="2">Heading 2</button>
+            <button type="button" class="bn-button source-editor-command" data-source-command="heading" data-source-heading-level="3">Heading 3</button>
             <button type="button" class="bn-button source-editor-command" data-source-command="link" title="Markdown link (Ctrl/⌘ + Alt + K)" aria-keyshortcuts="Control+Alt+K Meta+Alt+K">Link</button>
             <button type="button" class="bn-button source-editor-command" data-source-command="wikilink" title="Wikilink (Ctrl/⌘ + Shift + K)" aria-keyshortcuts="Control+Shift+K Meta+Shift+K">Wikilink</button>
           </div>
         </details>
         <div class="writing-preferences">
-          <label class="writing-layout-label">View <select data-writing-layout aria-label="Writing layout"><option value="write" selected>Write</option><option value="split">Split</option><option value="preview">Preview</option><option value="source">Source</option></select></label>
+          <label class="writing-layout-label">View <select data-writing-layout aria-label="Writing layout"><option value="write" selected>Write</option><option value="focus">Focus</option><option value="split">Split</option><option value="preview">Preview</option><option value="source">Source</option></select></label>
           <label>Type <select data-writing-font aria-label="Writing type"><option value="prose" selected>Book</option><option value="sans">Sans</option><option value="mono">Monospace</option></select></label>
         </div>
         <div class="source-editor-actions">
@@ -146,6 +151,11 @@
           <button type="button" data-source-preview-retry hidden>Retry preview</button>
           <div class="note-body source-editor-preview" data-source-preview></div>
         </div>
+      </div>
+
+      <div class="source-writing-footer">
+        <span data-writing-count title="Word count of Markdown source, excluding frontmatter. Links and code are included."></span>
+        <label><input type="checkbox" data-writing-spellcheck checked> Spellcheck</label>
       </div>
 
       <section class="source-editor-conflict" data-source-conflict hidden aria-labelledby="source-editor-conflict-heading">
