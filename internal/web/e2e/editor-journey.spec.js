@@ -25,10 +25,10 @@
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
-import { caretToEnd, keptDrafts, openEditor, phraseFor, SURFACE } from "./editor-helpers.js";
+import { caretToEnd, keptDrafts, phraseFor, SURFACE } from "./editor-helpers.js";
 import { expect, gitStatus, manifest, test } from "./fixture.js";
 
-import { NOTE, ATTACHMENTS, ROWS, MARKER, upload, linkFor, vaultPath, openBeta, openManage, createNote, sendFiles, stagedLeftovers, expectEditorKey, trashedPath } from "./editor-journey-helpers.js";
+import { NOTE, ATTACHMENTS, ROWS, MARKER, upload, linkFor, vaultPath, openBeta, openCreatedEditor, openManage, createNote, sendFiles, stagedLeftovers, expectEditorKey, trashedPath } from "./editor-journey-helpers.js";
 
 test("a file chosen in the browser is staged, linked, and enters the vault with the save", async ({
   page,
@@ -170,7 +170,7 @@ test("unsaved text holds a rename until it is saved, and nothing is left under t
 
   await openBeta(page);
   await createNote(page, title);
-  await openEditor(page, `/n/${encodeURIComponent(title)}`, `title: ${title}`);
+  await openCreatedEditor(page, title);
 
   await caretToEnd(page);
   await page.keyboard.type(phrase);
@@ -228,14 +228,15 @@ test("a note created from the editor survives a property, a pin, a move, a trash
 
   await openBeta(page);
   await createNote(page, title);
-  await openEditor(page, `/n/${encodeURIComponent(title)}`, `title: ${title}`);
+  await openCreatedEditor(page, title);
   await openManage(page);
 
   await page.locator("[data-source-property-name]").fill("status");
   await page.locator("[data-source-property-value]").fill("journeyed");
   await page.locator("[data-source-property-set]").click();
   // A property rewrites the note behind the editor's back, so a clean editor
-  // re-reads it. The property arriving on screen is the vault's own answer.
+  // re-reads it with frontmatter folded. Reopen it to inspect the vault's answer.
+  await page.getByRole("button", { name: "Show frontmatter in source editor" }).click();
   await expect(page.locator(SURFACE)).toContainText("status: journeyed");
 
   await page.locator("[data-source-pin]").click();
@@ -293,7 +294,7 @@ test("a property removed, a pin lifted, and a line captured over unsaved text", 
 
   await openBeta(page);
   await createNote(page, title);
-  await openEditor(page, `/n/${encodeURIComponent(title)}`, `title: ${title}`);
+  await openCreatedEditor(page, title);
   await openManage(page);
 
   // Set then removed through the same field, which is the only way a person
@@ -301,8 +302,10 @@ test("a property removed, a pin lifted, and a line captured over unsaved text", 
   await page.locator("[data-source-property-name]").fill("status");
   await page.locator("[data-source-property-value]").fill("temporary");
   await page.locator("[data-source-property-set]").click();
+  await page.getByRole("button", { name: "Show frontmatter in source editor" }).click();
   await expect(page.locator(SURFACE)).toContainText("status: temporary");
   await page.locator("[data-source-property-unset]").click();
+  await page.getByRole("button", { name: "Show frontmatter in source editor" }).click();
   await expect(page.locator(SURFACE)).not.toContainText("status: temporary");
 
   // Each of these waits for its own sentence before the next is asked for. The

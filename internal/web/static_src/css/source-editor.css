@@ -1,12 +1,5 @@
-/*
- * The raw-Markdown editor at /edit.
- *
- * The layout here is the wide one — editor and preview side by side — because
- * every other part of this stylesheet is written that way and responsive.css
- * narrows it with max-width blocks. The tab strip is therefore declared hidden
- * below and shown again there: on a wide screen the two panes are columns and a
- * tablist selecting between them would be a control with nothing to do.
- */
+/* Source editor layout. Write is the default; Split reveals both panes on
+   desktop, while narrow screens use the Edit/Preview tabs. */
 
 .source-editor {
   display: grid;
@@ -83,10 +76,7 @@
   cursor: pointer;
 }
 
-/*
- * A disabled Save is the resting state of a clean note, not an error, so it
- * reads as quiet rather than broken.
- */
+/* A clean note has nothing to save; keep this resting state quiet. */
 .source-editor-save:disabled {
   border-color: var(--bn-border);
   background: var(--bn-sunken);
@@ -111,12 +101,7 @@
   color: var(--bn-success);
 }
 
-/*
- * The draft line is the vault status line's quieter neighbour, and it is styled
- * to stay that way: smaller and no min-height, so an empty one — which is its
- * resting state on a note nobody has edited — takes no room at all and the two
- * are never mistaken for one two-line message about the vault.
- */
+/* Local draft status is separate from the vault save outcome. */
 .source-editor-draft-status {
   margin: 0;
   color: var(--bn-muted);
@@ -177,12 +162,7 @@
   overflow: hidden;
 }
 
-/*
- * CodeMirror measures its own layout, so the height has to come from here: with
- * no height on .cm-editor the view collapses to one line and the scroller never
- * engages. 60vh is a working surface on a laptop that still leaves the toolbar
- * and the status line on screen.
- */
+/* CodeMirror needs an explicit height for its scrollable writing surface. */
 .source-editor-surface .cm-editor {
   height: 60vh;
 }

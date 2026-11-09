@@ -3,11 +3,12 @@
 Part of the [local web server](web-server.md).
 
 Every rendered note page includes a full-width Related Notes explorer after the
-body. Balanced loads five candidates immediately; Rediscover and Connect remain
+body. Balanced loads two candidates immediately; Rediscover and Connect remain
 lazy until their tabs are activated. **Balanced** is the broad mix from
 `bn related`, **Rediscover** limits the set to older or not-recently-opened graph
 neighbors, and **Connect** favors text- or metadata-supported notes that are not
-already directly linked. Each tab expands independently in groups of five to a
+already directly linked. Each tab starts with two suggestions; Show more expands
+to five, then in groups of five to a
 hard cap of twenty. Cards lead with the title, relationship, a bounded prose-first
 excerpt, and an optional bridge. The path and up to three human reasons are
 available under **Why this connection?**. Common filler words are omitted from
@@ -28,6 +29,9 @@ adds a positive ranking signal. **Dismiss** and **Later** suppress that pair in
 all three modes; Later offers tomorrow, next week, or a strict future local date
 derived from the server's date. The Feedback drawer lists every active explicit
 decision for the source, including candidates outside the current result prefix.
+It appears below the suggestions only when feedback exists. Routine result counts
+remain available to assistive technology; loading, error and action feedback
+remain visible.
 **Clear** removes the rating or snooze but preserves open history, so the pair is
 eligible again without pretending it was never opened. An expired Later decision
 also becomes eligible again on read; expiry does not rewrite the state file.

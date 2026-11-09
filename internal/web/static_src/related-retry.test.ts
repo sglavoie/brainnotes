@@ -22,9 +22,9 @@ it("retries a failed initial load once and moves focus to the result status on s
   expect(retryButton().disabled).toBe(true);
   expect(fetcher).toHaveBeenCalledTimes(2);
   expect(fetcher.mock.calls[1][0]).toBe(fetcher.mock.calls[0][0]);
-  pending.resolve(jsonResponse(payload("balanced", 5)));
+  pending.resolve(jsonResponse(payload("balanced", 2)));
   await waitForExpect(() => expect(retryButton().hidden).toBe(true));
-  expect(document.querySelectorAll("[data-related-card]")).toHaveLength(5);
+  expect(document.querySelectorAll("[data-related-card]")).toHaveLength(2);
   expect(document.activeElement).toBe(status());
 });
 
@@ -32,12 +32,12 @@ it("preserves cards and retries the failed expansion size across repeated failur
   document.body.innerHTML = rootHTML();
   const pending = deferred<Response>();
   const fetcher = vi.fn()
-    .mockResolvedValueOnce(jsonResponse(payload("balanced", 5)))
+    .mockResolvedValueOnce(jsonResponse(payload("balanced", 2)))
     .mockResolvedValueOnce(jsonResponse({ message: "Unavailable" }, 503))
     .mockRejectedValueOnce(new Error("Still offline"))
     .mockReturnValueOnce(pending.promise);
   initRelatedNotes({ fetch: fetcher });
-  await waitForExpect(() => expect(document.querySelectorAll("[data-related-card]")).toHaveLength(5));
+  await waitForExpect(() => expect(document.querySelectorAll("[data-related-card]")).toHaveLength(2));
   document.querySelector<HTMLButtonElement>('[data-related-show-more="balanced"]')!.click();
   await waitForExpect(() => expect(retryButton().hidden).toBe(false));
   retryButton().click();
@@ -45,12 +45,12 @@ it("preserves cards and retries the failed expansion size across repeated failur
   expect(retryButton().hidden).toBe(false);
   expect(retryButton().disabled).toBe(false);
   retryButton().click();
-  expect(document.querySelectorAll("[data-related-card]")).toHaveLength(5);
-  expect(fetcher.mock.calls.slice(1).map(([input]) => requestOptions(input).limit)).toEqual([10, 10, 10]);
+  expect(document.querySelectorAll("[data-related-card]")).toHaveLength(2);
+  expect(fetcher.mock.calls.slice(1).map(([input]) => requestOptions(input).limit)).toEqual([5, 5, 5]);
   tab("balanced").focus();
-  pending.resolve(jsonResponse(payload("balanced", 10)));
+  pending.resolve(jsonResponse(payload("balanced", 5)));
   await waitForExpect(() => expect(retryButton().hidden).toBe(true));
-  expect(document.querySelectorAll("[data-related-card]")).toHaveLength(10);
+  expect(document.querySelectorAll("[data-related-card]")).toHaveLength(5);
   expect(document.activeElement).toBe(tab("balanced"));
 });
 
@@ -59,21 +59,21 @@ it("keeps a failed background expansion separate from the active mode", async ()
   const expansion = deferred<Response>();
   const fetcher = vi.fn(async (input: RequestInfo | URL) => {
     const { mode, limit } = requestOptions(input);
-    if (mode === "balanced" && limit === 10) return expansion.promise;
+    if (mode === "balanced" && limit === 5) return expansion.promise;
     return jsonResponse(payload(mode, limit));
   });
   initRelatedNotes({ fetch: fetcher });
-  await waitForExpect(() => expect(document.querySelectorAll("[data-related-card]")).toHaveLength(5));
+  await waitForExpect(() => expect(document.querySelectorAll("[data-related-card]")).toHaveLength(2));
   document.querySelector<HTMLButtonElement>('[data-related-show-more="balanced"]')!.click();
   tab("connect").click();
-  await waitForExpect(() => expect(document.querySelectorAll('[data-related-results="connect"] [data-related-card]')).toHaveLength(5));
+  await waitForExpect(() => expect(document.querySelectorAll('[data-related-results="connect"] [data-related-card]')).toHaveLength(2));
   expansion.resolve(jsonResponse({ message: "Expansion failed" }, 503));
   await new Promise((resolve) => setTimeout(resolve, 0));
   expect(retryButton().hidden).toBe(true);
-  expect(status().textContent).toBe("Showing 5 related notes.");
+  expect(status().textContent).toBe("Showing 2 related notes.");
   tab("balanced").click();
   await waitForExpect(() => expect(retryButton().hidden).toBe(false));
   retryButton().click();
-  expect(requestOptions(fetcher.mock.calls.at(-1)![0])).toEqual({ mode: "balanced", limit: 10 });
+  expect(requestOptions(fetcher.mock.calls.at(-1)![0])).toEqual({ mode: "balanced", limit: 5 });
   await waitForExpect(() => expect(retryButton().disabled).toBe(false));
 });

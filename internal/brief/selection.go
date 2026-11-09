@@ -65,6 +65,7 @@ type DeterministicSelector struct {
 	ranker       *recall.Ranker
 	notesByPath  map[string]CorpusNote
 	excerptsByID map[string]string
+	blocksByPath map[string][]recall.MarkdownBlock
 }
 
 var _ Selector = (*DeterministicSelector)(nil)
@@ -232,6 +233,10 @@ func NewDeterministicSelector(corpus SelectionCorpus, options DeterministicSelec
 	for path, excerpt := range corpus.excerpts {
 		excerpts[path] = excerpt
 	}
+	blocks := make(map[string][]recall.MarkdownBlock, len(corpus.documents))
+	for _, document := range corpus.documents {
+		blocks[document.Path] = append([]recall.MarkdownBlock(nil), document.Blocks...)
+	}
 
 	var ranker *recall.Ranker
 	if len(corpus.documents) > 0 {
@@ -247,6 +252,7 @@ func NewDeterministicSelector(corpus SelectionCorpus, options DeterministicSelec
 		ranker:       ranker,
 		notesByPath:  notesByPath,
 		excerptsByID: excerpts,
+		blocksByPath: blocks,
 	}, nil
 }
 
@@ -358,24 +364,9 @@ func (selector *DeterministicSelector) SelectConnect(corpus CorpusSnapshot, cont
 	if err != nil {
 		return SlotResult{}, err
 	}
-	now := selector.nowTime()
-	strict := make([]connectCandidate, 0, len(results))
-	relaxed := make([]connectCandidate, 0, len(results))
-	for _, result := range results {
-		note, ok := corpusByPath[result.Path]
-		if !ok {
-			continue
-		}
-		candidate := connectCandidate{result: result, note: note}
-		relaxed = append(relaxed, candidate)
-
-		inCooldown, err := selector.connectPairInCooldown(sourcePath, result.Path, now)
-		if err != nil {
-			return SlotResult{}, err
-		}
-		if !inCooldown {
-			strict = append(strict, candidate)
-		}
+	strict, relaxed, err := selector.connectCandidates(results, corpusByPath, sourcePath)
+	if err != nil {
+		return SlotResult{}, err
 	}
 	if len(relaxed) == 0 {
 		return unavailableSlot(SlotConnect, "No connect candidate is available."), nil
@@ -387,7 +378,10 @@ func (selector *DeterministicSelector) SelectConnect(corpus CorpusSnapshot, cont
 		explanation = "Cooldown relaxed because no alternative connect candidate is available."
 	}
 
-	selected := chosen[0]
+	return selector.connectCard(sourceNote.Ref, chosen[0], explanation), nil
+}
+
+func (selector *DeterministicSelector) connectCard(source NoteRef, selected connectCandidate, explanation string) SlotResult {
 	reasons := connectReasonStrings(selected.result.Reasons)
 	if len(reasons) > 0 {
 		explanation = reasons[0]
@@ -395,15 +389,15 @@ func (selector *DeterministicSelector) SelectConnect(corpus CorpusSnapshot, cont
 	candidateRef := selected.note.Ref
 	return cardSlot(SlotConnect, Card{
 		Slot:        SlotConnect,
-		Source:      sourceNote.Ref,
+		Source:      source,
 		Candidate:   &candidateRef,
 		Explanation: explanation,
-		Excerpt:     selector.excerptForPath(selected.note.Ref.RelPath),
+		Excerpt:     selector.connectionCardExcerpt(selected.result, source),
 		Metadata: CandidateMetadata{
 			Score:        selected.result.Score,
 			Relationship: string(selected.result.Relationship),
 			Bridge:       connectBridge(selected.result),
 			Reasons:      reasons,
 		},
-	}), nil
+	})
 }

@@ -15,6 +15,33 @@ const stableSync = async (page) => {
   });
 };
 
+test("a fresh editor starts with prose and reversible frontmatter folding, respecting saved preferences", async ({ page }) => {
+  await page.goto("/edit?key=Alpha");
+  const editor = page.locator(".cm-content");
+  await expect(page.getByLabel("Writing layout")).toHaveValue("write");
+  await expect(page.getByLabel("Writing type")).toHaveValue("prose");
+  await expect(page.locator("[data-source-pane=preview]")).toBeHidden();
+  await expect(editor).toContainText("Alpha body");
+  await expect(editor).not.toContainText("title: Alpha");
+  const show = page.getByRole("button", { name: "Show frontmatter in source editor" });
+  await show.focus();
+  await show.press("Enter");
+  await expect(editor).toContainText("title: Alpha");
+  const hide = page.getByRole("button", { name: "Hide frontmatter in source editor" });
+  await hide.focus();
+  await hide.press("Enter");
+  await expect(show).toBeFocused();
+  await expect(editor).not.toContainText("title: Alpha");
+  await expect(page.locator("[data-source-save]")).toBeDisabled();
+  await accessible(page);
+  await page.getByLabel("Writing layout").selectOption("split");
+  await page.getByLabel("Writing type").selectOption("mono");
+  await page.reload();
+  await expect(page.getByLabel("Writing layout")).toHaveValue("split");
+  await expect(page.getByLabel("Writing type")).toHaveValue("mono");
+  await expect(page.locator("[data-source-pane=preview]")).toBeVisible();
+});
+
 test("writing layouts and typography preserve unsaved text and remain accessible", async ({ page }) => {
   await page.goto("/edit?key=Writing");
   const editor = page.locator(".cm-content");

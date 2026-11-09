@@ -10,7 +10,7 @@ import {
 } from "@codemirror/autocomplete";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
-import { bracketMatching, codeFolding, foldEffect, defaultHighlightStyle, syntaxHighlighting } from "@codemirror/language";
+import { bracketMatching, defaultHighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { Annotation, EditorState } from "@codemirror/state";
 import { openSearchPanel, search, searchKeymap } from "@codemirror/search";
 import { EditorView, highlightSpecialChars, keymap } from "@codemirror/view";
@@ -18,8 +18,9 @@ import { EditorView, highlightSpecialChars, keymap } from "@codemirror/view";
 import { wikilinkContextAt, type WikilinkOption } from "./source-wikilink";
 import type { SourceFormatCommand, SourceFormatOptions } from "./source-format";
 import type { SourceSurface, SourceSurfaceFactory } from "./source-surface";
+import { frontmatterFolding, initialSourceState } from "./source-frontmatter";
 
-// The CodeMirror adapter, and the only module in the editor that imports it.
+// The CodeMirror surface adapter, with view helpers for folding and position.
 //
 // Everything here is either a CodeMirror API call or a translation between one
 // and the surface interface. That containment is deliberate: CodeMirror
@@ -57,7 +58,7 @@ export const createSourceSurfaceFactory = (
         doc: initialValue,
         extensions: [
           history(),
-          codeFolding({ placeholderDOM: frontmatterPlaceholder }),
+          frontmatterFolding,
           search({ top: true }),
           highlightSpecialChars(),
           bracketMatching(),
@@ -324,22 +325,4 @@ const applyWikilink =
     });
   };
 
-// Long metadata stays editable, but does not push the prose out of the first
-// viewport. Short headers with long values wrap into many lines on phones,
-// so bound both lines and characters. This never changes the source or selection.
-const initialSourceState = (state: EditorState): EditorState => {
-  const header = /^---\r?\n[\s\S]*?\r?\n---(?:\r?\n|$)/.exec(state.doc.toString());
-  if (!header || (header[0].split("\n").length < 9 && header[0].length < 240)) return state;
-  return state.update({ effects: foldEffect.of({ from: 0, to: header[0].trimEnd().length }) }).state;
-};
-
-const frontmatterPlaceholder = (_view: EditorView, unfold: (event: Event) => void): HTMLElement => {
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = "bn-button source-editor-frontmatter";
-  button.textContent = "Show frontmatter";
-  button.setAttribute("aria-label", "Show frontmatter in source editor");
-  button.addEventListener("click", unfold);
-  return button;
-};
 import { bindSourcePosition } from "./source-position";

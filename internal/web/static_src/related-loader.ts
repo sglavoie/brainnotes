@@ -82,6 +82,7 @@ export const createRelatedLoader = (
   };
 
   const setStatus = (message: string, kind: StatusKind = ""): void => {
+    view.status.classList.remove("related-status-quiet");
     setStatusText(view.status, message, kind);
   };
 
@@ -91,6 +92,7 @@ export const createRelatedLoader = (
     }
     const [message, kind] = statusForMode(model, mode);
     setStatus(message, kind);
+    view.status.classList.toggle("related-status-quiet", kind === "is-success");
     const state = model.modes[mode];
     renderRelatedRetry(view, state.failedLimit !== undefined, state.loading);
   };

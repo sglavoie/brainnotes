@@ -1,6 +1,6 @@
 import type { RelatedFeedback, RelatedMode, RelatedResponse } from "./related-types";
 
-export const RELATED_INITIAL_LIMIT = 5;
+export const RELATED_INITIAL_LIMIT = 2;
 export const RELATED_LIMIT_STEP = 5;
 export const RELATED_MAX_LIMIT = 20;
 
@@ -65,7 +65,7 @@ export const createRelatedModel = (): RelatedModel => ({
 });
 
 export const nextRelatedLimit = (limit: number): number =>
-  Math.min(RELATED_MAX_LIMIT, limit + RELATED_LIMIT_STEP);
+  Math.min(RELATED_MAX_LIMIT, (Math.floor(limit / RELATED_LIMIT_STEP) + 1) * RELATED_LIMIT_STEP);
 
 const parseCalendarDate = (value: string): [number, number, number] | null => {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);

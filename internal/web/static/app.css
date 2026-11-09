@@ -1593,13 +1593,11 @@ code {
 }
 
 .related-notes > h2,
-.related-notes-intro,
 .related-status,
 .related-mode-description {
   margin: 0;
 }
 
-.related-notes-intro,
 .related-mode-description {
   color: var(--bn-muted);
 }
@@ -1632,7 +1630,7 @@ code {
 .related-tab {
   display: grid;
   gap: 0.18rem;
-  text-align: left;
+  text-align: center;
 }
 
 .related-tab:hover,
@@ -1662,13 +1660,7 @@ code {
 
 .related-tab-label {
   color: var(--bn-text-strong);
-  font-weight: 700;
-}
-
-.related-tab-description {
-  color: var(--bn-text-subtle);
-  font-size: 0.78rem;
-  line-height: 1.3;
+  font-weight: 500;
 }
 
 .related-status {
@@ -1693,16 +1685,16 @@ code {
   color: var(--bn-warning);
 }
 
-.related-feedback-drawer {
-  min-width: 0;
-  border: 1px solid var(--bn-border);
-  border-radius: 0.45rem;
-  background: var(--bn-sunken);
-}
+.related-feedback-drawer { min-width: 0; }
 
 .related-feedback-drawer > summary {
   list-style-position: inside;
-  font-weight: 700;
+  width: fit-content;
+  font-size: 0.85rem;
+  font-weight: 400;
+  border-color: transparent;
+  background: transparent;
+  color: var(--bn-muted);
 }
 
 .related-feedback-list {
@@ -1915,6 +1907,12 @@ code {
   background: var(--bn-sunken);
 }
 
+
+.related-status-quiet:not(:focus) {
+  position: absolute; width: 1px; height: 1px; min-height: 0; overflow: hidden;
+  clip-path: inset(50%); white-space: nowrap;
+}
+.related-card-actions .connection-launch { border: 1px solid var(--bn-accent-subtle-border); background: var(--bn-accent-subtle-bg); color: var(--bn-accent-subtle-text); cursor: pointer; }
 /* internal/web/static_src/css/overview-bulk.css */
 .metric-grid {
   display: grid;
@@ -5129,6 +5127,10 @@ code {
 }
 
 .frontmatter-row {
+  display: grid;
+  grid-template-columns: minmax(4.5rem, 0.7fr) minmax(0, 1.5fr);
+  gap: 0.5rem;
+  align-items: baseline;
   min-width: 0;
   border-top: 1px solid var(--bn-border);
   padding-top: 0.45rem;
@@ -5140,7 +5142,7 @@ code {
 }
 
 .frontmatter-row dt {
-  margin: 0 0 0.18rem;
+  margin: 0;
   color: var(--bn-muted);
   font-size: 0.78rem;
   font-weight: 700;
@@ -5272,7 +5274,9 @@ code {
 .frontmatter-row dd > .frontmatter-text { flex: 1 1 auto; min-width: 0; }
 .frontmatter-editor { margin-top: 0; margin-left: auto; }
 .frontmatter-editor[open] { flex: 1 1 100%; }
-.frontmatter-row dd > :is(.frontmatter-list, .frontmatter-map) { flex: 1 1 100%; }
+.frontmatter-row dd > :is(.frontmatter-list, .frontmatter-map) { flex: 1 1 auto; }
+
+.frontmatter-row dd > .frontmatter-list { display: flex; flex-wrap: wrap; gap: 0.15rem 0.6rem; list-style: none; padding-left: 0; }
 /* internal/web/static_src/css/backlinks.css */
 .backlink-item + .backlink-item {
   margin-top: 0.85rem;
@@ -7163,15 +7167,8 @@ code {
 }
 
 /* internal/web/static_src/css/source-editor.css */
-/*
- * The raw-Markdown editor at /edit.
- *
- * The layout here is the wide one — editor and preview side by side — because
- * every other part of this stylesheet is written that way and responsive.css
- * narrows it with max-width blocks. The tab strip is therefore declared hidden
- * below and shown again there: on a wide screen the two panes are columns and a
- * tablist selecting between them would be a control with nothing to do.
- */
+/* Source editor layout. Write is the default; Split reveals both panes on
+   desktop, while narrow screens use the Edit/Preview tabs. */
 
 .source-editor {
   display: grid;
@@ -7248,10 +7245,7 @@ code {
   cursor: pointer;
 }
 
-/*
- * A disabled Save is the resting state of a clean note, not an error, so it
- * reads as quiet rather than broken.
- */
+/* A clean note has nothing to save; keep this resting state quiet. */
 .source-editor-save:disabled {
   border-color: var(--bn-border);
   background: var(--bn-sunken);
@@ -7276,12 +7270,7 @@ code {
   color: var(--bn-success);
 }
 
-/*
- * The draft line is the vault status line's quieter neighbour, and it is styled
- * to stay that way: smaller and no min-height, so an empty one — which is its
- * resting state on a note nobody has edited — takes no room at all and the two
- * are never mistaken for one two-line message about the vault.
- */
+/* Local draft status is separate from the vault save outcome. */
 .source-editor-draft-status {
   margin: 0;
   color: var(--bn-muted);
@@ -7342,12 +7331,7 @@ code {
   overflow: hidden;
 }
 
-/*
- * CodeMirror measures its own layout, so the height has to come from here: with
- * no height on .cm-editor the view collapses to one line and the scroller never
- * engages. 60vh is a working surface on a laptop that still leaves the toolbar
- * and the status line on screen.
- */
+/* CodeMirror needs an explicit height for its scrollable writing surface. */
 .source-editor-surface .cm-editor {
   height: 60vh;
 }
@@ -9288,7 +9272,6 @@ summary { cursor: pointer; min-height: var(--bn-control-height); box-sizing: bor
 .library-search:not([data-searching="true"]) + .overview-results :is(.panel-header, .library-results-tools) { display: none; }
 .library-activity[data-searching="false"] { margin-top: 0.5rem; }
 /* internal/web/static_src/css/reading-comfort.css */
-.note-main > .site-header h1 { font-size: clamp(1.9rem, 3vw, 2.65rem); letter-spacing: -0.035em; line-height: 1.15; }
 .reading-controls { display: flex; flex-wrap: wrap; gap: 0.4rem; order: 1; }
 .reading-controls .bn-button { border: 1px solid var(--bn-border); background: transparent; color: var(--bn-text-subtle); cursor: pointer; }
 .reading-controls button[aria-pressed='true'] { background: var(--bn-accent-subtle-bg); color: var(--bn-accent-subtle-text); border-color: var(--bn-accent-subtle-border); }
@@ -9314,7 +9297,6 @@ summary { cursor: pointer; min-height: var(--bn-control-height); box-sizing: bor
   :root[data-reading-mode='quiet'] .note-layout-toolbar { visibility: hidden; }
 }
 @media (max-width: 700px) {
-  .note-main > .site-header h1 { font-size: 1.4rem; }
   .note-print-body > .note-body { font-size: 1rem; }
   .reading-controls { width: 100%; }
   .reading-controls button { font-size: 0.8rem; }
@@ -9582,6 +9564,10 @@ div.note-peek-anchor > .note-peek-trigger { position: absolute; right: 0; top: 0
 .writing-preferences select { font: inherit; color: var(--bn-text); background: var(--bn-surface); border: 1px solid var(--bn-border); border-radius: 0.4rem; padding: 0.4rem; }
 .source-editor[data-writing-font='prose'] .cm-content { font-family: var(--bn-book); font-size: 1.15rem; line-height: 1.85; }
 .source-editor[data-writing-font='prose'] .cm-content :is(.tok-monospace, .cm-code) { font-family: var(--bn-mono); font-size: 0.9em; }
+.source-editor-main > .site-header h1 { font-family: var(--bn-book); font-weight: 500; letter-spacing: -0.035em; line-height: 1.2; }
+.source-editor-main > .site-header h1 a { color: var(--bn-text-strong); }
+.source-frontmatter-hide { align-self: flex-start; margin: 0.5rem; }
+.source-editor[data-writing-font='prose'] .source-editor-frontmatter { font-family: system-ui, sans-serif; font-size: 0.8rem; }
 @media (min-width: 961px) {
   .source-editor-panes[data-writing-layout='write'], .source-editor-panes[data-writing-layout='preview'] { grid-template-columns: minmax(0, 1fr); width: 100%; max-width: 72ch; margin-inline: auto; }
   .source-editor-panes[data-writing-layout='write'] .source-editor-pane-preview,
@@ -9590,6 +9576,7 @@ div.note-peek-anchor > .note-peek-trigger { position: absolute; right: 0; top: 0
   .source-editor-panes[data-writing-layout='write'] .cm-content { padding-block: 1.25rem; }
   .source-editor:has([data-writing-layout='write']) { border-color: transparent; box-shadow: none; }
 }
+
 @media (max-width: 960px) {
   .writing-layout-label { display: none !important; }
   .writing-preferences { grid-column: 1 / -1; grid-row: 2; justify-content: flex-end; }

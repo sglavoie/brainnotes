@@ -145,6 +145,8 @@ function experienceVisuals(snapshot) {
     await snapshot(page, "global-capture");
     await page.keyboard.press("Escape");
     await page.goto("/library?q=field&status=reference&sort=title");
+    // The async sync line shifts the anchor; open the preview after it settles.
+    await expect(page.locator("[data-sync-line]")).toContainText("Review 5 incoming changes");
     const preview = page.locator(".note-peek-trigger").first();
     await preview.focus();
     await preview.press("Enter");

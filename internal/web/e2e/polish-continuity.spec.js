@@ -5,11 +5,13 @@ import { SURFACE } from "./editor-helpers.js";
 
 test("Undo confirms one exact change even after another tab writes", async ({ page, context }) => {
   await openBeta(page);
+  await page.getByRole("button", { name: "Show frontmatter in source editor" }).click();
   await openManage(page);
   const before = readFileSync(vaultPath("Beta.md"), "utf8");
   await page.locator("[data-source-property-name]").fill("status");
   await page.locator("[data-source-property-value]").fill("undo-preview-test");
   await page.locator("[data-source-property-set]").click();
+  await page.getByRole("button", { name: "Show frontmatter in source editor" }).click();
   await expect(page.locator(SURFACE)).toContainText("undo-preview-test");
   const undo = page.locator("[data-source-undo]");
   await undo.click();

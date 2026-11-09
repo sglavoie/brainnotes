@@ -98,7 +98,7 @@ const focusAfterMutation = (
       return;
     }
   }
-  (fromDrawer ? view.feedbackSummary : view.tabs[model.activeMode]).focus({ preventScroll: true });
+  (fromDrawer && !view.feedbackDrawer.hidden ? view.feedbackSummary : view.tabs[model.activeMode]).focus({ preventScroll: true });
 };
 
 const markInactiveModesStale = (model: RelatedModel): void => {

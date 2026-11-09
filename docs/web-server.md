@@ -146,11 +146,13 @@ is unavailable, keep the form open until creation is confirmed.
 On a note, choose **Edit**, or **Open in external editor** on local
 servers. The source editor opens with the writing surface visible on a narrow
 screen. Its toolbar keeps **Save** nearby while scrolling; **Format** reveals formatting
-commands and Escape closes them. Long frontmatter starts collapsed; **Show
-frontmatter** expands it without changing the source.
+commands and Escape closes them. Frontmatter starts collapsed; **Show
+frontmatter** expands it and **Hide frontmatter** folds it again without changing
+the source or marking the note as edited. Find still searches the full source.
 On desktop, **View** chooses **Write**, **Split**, or **Preview**; **Type** offers
 proportional prose or monospace, with code always in monospace. These choices are
-remembered in this browser. Write centers a single column and keeps Save in the
+remembered in this browser. A browser without saved preferences starts with
+Write and Prose; existing choices are preserved. Write centers a single column and keeps Save in the
 toolbar. Narrow screens retain Edit/Preview tabs, with the type choice inside Format.
 
 Below the writing surface, **This note and this vault** contains History and
@@ -306,6 +308,11 @@ their relationship, with **Explore connection** opening the candidate. These
 actions work without an external editor. A note title opens the browser reader.
 The configured capture inbox is excluded from Brief recommendations. Excerpts
 prefer substantive passages over short introductions such as “Every Sunday:”.
+Connect cards prefer a passage mentioning the shared connecting note, or the
+source note for a direct connection. Long passages are clipped around that
+mention; when no matching prose exists, the ordinary excerpt remains available.
+This changes the excerpt, not the selected notes or ranking. Existing daily
+cards retain their saved excerpts until replaced with Another or a new day's selection.
 **Why this note?**
 reveals its location and recommendation reasons; **Ask AI** expands the prompt.
 Both start closed again when Another loads a replacement. Activity counts and

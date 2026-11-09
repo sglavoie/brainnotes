@@ -15,8 +15,8 @@ export const initWritingPreferences = (panel: HTMLElement, panes: SourcePanes): 
     try { const value = localStorage.getItem(key); return value && allowed.includes(value) ? value : fallback; }
     catch { return fallback; }
   };
-  layout.value = restore("bn.writing-layout", ["write", "split", "preview"], "split");
-  font.value = restore("bn.writing-font", ["prose", "mono"], "mono");
+  layout.value = restore("bn.writing-layout", ["write", "split", "preview"], "write");
+  font.value = restore("bn.writing-font", ["prose", "mono"], "prose");
   const arrange = (): void => {
     if (desktop.matches) marker.after(preferences);
     else format?.append(preferences);

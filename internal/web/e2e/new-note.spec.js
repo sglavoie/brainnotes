@@ -13,6 +13,7 @@ test("hosted New note creates, opens the editor, saves and reopens", async ({ pa
   await expect(page.locator("[data-new-note-destination]")).toHaveText("Destination: New folder/Ideas/Browser creation.md");
   await page.getByRole("button", { name: "Create and write" }).click();
   await expect(page).toHaveURL(/\/edit\?key=/);
+  await page.getByRole("button", { name: "Show frontmatter in source editor", exact: true }).click();
   await expect(page.locator(SURFACE)).toContainText("Browser creation");
   await caretToEnd(page);
   await page.keyboard.type("\n\nA full note written from the hosted browser.");
@@ -46,6 +47,7 @@ test("creation keeps its Library search through editing, reading and reload", as
   await page.locator("[data-empty-create-note]").click();
   await expect(page.getByRole("link", { name: "Back to results" })).toHaveAttribute("href", search);
   await page.getByRole("button", { name: "Create and write" }).click();
+  await page.getByRole("button", { name: "Show frontmatter in source editor", exact: true }).click();
   await expect(page.locator(SURFACE)).toContainText(title);
   await caretToEnd(page);
   await page.keyboard.type("\n\nCreated outside the original folder filter.");
@@ -80,6 +82,7 @@ test("a lost creation reply survives reload and checks the original receipt", as
   await expect(page.getByLabel("Title", { exact: true })).toHaveValue("Creation receipt recovery");
   await expect(page.getByLabel("Folder (optional)")).toHaveValue("Recovery");
   await page.getByRole("button", { name: "Check creation", exact: true }).click();
+  await page.getByRole("button", { name: "Show frontmatter in source editor", exact: true }).click();
   await expect(page.locator(SURFACE)).toContainText("Creation receipt recovery");
   expect(requests).toHaveLength(2);
   expect(requests[0]).toBe(requests[1]);

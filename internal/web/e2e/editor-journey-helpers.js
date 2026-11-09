@@ -4,7 +4,7 @@
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 
-import { openEditor } from "./editor-helpers.js";
+import { openEditor, SURFACE } from "./editor-helpers.js";
 import { expect, manifest } from "./fixture.js";
 
 export const NOTE = "Beta.md";
@@ -13,6 +13,12 @@ export const NOTE = "Beta.md";
 export const ATTACHMENTS = "attachments";
 export const ROWS = "[data-source-attachment-list] > li";
 export const MARKER = manifest.fixtureRoot.split("/").pop();
+
+export async function openCreatedEditor(page, title) {
+  await openEditor(page, `/n/${encodeURIComponent(title)}`, "Show frontmatter");
+  await page.getByRole("button", { name: "Show frontmatter in source editor" }).click();
+  await expect(page.locator(SURFACE)).toContainText(`title: ${title}`);
+}
 
 // Every uploaded file carries a space and a pair of parentheses, because those
 // are exactly the characters internal/attachments/name.go keeps and Markdown

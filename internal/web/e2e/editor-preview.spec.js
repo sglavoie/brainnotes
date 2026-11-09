@@ -12,8 +12,9 @@ const NOTE = "Alpha.md";
 const PANE_EDIT = '[data-source-pane="edit"]';
 const PANE_PREVIEW = '[data-source-pane="preview"]';
 
-test("both panes are shown side by side on a wide window", async ({ page }) => {
+test("Split shows both panes side by side on a wide window", async ({ page }) => {
   await openEditor(page);
+  await page.getByLabel("Writing layout").selectOption("split");
 
   await expect(page.locator(PANE_EDIT)).toBeVisible();
   await expect(page.locator(PANE_PREVIEW)).toBeVisible();
@@ -51,6 +52,7 @@ test.describe("on a narrow window", () => {
 
 test("Retry preview recovers the current draft and returns keyboard focus", async ({ page }) => {
   await openEditor(page);
+  await page.getByLabel("Writing layout").selectOption("split");
   const preview = page.locator("[data-source-preview]");
   await expect(preview).toContainText("Alpha body");
   await page.route("**/api/source/preview", route => route.fulfill({ status: 503, body: "Offline" }));

@@ -83,9 +83,6 @@ export const createRelatedView = (root: HTMLElement): RelatedView => {
   status.setAttribute("aria-live", "polite");
   status.tabIndex = -1;
 
-  const intro = doc.createElement("p");
-  intro.className = "related-notes-intro";
-  intro.textContent = "Explore nearby ideas without changing this note.";
   const tablist = doc.createElement("div");
   tablist.className = "related-tab-list";
   tablist.setAttribute("role", "tablist");
@@ -94,6 +91,7 @@ export const createRelatedView = (root: HTMLElement): RelatedView => {
   const feedbackDrawer = doc.createElement("details");
   feedbackDrawer.className = "related-feedback-drawer";
   feedbackDrawer.setAttribute("data-related-feedback-drawer", "");
+  feedbackDrawer.hidden = true;
   const feedbackSummary = doc.createElement("summary");
   feedbackSummary.setAttribute("data-related-feedback-summary", "");
   feedbackSummary.textContent = "Feedback (0)";
@@ -127,7 +125,7 @@ export const createRelatedView = (root: HTMLElement): RelatedView => {
     label.className = "related-tab-label";
     label.textContent = definition.label;
     const description = doc.createElement("span");
-    description.className = "related-tab-description";
+    description.className = "related-tab-description visually-hidden";
     description.textContent = definition.description;
     tab.append(label, description);
     tablist.appendChild(tab);
@@ -148,7 +146,7 @@ export const createRelatedView = (root: HTMLElement): RelatedView => {
     fallbackHeading.textContent = "Related Notes";
     root.appendChild(fallbackHeading);
   }
-  root.append(intro, tablist, status, retry, feedbackDrawer, panelsContainer);
+  root.append(tablist, status, retry, panelsContainer, feedbackDrawer);
   return { status, retry, tabs, panels, results, moreButtons, feedbackDrawer, feedbackSummary, feedbackList };
 };
 
@@ -285,6 +283,10 @@ const renderRelatedCard = (doc: Document, result: RelatedResult, serverDate: str
 };
 
 export const renderRelatedFeedback = (view: RelatedView, feedback: RelatedFeedback[]): void => {
+  // Keep the empty drawer out of the reading flow. If its last item is cleared
+  // while it owns focus, return focus before removing that control from view.
+  if (feedback.length === 0 && view.feedbackDrawer.contains(document.activeElement)) view.status.focus();
+  view.feedbackDrawer.hidden = feedback.length === 0;
   view.feedbackSummary.textContent = `Feedback (${feedback.length})`;
   view.feedbackList.replaceChildren();
   if (feedback.length === 0) {

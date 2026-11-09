@@ -62,6 +62,28 @@ func (selector *DeterministicSelector) connectPairInCooldown(sourcePath, candida
 	return activeCooldown(last, now), nil
 }
 
+func (selector *DeterministicSelector) connectCandidates(results []recall.Result, notes map[string]CorpusNote, sourcePath string) ([]connectCandidate, []connectCandidate, error) {
+	now := selector.nowTime()
+	strict := make([]connectCandidate, 0, len(results))
+	relaxed := make([]connectCandidate, 0, len(results))
+	for _, result := range results {
+		note, ok := notes[result.Path]
+		if !ok {
+			continue
+		}
+		candidate := connectCandidate{result: result, note: note}
+		relaxed = append(relaxed, candidate)
+		inCooldown, err := selector.connectPairInCooldown(sourcePath, result.Path, now)
+		if err != nil {
+			return nil, nil, err
+		}
+		if !inCooldown {
+			strict = append(strict, candidate)
+		}
+	}
+	return strict, relaxed, nil
+}
+
 func (selector *DeterministicSelector) nowTime() time.Time {
 	if selector == nil || selector.now == nil {
 		return time.Now()

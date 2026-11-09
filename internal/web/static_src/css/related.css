@@ -5,13 +5,11 @@
 }
 
 .related-notes > h2,
-.related-notes-intro,
 .related-status,
 .related-mode-description {
   margin: 0;
 }
 
-.related-notes-intro,
 .related-mode-description {
   color: var(--bn-muted);
 }
@@ -44,7 +42,7 @@
 .related-tab {
   display: grid;
   gap: 0.18rem;
-  text-align: left;
+  text-align: center;
 }
 
 .related-tab:hover,
@@ -74,13 +72,7 @@
 
 .related-tab-label {
   color: var(--bn-text-strong);
-  font-weight: 700;
-}
-
-.related-tab-description {
-  color: var(--bn-text-subtle);
-  font-size: 0.78rem;
-  line-height: 1.3;
+  font-weight: 500;
 }
 
 .related-status {
@@ -105,16 +97,16 @@
   color: var(--bn-warning);
 }
 
-.related-feedback-drawer {
-  min-width: 0;
-  border: 1px solid var(--bn-border);
-  border-radius: 0.45rem;
-  background: var(--bn-sunken);
-}
+.related-feedback-drawer { min-width: 0; }
 
 .related-feedback-drawer > summary {
   list-style-position: inside;
-  font-weight: 700;
+  width: fit-content;
+  font-size: 0.85rem;
+  font-weight: 400;
+  border-color: transparent;
+  background: transparent;
+  color: var(--bn-muted);
 }
 
 .related-feedback-list {
@@ -327,3 +319,9 @@
   background: var(--bn-sunken);
 }
 
+
+.related-status-quiet:not(:focus) {
+  position: absolute; width: 1px; height: 1px; min-height: 0; overflow: hidden;
+  clip-path: inset(50%); white-space: nowrap;
+}
+.related-card-actions .connection-launch { border: 1px solid var(--bn-accent-subtle-border); background: var(--bn-accent-subtle-bg); color: var(--bn-accent-subtle-text); cursor: pointer; }
