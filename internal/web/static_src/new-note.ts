@@ -1,6 +1,6 @@
 import { asRecord } from "./api-internal";
 import { editorURLForKey, postManagement, type ManageOutcome } from "./source-manage-client";
-import { newNoteDraft, type PendingCreation } from "./new-note-draft";
+import { newNoteDraft, type PendingCreation, type NewNoteValues } from "./new-note-draft";
 import { withLibraryContext } from "./note-navigation";
 import { newSaveID } from "./source-save";
 
@@ -11,6 +11,7 @@ export const initNewNote = (root: ParentNode = document, deps: NewNoteDeps = {})
   if (!form) return;
   const title = form.querySelector<HTMLInputElement>('[name="title"]')!;
   const body = form.querySelector<HTMLTextAreaElement>('[name="body"]');
+  const prefix = form.dataset.newNotePrefix || "";
   const folder = form.querySelector<HTMLInputElement>('[name="folder"]')!;
   const button = form.querySelector<HTMLButtonElement>('button[type="submit"]')!;
   const status = form.querySelector<HTMLElement>("[data-new-note-status]")!;
@@ -18,15 +19,15 @@ export const initNewNote = (root: ParentNode = document, deps: NewNoteDeps = {})
   const navigate = deps.navigate ?? ((url: string) => window.location.assign(url));
   const draft = newNoteDraft(form);
   const restored = draft.restore();
-  if (restored) { title.value = restored.title; folder.value = restored.folder; if (body && restored.body !== undefined) body.value = restored.body; }
+  restoreInitialValues(form, restored, prefix);
   let pending: PendingCreation | undefined = restored?.pending;
   let busy = false;
   let committed = false;
   const values = (): { title: string; folder: string; body?: string } => ({
     title: title.value.trim(), folder: folder.value.trim().replace(/\\/g, "/"),
-    ...(body?.value ? { body: body.value } : {}),
+    ...(body?.value || prefix ? { body: prefix + (body?.value || "") } : {}),
   });
-  const keepDraft = (): void => draft.save({ title: title.value, folder: folder.value, body: body?.value, pending });
+  const keepDraft = (): void => draft.save({ title: title.value, folder: folder.value, body: prefix + (body?.value || ""), pending });
   const preview = (): void => {
     const value = values();
     button.textContent = pending?.signature === JSON.stringify(value) ? "Check creation" : "Create and write";
@@ -94,3 +95,11 @@ const showOutcome = (
 };
 
 const setBodyDisabled = (body: HTMLTextAreaElement | null, disabled: boolean): void => { if (body) body.disabled = disabled; };
+
+const restoreInitialValues = (form: HTMLFormElement, restored: NewNoteValues | null, prefix: string): void => {
+  if (!restored) return;
+  form.querySelector<HTMLInputElement>('[name="title"]')!.value = restored.title;
+  form.querySelector<HTMLInputElement>('[name="folder"]')!.value = restored.folder;
+  const body = form.querySelector<HTMLTextAreaElement>('[name="body"]');
+  if (body && restored.body !== undefined) body.value = prefix && restored.body.startsWith(prefix) ? restored.body.slice(prefix.length) : restored.body;
+};

@@ -353,7 +353,7 @@
 /* Reading uses the shared Workspace menu; keep note actions compact enough for
  * opening prose to remain visible on a phone, without shrinking touch targets. */
 @media (max-width: 700px) {
-  .note-page .note-actions { gap: 0.5rem; margin-block: 0.75rem; }
+  .note-page .note-actions { gap: 0.4rem; margin-block: 0.25rem 0.5rem; }
   .note-page .note-actions :is(.source-editor-launch, .open-editor-button, .copy-button, .pin-button, .synthesize-launch) {
     flex: 0 1 auto;
     min-height: 2.75rem;

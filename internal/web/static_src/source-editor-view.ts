@@ -1,3 +1,4 @@
+import { codeTypography } from "./source-code-type";
 import {
   autocompletion,
   closeBrackets,
@@ -68,6 +69,7 @@ export const createSourceSurfaceFactory = (
           EditorView.contentAttributes.of({ "aria-labelledby": "source-editor-heading" }),
           markdown({ base: markdownLanguage }),
           syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+          codeTypography,
           autocompletion({ override: [wikilinkCompletionSource(options, refresh)] }),
           // Tab is deliberately not bound. CodeMirror's own documentation
           // warns that capturing it traps keyboard users in the editor, and a

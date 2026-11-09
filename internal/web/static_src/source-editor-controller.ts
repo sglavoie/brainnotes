@@ -1,3 +1,4 @@
+import { initWritingPreferences } from "./source-writing";
 import { wireEditor } from "./source-editor-bindings";
 import { setSourceStatus } from "./source-status";
 import type { StatusKind } from "./status";
@@ -95,6 +96,7 @@ export const createSourceEditorController = (
   const ownerDocument = deps.doc ?? elements.panel.ownerDocument;
   const title = createEditorTitle(ownerDocument);
   const panes = initSourcePanes(elements);
+  initWritingPreferences(elements.panel, panes);
   const state: EditorState = {
     surface: null,
     baseRevision: "",

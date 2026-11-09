@@ -79,12 +79,19 @@ for (const [theme, width] of [["light", 1280], ["dark", 390], ["light", 390], ["
       await page.locator("#measurements-and-uncertainties").evaluate((heading) => heading.scrollIntoView());
       await snapshot(page, "reading");
     });
-    experienceVisuals(snapshot, width);
+    experienceVisuals(snapshot);
     thinkingVisuals(snapshot);
     test("editor and exact Undo confirmation", async ({ page }) => {
       await page.goto("/edit?key=Survey");
       await expect(page.locator(SURFACE)).toContainText("The water has fallen");
       await snapshot(page, "editor");
+      if (width > 960) {
+        await page.getByLabel("Writing layout").selectOption("write");
+        await page.getByLabel("Writing type").selectOption("prose");
+        await snapshot(page, "focused-writing");
+        await page.getByLabel("Writing layout").selectOption("split");
+        await page.getByLabel("Writing type").selectOption("mono");
+      }
       await page.route("**/api/history/preview", (route) => route.fulfill({ json: {
         ok: true, entry_id: "visual-entry", preview_id: "visual-receipt",
         command: "bn frontmatter set status", timestamp: "2026-01-02T03:04:05Z",
@@ -125,13 +132,13 @@ test("short-screen editor opens on prose with long frontmatter and an attachment
   await expect(page).toHaveScreenshot("editor-short-320.png", { animations: "disabled", caret: "hide", maxDiffPixelRatio: 0.001 });
 });
 
-function experienceVisuals(snapshot, width) {
+function experienceVisuals(snapshot) {
   test("quiet reading, capture and note preview", async ({ page }) => {
     await page.goto("/n/Survey");
-    if (width < 700) await page.locator(".note-actions-more > summary").click();
+    await page.locator(".note-actions-more > summary").click();
     await page.locator("button[data-reading-mode]").click();
     await page.locator("button[data-reading-type]").click();
-    if (width < 700) await page.locator(".note-actions-more > summary").click();
+    await page.locator(".note-actions-more > summary").click();
     await snapshot(page, "quiet-reading");
     await page.locator("[data-capture-launch]").click();
     await page.locator("[data-capture-dialog] [data-capture-input]").fill("An idea to come back to: compare the river sketches.");
@@ -153,6 +160,9 @@ function thinkingVisuals(snapshot) {
     await expect(page.locator(".connection-note h3")).toHaveCount(2);
     await page.evaluate(() => window.scrollTo(0, 0));
     await snapshot(page, "connection");
+    await page.getByRole("button", { name: "Write a thought about this connection" }).click();
+    await page.getByLabel("Your thought", { exact: true }).fill("These observations suggest a better question for the next visit.");
+    await snapshot(page, "connection-writing");
     await page.keyboard.press("Escape");
     const link = page.locator('[data-note-body] a[href^="/n/beta"]').first();
     await link.focus();

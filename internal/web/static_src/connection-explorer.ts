@@ -1,3 +1,4 @@
+import { connectionWriting } from "./connection-writing-loader";
 import { noteKeyFromPath, readNoteReference, renderReference, referenceLink } from "./note-reference";
 import { notePathForKey } from "./filters";
 
@@ -46,18 +47,7 @@ export const openConnection = (connection: Connection, trigger: HTMLElement): vo
   dialog.append(header, explanation, pair);
   if (connection.bridge) void showBridge(explanation, connection.bridge, request.signal);
   if (document.documentElement.dataset.readOnly !== "true") {
-    const draft = document.createElement("a");
-    draft.className = "bn-button bn-primary connection-draft";
-    const params = new URLSearchParams();
-    params.append("source", connection.source);
-    params.append("source", connection.candidate);
-    draft.href = `/new?${params}`;
-    draft.textContent = "Write a thought about this connection";
-    dialog.append(draft);
-    const hint = document.createElement("p");
-    hint.className = "connection-draft-hint";
-    hint.textContent = "Start a note with both source links already included.";
-    dialog.append(hint);
+    connectionWriting(dialog, [connection.source, connection.candidate], request.signal);
   }
   dialog.addEventListener("close", () => {
     request.abort(); dialog.remove();

@@ -1,3 +1,4 @@
+import { preserveReadingPlace, referenceControls } from "./reference-layout";
 import { noteKeyFromPath, readNoteReference, renderReference } from "./note-reference";
 
 let panel: SideReference | undefined;
@@ -34,7 +35,9 @@ class SideReference {
     this.close.className = "bn-button";
     this.close.textContent = "Close reference";
     this.close.addEventListener("click", () => this.hide());
-    header.append(label, this.close);
+    header.append(label);
+    referenceControls(this.root, header);
+    header.append(this.close);
     this.content.className = "reference-content";
     this.content.setAttribute("aria-live", "polite");
     this.root.append(header, this.content);
@@ -49,8 +52,11 @@ class SideReference {
     const request = new AbortController();
     this.request = request;
     this.returnTarget = returnTarget;
-    this.root.hidden = false;
-    document.body.classList.add("has-reference");
+    if (returnTarget && this.root.classList.contains("is-collapsed")) this.root.querySelector<HTMLButtonElement>(".reference-collapse")?.click();
+    preserveReadingPlace(() => {
+      this.root.hidden = false;
+      document.body.classList.add("has-reference");
+    });
     this.content.textContent = "Loading reference…";
     if (returnTarget) this.close.focus({ preventScroll: true });
     try { sessionStorage.setItem(storageKey(), key); } catch { /* Optional persistence. */ }
@@ -74,8 +80,10 @@ class SideReference {
 
   private hide(): void {
     this.request?.abort();
-    this.root.hidden = true;
-    document.body.classList.remove("has-reference");
+    preserveReadingPlace(() => {
+      this.root.hidden = true;
+      document.body.classList.remove("has-reference", "reference-collapsed");
+    });
     try { sessionStorage.removeItem(storageKey()); } catch { /* Optional persistence. */ }
     const target = this.returnTarget?.isConnected ? this.returnTarget : document.querySelector<HTMLElement>("[data-note-body], .cm-content");
     target?.focus({ preventScroll: true });

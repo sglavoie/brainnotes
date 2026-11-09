@@ -1,10 +1,11 @@
+import { highlightedText } from "./text-highlight";
 import { readableExcerpt } from "./note-excerpt";
 import { withLibraryContext } from "./note-navigation";
 
 export type NoteReference = {
   title: string; excerpt: string; path: string;
   passages?: { text: string; heading: boolean; relevant: boolean }[];
-  truncated?: boolean;
+  truncated?: boolean; context?: string;
 };
 
 export const noteKeyFromPath = (path: string): string => {
@@ -33,7 +34,7 @@ export const renderReference = (root: HTMLElement, reference: NoteReference, con
   const shown = referencePassages(reference, connection);
   for (const passage of shown) {
     const text = document.createElement(passage.heading ? "h4" : "p");
-    text.textContent = readableExcerpt(passage.text);
+    text.append(highlightedText(readableExcerpt(passage.text), connection && reference.context ? [reference.context] : []));
     if (passage.relevant) text.className = "connection-passage";
     root.append(text);
   }
@@ -51,5 +52,5 @@ const referencePassages = (reference: NoteReference, connection: boolean) => {
     .filter((passage, index) => !(index === 0 && passage.heading && passage.text.trim() === reference.title.trim()));
   if (!connection) return passages;
   const relevant = passages.filter((passage) => passage.relevant);
-  return relevant.length ? relevant : passages.filter((passage) => !passage.heading).slice(0, 2);
+  return relevant.length ? passages.filter((passage) => !passage.heading) : passages.filter((passage) => !passage.heading).slice(0, 2);
 };

@@ -44,7 +44,9 @@ compiler API. Drop the alias once typescript-eslint supports TypeScript 7.
 
 The generated JavaScript is committed so Go-only builds do not need Node. The
 editor and Sync pages load `editing.js` for CodeMirror; note reading loads only
-`app.js`. Each workspace loads its own small page bundle.
+`app.js`. Each workspace loads its own small page bundle. Recent-history tools
+load with Library, Properties and Settings; connection-writing tools load only
+when someone chooses to write about a connection.
 New note, Pinned, and broken-link repair share `workspace-actions.js`; folder
 suggestions load only on the creation, editor, and Library screens.
 `internal/cli/web-build-args.json` is the shared entry manifest for local builds,

@@ -20,8 +20,9 @@ const parseDraft = (raw: string | null): Draft | null => {
 // also protects against a different vault later being served at that origin.
 export const newNoteDraft = (form: HTMLElement) => {
   const vault = form.dataset.newNoteVault;
-  const suggestion = new URLSearchParams(window.location.search).get("title") || "";
-  const key = `bn.new-note.v1:${JSON.stringify([vault, suggestion, ...new URLSearchParams(window.location.search).getAll("source")])}`;
+  const params = new URLSearchParams(form.dataset.newNoteContext ?? window.location.search);
+  const suggestion = params.get("title") || "";
+  const key = `bn.new-note.v1:${JSON.stringify([vault, suggestion, ...params.getAll("source")])}`;
   const notice = form.querySelector<HTMLElement>("[data-new-note-draft-status]");
   const report = (text: string): void => { if (notice && notice.textContent !== text) notice.textContent = text; };
   return {

@@ -59,7 +59,8 @@ omit that navigation position.
 Select notes with their checkboxes or **Select displayed**. The selected count,
 **Clear selection**, and **Copy wikilinks** appear once there is a selection.
 **Selection help** appears alongside the actions once notes are selected.
-Shift-click a checkbox to select or clear the range from the previous checkbox. Selections and copied wikilinks
+Shift-click a checkbox to select or clear the range from the previous checkbox.
+Selections and copied wikilinks
 include other result pages; copied links use exact-case vault targets in result
 order, one `[[target]]` per line. Copying also works on read-only replicas. The
 count identifies selections outside the current page. Changing the query, filters, or ordering
@@ -105,7 +106,7 @@ desktop sidebar preference.
 
 Prose stays within a 70-character measure on wide screens, including when
 metadata is hidden. Tables, code, and media can use the wider content column.
-**Edit in browser** opens at the passage currently being read. On narrow screens,
+**Edit** opens at the passage currently being read. On narrow screens,
 switching Edit/Preview keeps the corresponding passage in view; returning to the
 note retains the reading position.
 
@@ -115,7 +116,7 @@ result's position and keyboard focus after results load. If it no longer matches
 the search loads normally; interacting while loading cancels the automatic jump.
 Pinned, Brief, and Graph links also carry a named return destination.
 
-The reading toolbar keeps **Edit in browser**, **Pin**, and **Actions** visible.
+The reading toolbar keeps **Edit**, **Pin**, and **Actions** visible.
 **Actions** groups copying, note history, external-editor access, synthesis, and Trash.
 
 Use **Copy code** in a code block’s header, the **#** button beside a heading
@@ -142,11 +143,16 @@ reuses the original request, including after a reload; it never checks or retrie
 automatically. Confirmed creation clears those saved details. If browser storage
 is unavailable, keep the form open until creation is confirmed.
 
-On a note, choose **Edit in browser**, or **Open in external editor** on local
+On a note, choose **Edit**, or **Open in external editor** on local
 servers. The source editor opens with the writing surface visible on a narrow
 screen. Its toolbar keeps **Save** nearby while scrolling; **Format** reveals formatting
 commands and Escape closes them. Long frontmatter starts collapsed; **Show
 frontmatter** expands it without changing the source.
+On desktop, **View** chooses **Write**, **Split**, or **Preview**; **Type** offers
+proportional prose or monospace, with code always in monospace. These choices are
+remembered in this browser. Write centers a single column and keeps Save in the
+toolbar. Narrow screens retain Edit/Preview tabs, with the type choice inside Format.
+
 Below the writing surface, **This note and this vault** contains History and
 **Rename note**, which reveals the title field and Rename button. Rename changes the
 filename and incoming wikilinks; Save changes the source text. The folder fields
@@ -186,7 +192,8 @@ current values. Group links jump directly to each section without discarding dra
 with unsaved edits and pending confirmations remain visible even when they do
 not match. Clearing the search restores the full list.
 Upload sizes display and edit in MiB; conversion preserves exact byte counts and
-refuses values that would require rounding to a whole byte. Choose **Edit** beside a setting to reveal its controls; size and
+refuses values that would require rounding to a whole byte. Choose **Edit** beside a
+setting to reveal its controls; size and
 age fields name their units. **Configuration details** contains the exact key,
 type, and source file. Machine-local overrides remain visible as explanations of
 why a setting cannot be edited here.
@@ -314,7 +321,7 @@ and navigation still work.
 
 **Quiet reading** hides the metadata, contents, and secondary reading panels;
 **Book type** uses a serif face for prose. Both preferences persist in this browser.
-On phones, these controls live under **Actions** to leave room for the note.
+These controls live under **Actions** to leave room for the note.
 A leading heading that repeats the page title is visually suppressed without
 editing the Markdown. Printing retains a single title and the note body.
 
@@ -349,15 +356,25 @@ both notes together. Passages mentioning the other note or connecting note are
 preferred; otherwise the opening prose is shown. The connecting note is a link,
 and each source title opens the full note. Previewing a connection does not
 record an open or change the notes. On writable servers, **Write a thought about
-this connection** opens New note with both source links included. Add a title and
-your thought, then choose **Create and write**. Unfinished writing and an
-unconfirmed creation receipt survive reload in this tab.
+this connection** opens a writing area beneath the passages. Write first, then
+choose **Save thought…** to name the note and **Create and write** to save. Both
+source links are included automatically. Unfinished writing and an unconfirmed
+creation receipt are kept in this tab; reopen the same connection after reloading to
+recover them. Short link-list passages include nearby substantive prose, and the
+matching reference is highlighted.
+
+Search results include a matching passage with highlighted words. **Alt + Enter**,
+or **Keep beside**, opens the selected note as a reference while preserving unsaved
+writing.
 
 A link preview's **Keep beside this note** action keeps a reference visible while
 you read or write. It remains open across navigation in this tab and vault; close
 it with **Close reference** or Escape while focus is inside it. Desktop uses a
-side panel; phones use a panel below the reading area. References show bounded
-plain-text passages, with a full-note link for longer notes. No attachments or
+side panel with a draggable divider (also adjustable with arrow keys); its width is
+remembered in this browser. Opening and resizing it preserves the visible reading
+passage. Phones use a panel below the reading area that can collapse to a small
+strip. References show bounded plain-text passages, with a full-note link for
+longer notes. No attachments or
 agents are loaded by a reference preview.
 
 The Brief keeps capture and recommendations first. **Vault overview** expands

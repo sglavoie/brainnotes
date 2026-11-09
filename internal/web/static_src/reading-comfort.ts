@@ -21,22 +21,7 @@ export const initReadingComfort = (): void => {
     });
   }
   quietRepeatedTitle();
-  arrangeReadingControls();
-};
 
-const arrangeReadingControls = (): void => {
-  const controls = document.querySelector<HTMLElement>(".reading-controls");
-  const menu = document.querySelector(".note-more-options");
-  if (!controls || !menu) return;
-  const marker = document.createComment("reading preferences");
-  controls.before(marker);
-  const narrow = window.matchMedia("(max-width: 700px)");
-  const arrange = (): void => {
-    if (narrow.matches) menu.prepend(controls);
-    else marker.after(controls);
-  };
-  narrow.addEventListener("change", arrange);
-  arrange();
 };
 
 const quietRepeatedTitle = (): void => {

@@ -6,7 +6,6 @@ import { initCopyControls } from "./clipboard";
 import { initWorkspacePopovers } from "./disclosure-popover";
 import { initOpenInEditor } from "./editor-open";
 import { initFrontmatterEditing } from "./frontmatter-edit";
-import { initHistoryPanel } from "./history-panel";
 import { initNoteReading } from "./note-reading";
 import { initReadingComfort } from "./reading-comfort";
 import { initNotePeek } from "./note-peek";
@@ -39,7 +38,6 @@ import { initPendingWriteOutcomes } from "./write-outcome-check";
     initTrashUndo();
     initNoteInsight();
     initFrontmatterEditing();
-    initHistoryPanel();
   }
   // The synchronization line is on every page in every mode: a replica that
   // publishes a copy has a status worth reading too, and the route answers it.

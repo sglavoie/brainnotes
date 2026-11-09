@@ -47,7 +47,8 @@ func (s *Server) handleNotePeek(w http.ResponseWriter, r *http.Request) {
 		Path      string        `json:"path"`
 		Passages  []peekPassage `json:"passages"`
 		Truncated bool          `json:"truncated"`
-	}{document.Title, brief.RepresentativeExcerpt(document), path, passages, truncated})
+		Context   string        `json:"context,omitempty"`
+	}{document.Title, brief.RepresentativeExcerpt(document), path, passages, truncated, context})
 }
 
 type peekPassage struct {
@@ -83,17 +84,64 @@ func connectionBlocks(blocks []recall.MarkdownBlock, context string) []recall.Ma
 	if context == "" {
 		return blocks
 	}
-	matching := make([]recall.MarkdownBlock, 0, 2)
-	for _, block := range blocks {
-		if block.Kind != recall.BlockHeading && strings.Contains(strings.ToLower(block.Text), strings.ToLower(context)) {
-			matching = append(matching, block)
-			if len(matching) == 2 {
-				return matching
+	selected := make(map[int]bool)
+	matches := 0
+	for i, block := range blocks {
+		if !matchesConnection(block, context) {
+			continue
+		}
+		selected[i] = true
+		// A bare list of links explains the graph, but not the idea. Bring the
+		// nearest substantial prose along, including across a section heading.
+		if len([]rune(block.Text)) < 160 {
+			if neighbor := connectionNeighbor(blocks, i); neighbor >= 0 {
+				selected[neighbor] = true
+			}
+		}
+		matches++
+		if matches == 2 {
+			break
+		}
+	}
+	if matches == 0 {
+		return blocks
+	}
+	result := make([]recall.MarkdownBlock, 0, len(selected))
+	for i, block := range blocks {
+		if selected[i] {
+			result = append(result, connectionExcerpt(block, context))
+		}
+	}
+	return result
+}
+
+func connectionNeighbor(blocks []recall.MarkdownBlock, index int) int {
+	for distance := 1; distance <= 6; distance++ {
+		for _, candidate := range []int{index - distance, index + distance} {
+			if candidate < 0 || candidate >= len(blocks) {
+				continue
+			}
+			block := blocks[candidate]
+			if block.Kind == recall.BlockProse && len([]rune(block.Text)) >= 60 {
+				return candidate
 			}
 		}
 	}
-	if len(matching) > 0 {
-		return matching
+	return -1
+}
+
+func matchesConnection(block recall.MarkdownBlock, context string) bool {
+	return block.Kind != recall.BlockHeading && strings.Contains(strings.ToLower(block.Text), strings.ToLower(context))
+}
+
+// Context prose must leave room for the matching passages even when a nearby
+// paragraph is longer than the entire preview budget.
+func connectionExcerpt(block recall.MarkdownBlock, context string) recall.MarkdownBlock {
+	if !matchesConnection(block, context) {
+		text := []rune(block.Text)
+		if len(text) > 1600 {
+			block.Text = string(text[:1600]) + "…"
+		}
 	}
-	return blocks
+	return block
 }

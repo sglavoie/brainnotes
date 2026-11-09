@@ -15,6 +15,7 @@ class NotePeek {
   private returnTarget: HTMLElement | null = null;
   private request: AbortController | null = null;
   private timer = 0;
+  private readonly resize = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(() => { if (this.active) this.position(this.active); });
 
   constructor() {
     this.panel.className = "note-peek";
@@ -97,6 +98,7 @@ class NotePeek {
     this.panel.hidePopover();
     this.panel.hidden = true;
     this.active = null;
+    this.resize?.disconnect();
     if (restore) this.returnTarget?.focus({ preventScroll: true });
     this.returnTarget = null;
   }
@@ -112,6 +114,8 @@ class NotePeek {
   private async show(link: HTMLAnchorElement, returnTarget?: HTMLElement): Promise<void> {
     this.close(false);
     this.active = link;
+    this.resize?.observe(link);
+    this.resize?.observe(this.panel);
     this.returnTarget = returnTarget || null;
     this.title.textContent = linkTitle(link);
     this.excerpt.textContent = "Loading note…";

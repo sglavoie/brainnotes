@@ -1,8 +1,9 @@
+import { searchExcerptText } from "./text-highlight";
 import { normalizeSearchResults, searchResultPath } from "./api-search";
 import { fetchSavedViews } from "./saved-views-requests";
 import { savedViewHref } from "./saved-views-model";
 
-export type SwitcherEntry = { label: string; detail: string; path?: string; action?: string };
+export type SwitcherEntry = { label: string; detail: string; excerpt?: string; path?: string; action?: string };
 const recentKey = (): string => `bn.switcher.recent:${document.documentElement.dataset.vaultId}`;
 
 export const recentEntries = (): SwitcherEntry[] => {
@@ -45,5 +46,5 @@ export const savedViewEntries = async (): Promise<SwitcherEntry[]> => {
 export const searchEntries = async (query: string, signal: AbortSignal): Promise<SwitcherEntry[]> => {
   const response = await fetch(`/api/search?${new URLSearchParams({ q: query, limit: "8" })}`, { signal });
   if (!response.ok) throw new Error("Search unavailable. Try again or open Library.");
-  return normalizeSearchResults(await response.json()).map((note) => ({ label: note.title || note.key, detail: note.folder || "Note", path: searchResultPath(note) }));
+  return normalizeSearchResults(await response.json()).map((note) => ({ label: note.title || note.key, detail: note.folder || "Note", excerpt: searchExcerptText(note.snippet), path: searchResultPath(note) }));
 };

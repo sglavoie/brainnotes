@@ -1,3 +1,4 @@
+import { initHistoryPanel } from "./history-panel";
 import { initFolderSuggestions } from "./folder-suggestions";
 // Loaded only by this workspace; shared reading does not initialize it.
 import { initLibrarySearch } from "./library-search";
@@ -15,3 +16,5 @@ initFacets();
 initQueryBar();
 
 if (document.documentElement.dataset.readOnly !== "true") initFolderSuggestions();
+
+if (document.documentElement.dataset.readOnly !== "true") initHistoryPanel();

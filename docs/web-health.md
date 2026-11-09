@@ -157,7 +157,7 @@ and cannot be edited from the browser. Fix those in the file directly.
 The workbench does not provide spreadsheet-style editing, advanced value
 transforms (regular expressions, split/join or case rules), or reusable edit
 recipes. Use **Settings** for portable configuration and templates, and
-**Edit in browser** on a note to edit its Markdown body.
+**Edit** on a note to edit its Markdown body.
 
 ## Compact summaries and recovery
 

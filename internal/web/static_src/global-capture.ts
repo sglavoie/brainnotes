@@ -33,11 +33,11 @@ export const initGlobalCapture = (): void => {
     if (!dialog.open || !(event.target instanceof Node) || !dialog.contains(event.target)) return;
     const result = (event as CustomEvent<CaptureResult>).detail;
     dialog.close();
-    showCaptureNotice(result);
+    showCaptureNotice(result, origin);
   });
 };
 
-const showCaptureNotice = (result: CaptureResult): void => {
+const showCaptureNotice = (result: CaptureResult, origin: HTMLElement | null): void => {
   const notice = document.querySelector<HTMLElement>("[data-capture-notice]");
   if (!notice) return;
   notice.replaceChildren(document.createTextNode(result.message || "Captured to your inbox."));
@@ -52,4 +52,16 @@ const showCaptureNotice = (result: CaptureResult): void => {
   dismiss.textContent = "Dismiss";
   dismiss.addEventListener("click", () => notice.replaceChildren());
   notice.append(" ", dismiss);
+  positionCaptureNotice(notice, origin);
+};
+
+const positionCaptureNotice = (notice: HTMLElement, origin: HTMLElement | null): void => {
+  notice.removeAttribute("style");
+  const anchor = origin?.getBoundingClientRect();
+  if (!anchor || anchor.bottom < 0 || anchor.bottom > innerHeight - 120) return;
+  const width = notice.getBoundingClientRect().width;
+  notice.style.left = `${Math.max(12, Math.min(anchor.left, innerWidth - width - 12))}px`;
+  notice.style.top = `${Math.max(12, anchor.bottom + 8)}px`;
+  notice.style.bottom = "auto";
+  notice.style.transform = "none";
 };

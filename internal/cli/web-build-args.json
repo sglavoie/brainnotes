@@ -1,5 +1,6 @@
 [
   "app=internal/web/static_src/main.ts",
+  "connection-writing=internal/web/static_src/connection-writing.ts",
   "workspace-actions=internal/web/static_src/workspace-actions.ts",
   "editing=internal/web/static_src/editing.ts",
   "library-page=internal/web/static_src/library-page.ts",

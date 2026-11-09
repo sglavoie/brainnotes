@@ -11,9 +11,9 @@ actions require an inline preview first: the server returns a one-use
 rewrite counts, and any failures, then the follow-up apply call must reuse that
 preview receipt before it expires. Note pages can move the current note to
 Trash, edit frontmatter in place, create a blank note for a broken wikilink
-target, and edit the note body with **Edit in browser**, a raw-Markdown source
+target, and edit the note body with **Edit**, a raw-Markdown source
 editor with preview that saves through `/api/source/save` against the revision it
-loaded. **Edit in browser** is available in local and hosted modes and absent on
+loaded. **Edit** is available in local and hosted modes and absent on
 read-only replicas, which refuse every `/api/source/*` route. In local mode,
 **Actions → Open in external editor** opens the file in the configured editor
 instead. These web
@@ -50,7 +50,7 @@ remain plain escaped code blocks. Note bodies also auto-link GFM-style bare URLs
 such as `https://example.com`. Beyond that, rendering supports the GitHub
 Flavored Markdown extensions — tables, `~~strikethrough~~`, and task lists
 (`- [ ]` / `- [x]`, shown as read-only checkboxes on the rendered page; change
-them in **Edit in browser** or your editor) — plus footnotes, definition lists, and typographic punctuation
+them in **Edit** or your editor) — plus footnotes, definition lists, and typographic punctuation
 (straight quotes become curly, `---` becomes an em dash, `--` an en dash, and
 `...` an ellipsis). Wide tables scroll horizontally so they stay readable on
 narrow viewports, and wikilinks resolve inside table cells just as they do in

@@ -54,7 +54,7 @@
       <div class="panel-header">
         <h2 id="capture-heading">Quick capture</h2>
         {{if .CaptureConfigured}}
-          <p class="capture-destination">{{if .CapturePath}}<a href="{{.CapturePath}}"><code>{{.CaptureRelPath}}</code></a>{{else}}<code>{{.CaptureRelPath}}</code>{{end}} · <code>{{.CaptureHeading}}</code></p>
+          <details class="capture-destination"><summary>To your inbox</summary><p>{{if .CapturePath}}<a href="{{.CapturePath}}"><code>{{.CaptureRelPath}}</code></a>{{else}}<code>{{.CaptureRelPath}}</code>{{end}} · <code>{{.CaptureHeading}}</code></p></details>
         {{end}}
       </div>
       {{if and (not .CaptureConfigured) (not readOnly)}}

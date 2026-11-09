@@ -79,7 +79,7 @@
       <div class="note-actions">
         {{if not readOnly}}
           <div class="note-action-group">
-            <a class="source-editor-launch bn-button bn-primary" href="{{.EditSourcePath}}" data-source-editor-launch>Edit in browser</a>
+            <a class="source-editor-launch bn-button bn-primary" href="{{.EditSourcePath}}" data-source-editor-launch>Edit</a>
           </div>
         {{end}}
         <div class="note-action-group" data-pin-note data-pin-key="{{.Key}}" data-pin-csrf="{{.CSRFToken}}" data-pin-state="{{if .Pinned}}pinned{{else}}unpinned{{end}}">
@@ -96,13 +96,14 @@
           </button>
         </div>
 
+        <details class="note-actions-more">
+          <summary class="bn-button copy-button">Actions</summary>
+          <div class="note-more-options">
         <div class="reading-controls" role="group" aria-label="Reading preferences">
           <button type="button" class="bn-button" data-reading-mode aria-pressed="false">Quiet reading</button>
           <button type="button" class="bn-button" data-reading-type aria-pressed="false">Book type</button>
         </div>
-        <details class="note-actions-more">
-          <summary class="bn-button copy-button">Actions</summary>
-          <div class="note-more-options">
+
             <div class="note-action-group" data-open-editor data-open-key="{{.Key}}" data-open-csrf="{{.CSRFToken}}">
               <button type="button" class="bn-button open-editor-button" data-open-button>Open in external editor</button>
               <p class="open-editor-status" data-open-status role="status" aria-live="polite"></p>

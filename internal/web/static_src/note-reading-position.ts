@@ -76,6 +76,8 @@ export const initReadingPosition = (): void => {
       ? window.scrollY + heading.getBoundingClientRect().top - position.offset
       : position.ratio * (document.documentElement.scrollHeight - window.innerHeight);
     window.scrollTo({ top: Math.max(0, top), behavior: "instant" });
+    const passage = [...body.querySelectorAll<HTMLElement>("[data-source-line]")].find((block) => Number(block.dataset.sourceLine) === position.sourceLine);
+    (passage || heading)?.classList.add("resume-passage");
     const url = new URL(window.location.href);
     url.searchParams.delete(parameter);
     window.history.replaceState(window.history.state, "", url);

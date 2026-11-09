@@ -182,6 +182,8 @@ const replaceSlotContent = (ctx: BriefActionContext, slotResult: BriefSlotResult
   if (!header) {
     return;
   }
+  const previousHeight = slotEl.getBoundingClientRect().height;
+  if (previousHeight > 0) slotEl.style.minHeight = `${previousHeight}px`;
   while (header.nextSibling) {
     slotEl.removeChild(header.nextSibling);
   }

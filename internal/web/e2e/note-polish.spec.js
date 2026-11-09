@@ -56,7 +56,7 @@ test("trash offers undo after navigation and restores the original file", async 
   const peerBefore = gitStatus(manifest.peerVault);
   const peerBytes = readFileSync(join(manifest.peerVault, "Notes/Gamma.md"), "utf8");
   await page.goto("/n/Notes/Gamma");
-  await expect(page.getByRole("link", { name: "Edit in browser", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: "Edit", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Open in external editor", exact: true })).toBeHidden();
   await expect(page.locator("[data-trash-button]")).toBeHidden();
   await page.getByText("Actions", { exact: true }).focus();

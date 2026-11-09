@@ -3,6 +3,7 @@ export const browserSuites = {
   "pr": [
     "experience.spec.js",
     "thinking-experience.spec.js",
+    "writing-desk.spec.js",
     "accessibility.spec.js",
     "research-polish.spec.js",
     "smoke.spec.js",

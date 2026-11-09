@@ -201,7 +201,7 @@ async function recordWeb(world) {
     await shot("Related notes, ranked with reasons", 2600);
 
     // 4. Edit it in the browser and save.
-    await t.click(page.getByRole("link", { name: "Edit in browser", exact: true }));
+    await t.click(page.getByRole("link", { name: "Edit", exact: true }));
     const surface = page.locator("[data-source-surface] .cm-content");
     await surface.waitFor();
     await t.click(surface);

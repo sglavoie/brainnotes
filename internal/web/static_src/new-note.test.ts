@@ -80,3 +80,31 @@ describe("new note", () => {
     expect(h.navigate).not.toHaveBeenCalled();
   });
 });
+
+it("recovers a connection thought and retries exactly the same prefixed creation", async () => {
+  sessionStorage.clear();
+  const prefix = "## Connection\n\n[[Ideas/One]] ↔ [[Books/Two]]\n\n";
+  const form = document.querySelector<HTMLFormElement>("form")!;
+  form.dataset.newNoteVault = "connection-vault";
+  form.dataset.newNoteContext = "source=Ideas%2FOne&source=Books%2FTwo";
+  form.dataset.newNotePrefix = prefix;
+  form.insertAdjacentHTML("beforeend", '<textarea name="body"></textarea>');
+  const markup = document.body.innerHTML;
+  const fetcher = vi.fn().mockRejectedValueOnce(new Error("lost response"))
+    .mockResolvedValue(response({ ok: true, key: "ideas/fresh note" }));
+  const first = setup(fetcher);
+  document.querySelector<HTMLTextAreaElement>("textarea")!.value = "A thought with café and <literal> text.";
+  first.submit();
+  await vi.waitFor(() => expect(first.button.disabled).toBe(false));
+  const sent = new URLSearchParams(fetcher.mock.calls[0][1].body);
+  expect(sent.get("body")).toBe(prefix + "A thought with café and <literal> text.");
+  document.body.innerHTML = markup;
+  const second = setup(fetcher);
+  expect(document.querySelector<HTMLTextAreaElement>("textarea")!.value).toBe("A thought with café and <literal> text.");
+  expect(second.button.textContent).toBe("Check creation");
+  expect(fetcher).toHaveBeenCalledTimes(1);
+  second.submit();
+  await vi.waitFor(() => expect(second.navigate).toHaveBeenCalled());
+  expect(fetcher.mock.calls[1][1].body).toBe(fetcher.mock.calls[0][1].body);
+  sessionStorage.clear();
+});

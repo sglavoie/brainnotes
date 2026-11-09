@@ -9,6 +9,7 @@ async function expectAccessible(page) {
 test("quiet reading and book type persist without changing note content", async ({ page }) => {
   await page.goto("/n/Reading");
   const before = await page.locator("[data-note-body]").textContent();
+  await page.locator(".note-actions-more > summary").click();
   await page.locator("button[data-reading-mode]").click();
   await page.locator("button[data-reading-type]").click();
   await expect(page.locator(".note-meta-sidebar")).toBeHidden();
@@ -17,6 +18,7 @@ test("quiet reading and book type persist without changing note content", async 
   await expect(page.locator("button[data-reading-mode]")).toHaveAttribute("aria-pressed", "true");
   await expect(page.locator("button[data-reading-type]")).toHaveAttribute("aria-pressed", "true");
   expect(await page.locator("[data-note-body]").textContent()).toBe(before);
+  await page.locator(".note-actions-more > summary").click();
   await page.locator("button[data-reading-mode]").click();
   await expect(page.locator(".note-meta-sidebar")).toBeVisible();
 });

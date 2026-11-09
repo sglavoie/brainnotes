@@ -63,7 +63,7 @@ func TestReferencePassagesAreBoundedAndFindContextBeyondOpening(t *testing.T) {
 		t.Fatalf("unbounded reference: %d characters, %d passages", count, len(passages))
 	}
 	matched, _ := peekPassages(document, "Deliberate Practice")
-	if len(matched) != 1 || !matched[0].Relevant || matched[0].Text != blocks[19].Text {
+	if len(matched) != 2 || matched[0].Text != blocks[18].Text || !matched[1].Relevant || matched[1].Text != blocks[19].Text {
 		t.Fatalf("context lost: %+v", matched)
 	}
 }
