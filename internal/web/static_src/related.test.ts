@@ -155,6 +155,8 @@ it("renders untrusted fields as text and leaves note links unintercepted", async
   expect(card!.querySelector(".related-card-excerpt")!.textContent).toContain("<script>");
   expect(card!.querySelector(".related-card-relationship")!.textContent).toBe("Shared neighbor");
   expect(card!.querySelector(".related-card-bridge a")!.getAttribute("href")).toBe("/notes/bridge");
+  expect(card!.querySelector(".related-card-insight")!.textContent).toBe(malicious);
+  expect(card!.querySelector(".related-card-insight script")).toBeNull();
   expect(card!.querySelectorAll(".related-card-reasons li")).toHaveLength(3);
   expect(card!.textContent).not.toContain("0.99");
   expect(card!.querySelector('[class*="score"], [data-score]')).toBeNull();

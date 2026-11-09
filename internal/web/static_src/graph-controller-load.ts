@@ -1,6 +1,6 @@
 import { buildFilteredAPIURL, dispatchFiltersChange, hasActiveFilters } from "./filters";
 import { rebuildDisplay } from "./graph-controller-display";
-import { renderDetailsPanel } from "./graph-controller-interaction";
+import { renderDetailsPanel, selectNode } from "./graph-controller-interaction";
 import { graphFilterMode, syncPageSearchModeParam } from "./graph-controller-params";
 import {
   type GraphRuntime,
@@ -150,6 +150,9 @@ const mountGraph = (runtime: GraphRuntime, graphElements: GraphElements): void =
       },
       built
     );
+    if (state.display.isolateID !== "" && state.selectedNodeID === "") {
+      selectNode(runtime, state.display.isolateID);
+    }
   }
   updateZoomMatchesButton(runtime);
 };

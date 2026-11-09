@@ -95,6 +95,24 @@ for (const width of [390, 1280]) test(`Graph keyboard navigation and layout cont
   await expect(page.locator("[data-note-back-results]")).toHaveText("Back to Graph");
 });
 
+test("a note opens its neighborhood with a selected anchor and a clear exit", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto("/n/Alpha");
+  await expect(page.locator('[data-related-card="beta"] .related-card-insight')).toBeVisible();
+  await page.getByRole("link", { name: "Explore nearby notes" }).click();
+  await expect(page).toHaveURL(/\/graph\?g_isolate=alpha$/);
+  await expect(page.locator(".graph-context-bar")).toContainText("Alpha");
+  await expect(page.locator(".graph-context-bar")).toBeVisible();
+  await expect(page.locator(".graph-refine-options")).not.toHaveAttribute("open");
+  await expect(page.locator("#graph-canvas")).toBeInViewport({ ratio: 1 });
+  const openHref = new URL(await page.locator("#graph-open-note").getAttribute("href"));
+  expect(openHref.pathname).toBe("/n/alpha");
+  expect(openHref.searchParams.get("return_to")).toContain("/graph?g_isolate=alpha");
+  await page.getByRole("button", { name: "Show whole graph" }).click();
+  await expect(page.locator(".graph-context-bar")).toBeHidden();
+  await expect(page).toHaveURL(/\/graph$/);
+});
+
 test("wide reading keeps prose bounded with metadata shown or hidden", async ({ page }) => {
   await page.setViewportSize({ width: 1920, height: 1000 });
   await page.goto("/n/Reading");

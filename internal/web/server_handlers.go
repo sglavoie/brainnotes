@@ -87,6 +87,7 @@ func (s *Server) handleNote(w http.ResponseWriter, r *http.Request) {
 		Pinned:             query.Pinned()(note),
 		SynthesizePath:     synthesizeRoutePath + "?source=" + url.QueryEscape(normalizedKey),
 		EditSourcePath:     editorRoutePath + "?key=" + url.QueryEscape(normalizedKey),
+		NearbyGraphPath:    graphRoutePath + "?g_isolate=" + url.QueryEscape(normalizedKey),
 	}
 	if err := s.templates.ExecuteTemplate(w, "note", data); err != nil {
 		http.Error(w, "render error", http.StatusInternalServerError)

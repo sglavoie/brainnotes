@@ -75,7 +75,7 @@ const createModePanel = (
 export const createRelatedView = (root: HTMLElement): RelatedView => {
   const doc = root.ownerDocument;
   const retry = createRetryButton(doc);
-  const heading = root.querySelector("h2");
+  const heading = root.querySelector(".related-notes-heading") || root.querySelector("h2");
   const status = root.querySelector<HTMLElement>("[data-related-status]") || doc.createElement("p");
   status.className = "related-status";
   status.setAttribute("data-related-status", "");
@@ -203,6 +203,14 @@ const renderLaterControl = (doc: Document, result: RelatedResult, serverDate: st
   return details;
 };
 
+const appendRelatedInsight = (doc: Document, card: HTMLElement, result: RelatedResult): void => {
+  if (result.reasons.length === 0) return;
+  const insight = doc.createElement("p");
+  insight.className = "related-card-insight";
+  insight.textContent = result.reasons[0].detail || relatedReasonLabel(result.reasons[0].kind);
+  card.appendChild(insight);
+};
+
 const renderRelatedCard = (doc: Document, result: RelatedResult, serverDate: string, source: string): HTMLElement => {
   const card = doc.createElement("article");
   card.className = "related-card";
@@ -235,6 +243,7 @@ const renderRelatedCard = (doc: Document, result: RelatedResult, serverDate: str
     bridge.append("Connected through ", bridgeLink);
     card.appendChild(bridge);
   }
+  appendRelatedInsight(doc, card, result);
   if (result.excerpt !== "") {
     const excerpt = doc.createElement("blockquote");
     excerpt.className = "related-card-excerpt";

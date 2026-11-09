@@ -129,6 +129,7 @@ type notePageData struct {
 	Pinned             bool
 	SynthesizePath     string
 	EditSourcePath     string
+	NearbyGraphPath    string
 }
 
 type brokenPageData struct {

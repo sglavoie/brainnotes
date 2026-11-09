@@ -136,6 +136,8 @@ metadata controls. Skip links are omitted from print output.
 
 Explore further with the [Related Notes explorer](web-related-notes.md),
 [Graph](#explore-graph), or [Synthesis workbench](web-synthesis.md).
+**Explore nearby notes** beside Related Notes opens Graph around the current note
+and selects it. **Show whole graph** returns to the full vault view.
 
 ## Create and edit
 
@@ -283,12 +285,16 @@ stops while the page is hidden and ignores superseded replies.
 
 Graph uses the same **Workspace** menu as the other pages. Search and its
 Filter/Focus mode stay visible. **Refine graph** groups the facet picker, query
-expression, and layout controls; it opens for incoming filters or display options
-and shows an active marker when collapsed. Within it, **Filters** opens the picker
+expression, and layout controls; it opens for incoming filters or advanced layout
+options and shows an active marker when collapsed. A note-centered view keeps it
+closed so the neighborhood remains visible on entry. Within it, **Filters** opens the picker
 while active constraints stay visible. **Query expression** opens automatically for a
 query loaded from a URL or saved view. **Graph layout** contains spread, minimum
 degree, folder collapsing, isolation, label mode, and viewport controls.
 On phones, the canvas appears before the selected-note details.
+When opened from a note, Graph starts with that note and its immediate
+neighbors; the note is selected and **Show whole graph** remains visible above
+the canvas.
 
 Choose a note in **Notes and folders in this view**, or use arrow keys on the
 graph canvas to move through displayed notes in title order. Home/End select the
@@ -313,7 +319,8 @@ link. **Captured this session** reveals up to five earlier receipts. Failed or
 unconfirmed captures keep the draft and recovery instructions visible.
 
 Recommended notes follow capture; maintenance stays farther down the page.
-Each card shows its title, excerpt, and **Another** action. **Continue** offers
+Each card shows its title, a short reason, excerpt, and **Another** action.
+Continue also shows the note's edit date when available. **Continue** offers
 **Resume writing** in the browser on writable servers, or **Read note** on a
 replica. **Rediscover** offers **Revisit note**; **Connect** names both notes and
 their relationship, with **Explore connection** comparing their passages. These

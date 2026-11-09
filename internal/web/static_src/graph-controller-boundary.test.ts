@@ -103,10 +103,10 @@ afterEach(resetGraphTest);
   it("ignores a late mouseout for an element isolation removed", async () => {
     const fetchMock = startGraph("/graph?g_isolate=alpha", chainPayload);
     await flush();
+    fireNodeEvent("unselect", "alpha");
 
     const canvas = control("graph-canvas");
-    // Isolated from the URL, so nothing is selected and the panel is free to
-    // report the hover.
+    // Clear the entry anchor so the panel is free to report the hover.
     expect(mountedNodeIDs()).toEqual(["alpha", "beta"]);
 
     fireNodeEvent("mouseover", "beta");
@@ -194,12 +194,13 @@ afterEach(resetGraphTest);
   it("refuses a keyboard activation of a stale Cytoscape selection outside the displayed set", async () => {
     const fetchMock = startGraph("/graph?g_isolate=alpha", chainPayload);
     await flush();
+    fireNodeEvent("unselect", "alpha");
 
     const isolateButton = control<HTMLButtonElement>("graph-isolate-button");
     const openNote = control<HTMLAnchorElement>("graph-open-note");
 
-    // Isolated from the URL: gamma is two hops out and never reached Cytoscape,
-    // and with nothing hovered or selected the details panel is at rest.
+    // Gamma is two hops out and never reached Cytoscape. After clearing the
+    // entry anchor, the details panel is at rest.
     expect(mountedNodeIDs()).toEqual(["alpha", "beta"]);
     expect(mountedEdgeIDs()).toEqual(["e1"]);
     expect(detailsTitle()).toBe("Choose a note");
@@ -232,6 +233,7 @@ afterEach(resetGraphTest);
   it("still activates a Cytoscape selection the display pipeline kept", async () => {
     startGraph("/graph?g_isolate=alpha", chainPayload);
     await flush();
+    fireNodeEvent("unselect", "alpha");
 
     const isolateButton = control<HTMLButtonElement>("graph-isolate-button");
     expect(detailsTitle()).toBe("Choose a note");

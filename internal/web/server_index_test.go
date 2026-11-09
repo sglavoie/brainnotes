@@ -106,8 +106,8 @@ func assertBriefHomepage(t *testing.T, body string) {
 		`data-brief-action-insight`,
 		`data-brief-insight-prompt`,
 		`maxlength="2000"`,
-		`Most recently modified substantive note.`,
-		`Longest-unseen eligible note.`,
+		`Your most recently edited note.`,
+		`This note has been away from your attention longest.`,
 	}
 	for _, want := range required {
 		if !strings.Contains(body, want) {

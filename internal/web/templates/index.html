@@ -8,6 +8,7 @@
   <title>{{ .Title }}</title>
   {{template "themeBoot" .}}
   <link rel="stylesheet" href="/static/app.css">
+  <link rel="stylesheet" href="/static/idea-thread.css">
 </head>
 <body>
   {{template "workspaceSkip" .}}
@@ -132,6 +133,7 @@
                 {{.Continue.Card.SourceTitle}}
               {{end}}
             </h4>
+            <p class="brief-card-context">{{.Continue.Card.Explanation}}</p>
             {{if .Continue.Card.Excerpt}}<blockquote class="brief-card-excerpt">{{.Continue.Card.Excerpt}}</blockquote>{{end}}
             <div class="brief-card-actions">
               <button
@@ -217,6 +219,7 @@
                   {{.Rediscover.Card.SourceTitle}}
                 {{end}}
               </h4>
+              <p class="brief-card-context">{{.Rediscover.Card.Explanation}}</p>
               {{if .Rediscover.Card.Excerpt}}<blockquote class="brief-card-excerpt">{{.Rediscover.Card.Excerpt}}</blockquote>{{end}}
               <div class="brief-card-actions">
                 <button
@@ -306,6 +309,7 @@
                 {{end}}
               </h4>
               <p class="brief-connection-source">Alongside <a href="{{.Connect.Card.SourcePath}}">{{.Connect.Card.SourceTitle}}</a>{{if .Connect.Card.Bridge}} · through {{.Connect.Card.Bridge}}{{else if .Connect.Card.RelationshipLabel}} · {{.Connect.Card.RelationshipLabel}}{{end}}</p>
+              <p class="brief-card-context">{{.Connect.Card.Explanation}}</p>
               {{if .Connect.Card.Excerpt}}<blockquote class="brief-card-excerpt">{{.Connect.Card.Excerpt}}</blockquote>{{end}}
               <div class="brief-card-actions">
                 <button

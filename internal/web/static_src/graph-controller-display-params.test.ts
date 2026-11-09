@@ -59,6 +59,8 @@ describe("graph display controls", () => {
 
     expect(graphRequests(fetchMock)).toEqual(["/api/graph.json"]);
     expect(control<HTMLButtonElement>("graph-isolate-clear-button").disabled).toBe(false);
+    expect(control<HTMLAnchorElement>("graph-open-note").getAttribute("href")).toBe("/n/beta");
+    expect(control<HTMLElement>("graph-hover-title").textContent).toBe("Beta");
     expect(statusText()).toContain('Showing 3 of 4 nodes — isolated 1 hop from "Beta"');
   });
 

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -278,7 +279,7 @@ func (selector *DeterministicSelector) SelectContinue(corpus CorpusSnapshot) (Sl
 	return cardSlot(SlotContinue, Card{
 		Slot:        SlotContinue,
 		Source:      chosen.Ref,
-		Explanation: "Most recently modified substantive note.",
+		Explanation: "Your most recently edited note.",
 		Excerpt:     selector.excerptForPath(chosen.Ref.RelPath),
 	}), nil
 }
@@ -299,20 +300,9 @@ func (selector *DeterministicSelector) SelectRediscover(corpus CorpusSnapshot, c
 		continuePath = normalizedPath
 	}
 
-	strict := make([]rediscoverCandidate, 0, len(corpus.Notes))
-	relaxed := make([]rediscoverCandidate, 0, len(corpus.Notes))
-	for _, note := range corpus.Notes {
-		if continuePath != "" && note.Ref.RelPath == continuePath {
-			continue
-		}
-		candidate, inCooldown, err := selector.rediscoverCandidate(note, now)
-		if err != nil {
-			return SlotResult{}, err
-		}
-		relaxed = append(relaxed, candidate)
-		if !inCooldown {
-			strict = append(strict, candidate)
-		}
+	strict, relaxed, err := selector.rediscoverCandidates(corpus.Notes, continuePath, now)
+	if err != nil {
+		return SlotResult{}, err
 	}
 	if len(relaxed) == 0 {
 		return unavailableSlot(SlotRediscover, "No rediscover candidate is available."), nil
@@ -324,7 +314,7 @@ func (selector *DeterministicSelector) SelectRediscover(corpus CorpusSnapshot, c
 		return cardSlot(SlotRediscover, Card{
 			Slot:        SlotRediscover,
 			Source:      chosen.note.Ref,
-			Explanation: "Longest-unseen eligible note.",
+			Explanation: "This note has been away from your attention longest.",
 			Excerpt:     selector.excerptForPath(chosen.note.Ref.RelPath),
 		}), nil
 	}
@@ -334,7 +324,7 @@ func (selector *DeterministicSelector) SelectRediscover(corpus CorpusSnapshot, c
 	return cardSlot(SlotRediscover, Card{
 		Slot:        SlotRediscover,
 		Source:      chosen.note.Ref,
-		Explanation: "Cooldown relaxed because no alternative rediscover candidate is available.",
+		Explanation: "Another look at this note may bring a fresh perspective.",
 		Excerpt:     selector.excerptForPath(chosen.note.Ref.RelPath),
 	}), nil
 }
@@ -372,10 +362,10 @@ func (selector *DeterministicSelector) SelectConnect(corpus CorpusSnapshot, cont
 		return unavailableSlot(SlotConnect, "No connect candidate is available."), nil
 	}
 	chosen := strict
-	explanation := "Related note suggested by ModeConnect ranking."
+	explanation := "Read this alongside your current note for another angle."
 	if len(chosen) == 0 {
 		chosen = relaxed
-		explanation = "Cooldown relaxed because no alternative connect candidate is available."
+		explanation = "A connection worth returning to today."
 	}
 
 	return selector.connectCard(sourceNote.Ref, chosen[0], explanation), nil
@@ -385,6 +375,10 @@ func (selector *DeterministicSelector) connectCard(source NoteRef, selected conn
 	reasons := connectReasonStrings(selected.result.Reasons)
 	if len(reasons) > 0 {
 		explanation = reasons[0]
+	} else if selected.result.Relationship == recall.RelationshipDirect {
+		explanation = "These notes link directly."
+	} else if bridge := connectBridge(selected.result); bridge != "" {
+		explanation = "These notes meet through " + strings.TrimSuffix(path.Base(bridge), ".md") + "."
 	}
 	candidateRef := selected.note.Ref
 	return cardSlot(SlotConnect, Card{

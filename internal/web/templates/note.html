@@ -50,6 +50,13 @@
       })();
     </script>
     <link rel="stylesheet" href="/static/app.css" />
+    <!-- Keep these note-only rules off the shared stylesheet's reading-page transfer budget. -->
+    <style>
+      .related-notes-heading { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 0.35rem 1rem; }
+      .related-notes-heading h2 { margin: 0; }
+      .related-neighborhood { display: inline-flex; align-items: center; min-height: 2.75rem; font-size: 0.85rem; }
+      .related-card-insight { margin: 0.35rem 0 0.6rem; padding-inline-start: 0.7rem; border-inline-start: 2px solid var(--bn-accent-subtle-border); color: var(--bn-text-subtle); font-size: 0.85rem; line-height: 1.5; overflow-wrap: anywhere; }
+    </style>
   </head>
   <body class="note-page">
     <a class="note-skip-link" href="#bn:note-body">Skip to note</a>
@@ -361,7 +368,10 @@
             data-related-item-endpoint="/api/related/item"
             data-related-csrf="{{.CSRFToken}}"
           >
-            <h2>Related Notes</h2>
+            <div class="related-notes-heading">
+              <h2>Related Notes</h2>
+              <a class="related-neighborhood" href="{{.NearbyGraphPath}}">Explore nearby notes</a>
+            </div>
             <p data-related-status role="status" aria-live="polite">Related notes will load here.</p>
           </section>
 

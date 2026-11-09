@@ -14,8 +14,8 @@ export const enhanceBriefCards = (root: ParentNode): void => {
     const card = slot.querySelector<HTMLElement>("[data-brief-card]");
     if (!card) continue;
     enhancePurpose(slot);
-    enhanceCardCopy(card, slot.dataset.briefSlot || "");
-    if (slot.dataset.briefSlot !== "connect") enhanceDate(card);
+    enhanceCardCopy(card);
+    if (slot.dataset.briefSlot === "continue") enhanceDate(card);
     if (slot.dataset.briefSlot === "continue") enhanceResume(card);
     if (slot.dataset.briefSlot === "connect") enhanceBriefConnection(card);
   }
@@ -46,11 +46,11 @@ const enhanceResume = (card: HTMLElement): void => {
   if (action && !action.classList.contains("is-opened")) action.textContent = "Continue here";
 };
 
-const enhanceCardCopy = (card: HTMLElement, slot: string): void => {
+const enhanceCardCopy = (card: HTMLElement): void => {
   enhanceBridgeTitle(card);
   const excerpt = card.querySelector<HTMLElement>(".brief-card-excerpt");
   if (excerpt) excerpt.textContent = readableExcerpt(excerpt.textContent || "");
-  if (slot === "connect" || card.querySelector(".brief-card-context")) return;
+  if (card.querySelector(".brief-card-context")) return;
   const context = document.createElement("p");
   context.className = "brief-card-context";
   context.textContent = card.querySelector(".brief-card-explanation")?.textContent?.trim() || "";
@@ -71,7 +71,8 @@ const enhanceDate = (card: HTMLElement): void => {
     if (!label) return;
     const time = document.createElement("time"); time.dateTime = note.modified;
     time.title = date.toLocaleString(); time.textContent = `Edited ${label.replace(/^(Today|Yesterday)$/, (value) => value.toLowerCase())}`;
-    card.querySelector(".brief-card-context")?.replaceChildren(time);
+    const context = card.querySelector(".brief-card-context");
+    if (context) context.append(" · ", time);
   }).catch(() => { /* The existing recommendation reason remains available. */ })
     .finally(() => window.removeEventListener("pagehide", stop));
 };

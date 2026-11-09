@@ -10,8 +10,8 @@ neighbors, and **Connect** favors text- or metadata-supported notes that are not
 already directly linked. Each tab starts with two suggestions; Show more expands
 to five, then in groups of five to a
 hard cap of twenty. Cards lead with the title, relationship, a bounded prose-first
-excerpt, and an optional bridge. The path and up to three human reasons are
-available under **Why this connection?**. Common filler words are omitted from
+excerpt, an optional bridge, and the strongest human reason. The path and up to
+three reasons remain available under **Why this connection?**. Common filler words are omitted from
 text-match explanations. Preview a candidate before opening it with the eye
 button, or hover over its title. Numeric scores and
 ranking weights are intentionally not sent to or rendered by the browser.

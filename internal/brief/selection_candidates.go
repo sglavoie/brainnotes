@@ -48,6 +48,25 @@ func (selector *DeterministicSelector) rediscoverCandidate(note CorpusNote, now 
 	}, inCooldown, nil
 }
 
+func (selector *DeterministicSelector) rediscoverCandidates(notes []CorpusNote, continuePath string, now time.Time) ([]rediscoverCandidate, []rediscoverCandidate, error) {
+	strict := make([]rediscoverCandidate, 0, len(notes))
+	relaxed := make([]rediscoverCandidate, 0, len(notes))
+	for _, note := range notes {
+		if continuePath != "" && note.Ref.RelPath == continuePath {
+			continue
+		}
+		candidate, inCooldown, err := selector.rediscoverCandidate(note, now)
+		if err != nil {
+			return nil, nil, err
+		}
+		relaxed = append(relaxed, candidate)
+		if !inCooldown {
+			strict = append(strict, candidate)
+		}
+	}
+	return strict, relaxed, nil
+}
+
 func (selector *DeterministicSelector) connectPairInCooldown(sourcePath, candidatePath string, now time.Time) (bool, error) {
 	if selector.state == nil {
 		return false, nil

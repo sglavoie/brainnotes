@@ -34,6 +34,8 @@ func TestServer_NoteView200(t *testing.T) {
 		`data-related-source-key="source"`,
 		`data-related-endpoint="/api/related"`,
 		`data-related-item-endpoint="/api/related/item"`,
+		`href="/graph?g_isolate=source"`,
+		`Explore nearby notes`,
 		`maxlength="2000"`,
 		`<a class="note-skip-link" href="#bn:note-body">Skip to note</a>`,
 		`<div id="bn:note-body" class="note-body" tabindex="-1" data-note-key="source" data-note-body data-note-context-links>`,

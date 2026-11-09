@@ -40,5 +40,9 @@ export function graphVisuals(snapshot) {
     await page.locator(".graph-refine-options > summary").click();
     await page.getByText("Graph layout", { exact: true }).click();
     await snapshot(page, "graph-layout");
+    await page.goto("/graph?g_isolate=alpha");
+    await expect(page.locator(".graph-context-bar")).toContainText("Alpha");
+    await expect(page.locator("#graph-hover-title")).toHaveText("Alpha");
+    await snapshot(page, "graph-neighborhood");
   });
 }

@@ -9,7 +9,7 @@ import {
   separateIsolatedNodes,
 } from "./graph-controller-layout";
 import { formatCollapseDepthLabel, formatMinDegreeLabel } from "./graph-controller-params";
-import { type GraphRuntime } from "./graph-controller-runtime";
+import { type GraphRuntime, findSourceNodeModel } from "./graph-controller-runtime";
 import { buildGraphStyle } from "./graph-controller-style";
 import { type GraphLayoutRunOptions } from "./graph-controller-types";
 
@@ -68,6 +68,19 @@ export const updateZoomMatchesButton = (runtime: GraphRuntime): void => {
   }
 };
 
+const updateIsolationContext = (runtime: GraphRuntime): void => {
+  const button = runtime.dom.isolateClearButton;
+  if (!(button instanceof HTMLButtonElement)) return;
+  const isolateID = runtime.state.display.isolateID;
+  button.disabled = isolateID === "";
+  const bar = button.closest<HTMLElement>(".graph-context-bar");
+  if (!bar) return;
+  bar.hidden = isolateID === "";
+  const title = bar.querySelector<HTMLElement>("[data-graph-context-title]");
+  const anchor = findSourceNodeModel(runtime, isolateID);
+  if (title) title.textContent = anchor?.title || isolateID;
+};
+
 /** Disabled-state of the display controls, refreshed on every rebuild and selection. */
 export const updateDisplayControls = (runtime: GraphRuntime): void => {
   const { dom, state } = runtime;
@@ -75,9 +88,7 @@ export const updateDisplayControls = (runtime: GraphRuntime): void => {
     dom.isolateButton.disabled =
       state.selectedNodeID === "" || state.selectedNodeID === state.display.isolateID;
   }
-  if (dom.isolateClearButton instanceof HTMLButtonElement) {
-    dom.isolateClearButton.disabled = state.display.isolateID === "";
-  }
+  updateIsolationContext(runtime);
   if (dom.minDegreeInput instanceof HTMLInputElement) {
     dom.minDegreeInput.value = String(state.display.minDegree);
   }

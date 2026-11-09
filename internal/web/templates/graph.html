@@ -8,6 +8,7 @@
     <title>{{.Title}}</title>
     {{template "themeBoot" .}}
     <link rel="stylesheet" href="/static/app.css" />
+    <link rel="stylesheet" href="/static/idea-thread.css" />
     <script src="/static/cytoscape.min.js" defer></script>
     <script src="/static/layout-base.min.js" defer></script>
     <script src="/static/cose-base.min.js" defer></script>
@@ -79,9 +80,6 @@
               <button id="graph-isolate-button" class="graph-control-button" type="button" disabled>
                 Isolate selection
               </button>
-              <button id="graph-isolate-clear-button" class="graph-control-button" type="button" disabled>
-                Show whole graph
-              </button>
             </div>
             <div class="graph-view-controls-header">
               <label class="graph-control-label" for="graph-mindegree-input">Min degree</label>
@@ -135,6 +133,10 @@
             </div>
           </details>
         </section>
+      <div class="graph-context-bar" hidden>
+        <p>Nearby notes around <strong data-graph-context-title></strong></p>
+        <button id="graph-isolate-clear-button" class="graph-control-button" type="button" disabled>Show whole graph</button>
+      </div>
       <p id="graph-status" role="status">Loading graph…</p>
       <section class="graph-panel">
         <div id="graph-canvas" aria-label="Notes graph" tabindex="0" role="application" aria-describedby="graph-keyboard-help"></div>
