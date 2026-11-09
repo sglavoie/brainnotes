@@ -1,4 +1,5 @@
 import { codeTypography } from "./source-code-type";
+import { proseSyntax, restoredPassage } from "./source-prose";
 import {
   autocompletion,
   closeBrackets,
@@ -71,6 +72,8 @@ export const createSourceSurfaceFactory = (
           markdown({ base: markdownLanguage }),
           syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
           codeTypography,
+          proseSyntax,
+          restoredPassage,
           autocompletion({ override: [wikilinkCompletionSource(options, refresh)] }),
           // Tab is deliberately not bound. CodeMirror's own documentation
           // warns that capturing it traps keyboard users in the editor, and a

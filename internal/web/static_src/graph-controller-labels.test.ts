@@ -112,16 +112,16 @@ describe("estimateLabelBox", () => {
     expect(single).not.toBeNull();
     // text-valign: bottom pushes the label under the node: half the node width
     // plus text-margin-y.
-    expect(single?.y1).toBe(10 + labelBoxGeometry.marginYPX);
+    expect(single!.y1).toBe(10 + labelBoxGeometry.marginYPX);
 
     const charWidth = labelBoxGeometry.fontSizePX * labelBoxGeometry.averageCharWidthRatio;
-    const longTitle = "x".repeat(Math.ceil((labelBoxGeometry.maxWidthPX * 2) / charWidth));
+    const longTitle = "word ".repeat(Math.ceil((labelBoxGeometry.maxWidthPX * 2) / charWidth / 5));
     const wrapped = estimateLabelBox({ x: 0, y: 0 }, 20, longTitle, 1);
-    expect(wrapped?.x2 ?? 0).toBeLessThanOrEqual(
+    expect(wrapped!.x2).toBeLessThanOrEqual(
       labelBoxGeometry.maxWidthPX / 2 + labelBoxGeometry.backgroundPaddingPX
     );
-    expect((wrapped?.y2 ?? 0) - (wrapped?.y1 ?? 0)).toBeGreaterThan(
-      (single?.y2 ?? 0) - (single?.y1 ?? 0)
+    expect(wrapped!.y2 - wrapped!.y1).toBeGreaterThan(
+      (single?.y2 ?? 0) - (single!.y1 ?? 0)
     );
   });
 
@@ -274,6 +274,9 @@ describe("applyGraphVisualClasses", () => {
     expect(hasClass("a|b", "is-dimmed")).toBe(false);
   });
 
+});
+
+describe("label collision policy", () => {
   it("culls a colliding lower-degree label but never a pinned one", () => {
     const { cy, hasClass } = createFakeCy({
       nodes: ["hub", "leaf", "sel", "far"],

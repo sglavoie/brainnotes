@@ -2,9 +2,6 @@ package web
 
 import (
 	"errors"
-	"fmt"
-	"os"
-	"sort"
 	"strings"
 	"time"
 
@@ -259,70 +256,19 @@ func buildOverviewPageSummary(snapshot vaultSnapshot, root string) (overviewPage
 			orphanCount++
 		}
 
-		issues := query.UnresolvedLinks(note, snapshot.graph)
-		for _, issue := range issues {
-			target := snapshot.graph.UnresolvedTargetKey(issue.Link.Target)
-			if target == "" {
-				target = strings.ToLower(strings.TrimSpace(issue.Link.Target))
-			}
-			if target == "" {
-				continue
-			}
-			brokenTargets[target] = struct{}{}
-		}
+		addOverviewBrokenTargets(brokenTargets, note, snapshot)
 
-		path, err := notePathForKey(key)
+		candidate, err := overviewRecentCandidate(note, key, root)
 		if err != nil {
-			return overviewPageSummary{}, fmt.Errorf("route path for %q: %w", key, err)
+			return overviewPageSummary{}, err
 		}
-		folder, err := note.Folder(root)
-		if err != nil {
-			return overviewPageSummary{}, fmt.Errorf("folder for %q: %w", key, err)
-		}
-		info, err := os.Stat(note.Path)
-		if err != nil {
-			return overviewPageSummary{}, fmt.Errorf("stat %q: %w", note.Path, err)
-		}
-
-		title := note.Title()
-		if title == "" {
-			title = key
-		}
-		recent = append(recent, indexRecentCandidate{
-			view: indexRecentNote{
-				Title:   title,
-				Path:    path,
-				Folder:  folder,
-				Updated: info.ModTime().Local().Format(indexTimeLayout),
-			},
-			modTime: info.ModTime(),
-		})
-	}
-
-	sort.SliceStable(recent, func(i, j int) bool {
-		if !recent[i].modTime.Equal(recent[j].modTime) {
-			return recent[i].modTime.After(recent[j].modTime)
-		}
-		leftTitle := strings.ToLower(recent[i].view.Title)
-		rightTitle := strings.ToLower(recent[j].view.Title)
-		if leftTitle != rightTitle {
-			return leftTitle < rightTitle
-		}
-		return recent[i].view.Path < recent[j].view.Path
-	})
-	if len(recent) > indexRecentLimit {
-		recent = recent[:indexRecentLimit]
-	}
-
-	recentViews := make([]indexRecentNote, 0, len(recent))
-	for _, item := range recent {
-		recentViews = append(recentViews, item.view)
+		recent = append(recent, candidate)
 	}
 
 	return overviewPageSummary{
 		NoteCount:         noteCount,
 		BrokenTargetCount: len(brokenTargets),
 		OrphanCount:       orphanCount,
-		Recent:            recentViews,
+		Recent:            overviewRecentViews(recent, root),
 	}, nil
 }

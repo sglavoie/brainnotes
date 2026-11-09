@@ -35,6 +35,7 @@ import { type GraphElements, toCytoscapeElements } from "./graph";
  * or the isolation state.
  */
 export const bindGraphEvents = (runtime: GraphRuntime, instance: cytoscape.Core): void => {
+  instance.on("grab dragpan scrollzoom", () => instance.stop());
   instance.on("tap", "node", (event: cytoscape.EventObjectNode) => {
     const nodeID = event.target.id();
     const model = findDisplayedNodeModel(runtime, nodeID);

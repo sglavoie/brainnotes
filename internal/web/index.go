@@ -7,6 +7,7 @@ import (
 	"github.com/sglavoie/brainnotes/internal/brief"
 	"github.com/sglavoie/brainnotes/internal/cockpit"
 	"github.com/sglavoie/brainnotes/internal/config"
+	"github.com/sglavoie/brainnotes/internal/vault"
 )
 
 const (
@@ -163,13 +164,16 @@ func buildIndexFixesPanelData(queue cockpit.Queue) indexFixesPanelData {
 }
 
 type indexRecentNote struct {
-	Title   string
-	Path    string
-	Folder  string
-	Updated string
+	Title      string
+	Path       string
+	Folder     string
+	Updated    string
+	UpdatedISO string
+	Excerpt    string
 }
 
 type indexRecentCandidate struct {
+	note    *vault.Note
 	view    indexRecentNote
 	modTime time.Time
 }

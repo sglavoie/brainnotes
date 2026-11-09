@@ -16,7 +16,7 @@
     try {
       var stored = window.localStorage.getItem("bn.theme");
       document.documentElement.dataset.readingMode = window.localStorage.getItem("bn.reading-mode") || "";
-      document.documentElement.dataset.readingType = window.localStorage.getItem("bn.reading-type") || "";
+      document.documentElement.dataset.readingType = (window.localStorage.getItem("bn.reading-type") ?? "book");
       if (stored === "light" || stored === "dark") {
         document.documentElement.dataset.theme = stored;
       } else {
@@ -155,4 +155,17 @@
 
 {{define "switcherShortcut"}}
   <button type="button" class="bn-button switcher-launch" data-switcher-launch aria-label="Search notes and actions" title="Search notes and actions (Ctrl/⌘ K)" aria-keyshortcuts="Control+k Meta+k"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></svg><span class="switcher-shortcut">Search <kbd data-switcher-key aria-hidden="true">⌘K</kbd></span></button>
+{{end}}
+
+{{define "thoughtTransition"}}
+<style>@media (prefers-reduced-motion: no-preference) { @view-transition { navigation: auto; } }</style>
+<script>
+  // A rapid navigation or a changed motion preference can cancel readiness.
+  // Handle this expected lifecycle outcome without delaying navigation.
+  for (var eventName of ["pageswap", "pagereveal"]) {
+    addEventListener(eventName, function (event) {
+      if (event.viewTransition) event.viewTransition.ready.catch(function () {});
+    });
+  }
+</script>
 {{end}}

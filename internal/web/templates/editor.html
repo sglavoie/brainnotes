@@ -7,13 +7,14 @@
   <link rel="icon" type="image/svg+xml" sizes="any" href="/static/favicon.svg">
   <title>{{ .NoteTitle }} - {{ .Title }}</title>
   {{template "themeBoot" .}}
+  {{template "thoughtTransition" .}}
   <link rel="stylesheet" href="/static/app.css">
 </head>
 <body>
   {{template "workspaceSkip" .}}
   <main class="index-main source-editor-main">
     <header class="site-header">
-      <h1 id="source-editor-heading"><span class="visually-hidden">Editing </span><a href="{{ .NoteRoute }}" data-source-note-return>{{ .NoteTitle }}</a></h1>
+      <a class="reading-home" href="/">Brain Notes</a>
       {{template "desktopWorkspaceNav" ""}}
       {{template "switcherShortcut" .}}
       <button type="button" class="bn-button capture-launch" data-capture-launch title="Capture a thought (Ctrl/⌘ + Shift + Space)" aria-keyshortcuts="Control+Shift+Space Meta+Shift+Space" aria-label="Capture"><span class="capture-launch-label">Capture</span><span class="capture-launch-icon" aria-hidden="true">✎</span></button>
@@ -31,7 +32,6 @@
       </details>
     </header>
     {{template "siteSync" .}}
-    {{template "captureDialog" captureContext}}
 
     <section id="workspace-content" tabindex="-1"
       class="panel source-editor"
@@ -63,6 +63,8 @@
       data-source-undo-endpoint="{{ .UndoPath }}"
       aria-labelledby="source-editor-heading"
     >
+      <h1 id="source-editor-heading"><span class="visually-hidden">Editing </span><a href="{{ .NoteRoute }}" data-source-note-return>{{ .NoteTitle }}</a></h1>
+
       <!--
         The gate. It is hidden until an action is asked for over unsaved text,
         and it is the only thing between that text and an operation that would
@@ -93,7 +95,7 @@
         </details>
         <div class="writing-preferences">
           <label class="writing-layout-label">View <select data-writing-layout aria-label="Writing layout"><option value="write" selected>Write</option><option value="split">Split</option><option value="preview">Preview</option></select></label>
-          <label>Type <select data-writing-font aria-label="Writing type"><option value="mono">Monospace</option><option value="prose" selected>Prose</option></select></label>
+          <label>Type <select data-writing-font aria-label="Writing type"><option value="prose" selected>Book</option><option value="sans">Sans</option><option value="mono">Monospace</option></select></label>
         </div>
         <div class="source-editor-actions">
           <p class="source-editor-status" data-source-status role="status" aria-live="polite">Loading…</p>
@@ -271,6 +273,7 @@
         </dl>
       </details>
     </section>
+    {{template "captureDialog" captureContext}}
   </main>
   <script src="/static/app.js" defer></script>
   <script src="/static/editing.js" defer></script>

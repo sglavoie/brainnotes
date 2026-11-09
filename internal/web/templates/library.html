@@ -172,15 +172,17 @@
     <section class="panel">
       <div class="panel-header">
         <h2>Recently modified</h2>
+        <button type="button" class="bn-button library-density" data-library-density aria-pressed="false" hidden>Compact list</button>
       </div>
       {{if .Recent}}
         <ul class="recent-list">
           {{range .Recent}}
             <li class="recent-list-item">
               <a class="recent-note-title" href="{{.Path}}">{{.Title}}</a>
+              {{if .Excerpt}}<p class="recent-note-excerpt">{{.Excerpt}}</p>{{end}}
               <div class="recent-note-meta">
                 <span>{{if .Folder}}{{.Folder}}{{else}}/{{end}}</span>
-                <span>{{.Updated}}</span>
+                <time datetime="{{.UpdatedISO}}" title="{{.Updated}}" data-recent-time>{{.Updated}}</time>
               </div>
             </li>
           {{end}}

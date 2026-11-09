@@ -141,8 +141,13 @@ test("hosted browsing, keyboard save, and IME composition form one complete work
   await page.keyboard.type("[[composition");
   await searchRequest;
   await compositionEvent(surface, "compositionstart", "");
-  await page.keyboard.insertText(IME_TEXT);
-  await expect(surface).toContainText(IME_TEXT);
+  // Firefox's keyboard.insertText commits its own native composition, ending
+  // the synthetic session above. Insert through contenteditable so this test
+  // actually presses Enter while composition is still active in every engine.
+  expect(await surface.evaluate((_, text) => document.execCommand("insertText", false, text), IME_TEXT)).toBe(true);
+  // Wait for this insertion to reach editor state, rather than matching the
+  // earlier occurrence while Firefox still has a pending DOM mutation.
+  await expect.poll(async () => (await keptDrafts(page))[0]?.content).toContain(`[[composition${IME_TEXT}`);
   await page.keyboard.press("Enter");
   await compositionEvent(surface, "compositionend", IME_TEXT);
   releaseSearch();

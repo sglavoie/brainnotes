@@ -17,7 +17,10 @@ These links and the navigation disclosures work without JavaScript.
 ## Find a note
 
 Use Library to combine text search, filters, and an optional **Query expression**.
-Before searching, recently modified notes appear first in Recent activity.
+Before searching, recently modified notes appear first in Recent activity, with
+short prose excerpts and relative dates. Hover a date for its exact timestamp.
+**Compact list** hides excerpts for faster scanning and remembers the choice in
+this browser.
 Sorting and result actions appear once a search or filter is active.
 Library shows one results list as you type; Enter moves focus to its heading.
 The matching count and result actions sit together above the list.
@@ -154,9 +157,11 @@ commands and Escape closes them. Frontmatter starts collapsed; **Show
 frontmatter** expands it and **Hide frontmatter** folds it again without changing
 the source or marking the note as edited. Find still searches the full source.
 On desktop, **View** chooses **Write**, **Split**, or **Preview**; **Type** offers
-proportional prose or monospace, with code always in monospace. These choices are
-remembered in this browser. A browser without saved preferences starts with
-Write and Prose; existing choices are preserved. Write centers a single column and keeps Save in the
+Book, Sans, or Monospace, with code always in monospace. Book and Sans follow the
+reading type preference in both directions; Monospace remains an editor choice.
+These choices are remembered in this browser. A browser without saved preferences
+starts with Write and Book. Inactive prose syntax is softened without hiding or
+changing the Markdown. Write centers the same reading measure and keeps Save in the
 toolbar. Narrow screens retain Edit/Preview tabs, with the type choice inside Format.
 
 Below the writing surface, **This note and this vault** contains History and
@@ -302,13 +307,16 @@ keyboard navigation respect filtering, isolation, and folder collapsing.
 
 On writable servers, **Quick capture** appears above the recommendations, with
 the input and Capture button visible on entry on phones. Keyboard and wikilink
-hints appear while the capture form has focus.
+hints appear while composing. A confirmed capture returns the field to one line,
+keeps focus ready for the next thought, and shows a compact receipt with an inbox
+link. **Captured this session** reveals up to five earlier receipts. Failed or
+unconfirmed captures keep the draft and recovery instructions visible.
 
 Recommended notes follow capture; maintenance stays farther down the page.
 Each card shows its title, excerpt, and **Another** action. **Continue** offers
 **Resume writing** in the browser on writable servers, or **Read note** on a
 replica. **Rediscover** offers **Revisit note**; **Connect** names both notes and
-their relationship, with **Explore connection** opening the candidate. These
+their relationship, with **Explore connection** comparing their passages. These
 actions work without an external editor. A note title opens the browser reader.
 The configured capture inbox is excluded from Brief recommendations. Excerpts
 prefer substantive passages over short introductions such as “Every Sunday:”.
@@ -322,16 +330,20 @@ reveals its location and recommendation reasons; **Ask AI** expands the prompt.
 Both start closed again when Another loads a replacement. Activity counts and
 optional tool setup follow the recommendations.
 
-The Continue card can show the last passage visited in this browser tab. Resuming
-writing returns to that source line. These bounded hints are scoped to the vault
-and tab; they are separate from draft recovery and do not change the note or its
+When this browser has a remembered passage, Continue names the last section,
+shows its excerpt, and offers **Continue here**. Resuming returns to that source
+line with a brief highlight. These bounded hints are scoped to the vault and
+browser; they are separate from draft recovery and do not change the note or its
 recommendation ranking. If browser storage is unavailable, the ordinary excerpt
-and navigation still work.
+and navigation still work. Connect also previews a passage from each displayed
+source, preferring their shared connecting note. If those previews cannot load,
+the original card remains usable.
 
 ## Reading and quick interactions
 
 **Quiet reading** hides the metadata, contents, and secondary reading panels;
-**Book type** uses a serif face for prose. Both preferences persist in this browser.
+**Book type** uses a serif face for prose and is the default for a new browser.
+Turning it off selects Sans in reading and writing. Both preferences persist in this browser.
 These controls live under **Actions** to leave room for the note.
 A leading heading that repeats the page title is visually suppressed without
 editing the Markdown. Printing retains a single title and the note body.
@@ -405,3 +417,10 @@ contains a draft. Capture and recommendations remain first. **Vault overview** e
 health, pinned notes and recently modified notes. Reading uses a distinct title
 aligned with the prose, compact property presentation, and the existing Quiet
 reading and Book type preferences. Interaction motion respects reduced motion.
+
+Graph uses muted folder colors and wraps labels at word boundaries. Selecting a
+note in **Focus** mode gently centers it without changing zoom or rearranging
+nodes; ordinary Filter mode preserves the viewport. Reduced motion makes these
+viewport changes immediate. Reading-to-writing title transitions are enabled
+only in browsers supporting cross-document view transitions, and only when
+reduced motion is off.

@@ -102,8 +102,23 @@ export const zoomToMatches = (runtime: GraphRuntime): void => {
   if (matchedNodes.length === 0) {
     return;
   }
-  runtime.state.cy.fit(matchedNodes, 96);
+  const cy = runtime.state.cy;
+  cy.stop();
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) cy.fit(matchedNodes, 96);
+  else cy.animate({ fit: { eles: matchedNodes, padding: 96 } }, { duration: 180, queue: false });
   rememberMeaningfulViewport(runtime);
+};
+
+// Focus search is an explicit invitation to move around an idea. Preserve zoom
+// and all node positions; ordinary graph selection leaves the viewport alone.
+export const focusSelectedIdea = (runtime: GraphRuntime): void => {
+  const { cy, selectedNodeID, searchMode } = runtime.state;
+  if (!cy || searchMode !== "focus" || !selectedNodeID) return;
+  const node = cy.getElementById(selectedNodeID);
+  if (!node.length) return;
+  cy.stop();
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) cy.center(node);
+  else cy.animate({ center: { eles: node } }, { duration: 180, queue: false });
 };
 
 export const runLayout = (

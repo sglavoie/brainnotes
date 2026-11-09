@@ -7,8 +7,10 @@ import { initLibrarySort } from "./library-sort";
 import { initOverviewSearchResults } from "./overview-search";
 import { initFacets } from "./facets";
 import { initQueryBar } from "./query-bar";
+import { initLibraryRecent } from "./library-recent";
 
 initLibrarySearch();
+initLibraryRecent();
 initLibrarySearchLink();
 initLibrarySort();
 initOverviewSearchResults();

@@ -13,6 +13,7 @@ import { queryElement } from "./dom";
 import { captureFocusReturn } from "./focus-return";
 import { setStatusText } from "./status";
 import { isSubmitChord } from "./submit-chord";
+import { initCaptureFeedback } from "./capture-feedback";
 
 type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
 type CaptureStatusKind = "" | "is-success" | "is-error" | "is-loading";
@@ -26,6 +27,7 @@ class Capture {
   private readonly saveDraft: () => void;
   private readonly csrfToken: string;
   private readonly wikilinks: CaptureWikilinks;
+  private readonly settle: () => void;
 
   constructor(
     private readonly root: HTMLElement,
@@ -36,6 +38,7 @@ class Capture {
     private readonly fetcher: FetchLike
   ) {
     this.csrfToken = root.dataset.captureCsrf || "";
+    this.settle = initCaptureFeedback(root, status, recent);
     this.saveDraft = bindCaptureDraft(root, input);
     this.wikilinks = new CaptureWikilinks(input, fetcher);
     this.attempts = new CaptureAttempts(root);
@@ -86,6 +89,7 @@ class Capture {
       link.hidden = false;
     }
     this.setStatus(result.message || `Captured to ${this.root.dataset.captureTarget}.`, "is-success");
+    this.settle();
     window.dispatchEvent(new CustomEvent(managementMutationEventName, { detail: result }));
   }
 

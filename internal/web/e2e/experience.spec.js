@@ -7,6 +7,7 @@ async function expectAccessible(page) {
 }
 
 test("quiet reading and book type persist without changing note content", async ({ page }) => {
+  await page.addInitScript(() => { if (localStorage.getItem("bn.reading-type") === null) localStorage.setItem("bn.reading-type", ""); });
   await page.goto("/n/Reading");
   const before = await page.locator("[data-note-body]").textContent();
   await page.locator(".note-actions-more > summary").click();
@@ -115,7 +116,7 @@ test("Continue resumes the passage last visited in this tab", async ({ page }) =
   await editor.click();
   await editor.press("ControlOrMeta+End");
   await page.goto("/");
-  await expect(page.locator('[data-brief-slot="continue"] .brief-card-context')).toContainText("Your last passage");
+  await expect(page.locator('[data-brief-slot="continue"] .brief-card-context')).toContainText(/You left off|last passage/);
   await page.locator('[data-brief-slot="continue"] [data-brief-action-open]').click();
   await expect(page).toHaveURL(/read_at=/);
   const position = JSON.parse(new URL(page.url()).searchParams.get("read_at"));

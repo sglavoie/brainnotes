@@ -1,5 +1,6 @@
 import { readableExcerpt } from "./note-excerpt";
 import { readNoteResume } from "./note-resume";
+import { enhanceBriefConnection } from "./brief-connection";
 
 export const briefOpenLabel = (slot: string): string => {
   if (slot === "continue" && document.documentElement.dataset.readOnly === "true") return "Read note";
@@ -13,6 +14,7 @@ export const enhanceBriefCards = (root: ParentNode): void => {
     enhancePurpose(slot);
     enhanceCardCopy(card, slot.dataset.briefSlot || "");
     if (slot.dataset.briefSlot === "continue") enhanceResume(card);
+    if (slot.dataset.briefSlot === "connect") enhanceBriefConnection(card);
   }
 };
 
@@ -32,9 +34,12 @@ const enhanceResume = (card: HTMLElement): void => {
   const resume = readNoteResume(decodeURIComponent(new URL(link.href).pathname.slice(3)));
   if (!resume) return;
   const context = card.querySelector<HTMLElement>(".brief-card-context");
-  if (context) context.textContent = `Your last passage · ${resume.label}`;
+  if (context) context.textContent = resume.heading || !resume.label.startsWith("Your last ")
+    ? `You left off at “${resume.label}”` : "Pick up at your last passage";
   const excerpt = card.querySelector<HTMLElement>(".brief-card-excerpt");
   if (excerpt && resume.excerpt) excerpt.textContent = readableExcerpt(resume.excerpt);
+  const action = card.querySelector<HTMLButtonElement>("[data-brief-action-open]");
+  if (action && !action.classList.contains("is-opened")) action.textContent = "Continue here";
 };
 
 const enhanceCardCopy = (card: HTMLElement, slot: string): void => {
@@ -44,7 +49,7 @@ const enhanceCardCopy = (card: HTMLElement, slot: string): void => {
   if (slot === "connect" || card.querySelector(".brief-card-context")) return;
   const context = document.createElement("p");
   context.className = "brief-card-context";
-  context.textContent = slot === "continue" ? "Your latest writing" : "Something to revisit";
+  context.textContent = slot === "continue" ? "Pick up this thread" : "Something to revisit";
   card.querySelector(".brief-card-title")?.after(context);
 };
 

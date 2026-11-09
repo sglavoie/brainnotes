@@ -48,7 +48,9 @@ editor and Sync pages load `editing.js` for CodeMirror; note reading loads only
 load with Library, Properties and Settings; connection-writing tools load only
 when someone chooses to write about a connection. Note-specific AI tools load
 only when the note page offers a configured agent; ordinary reading keeps its
-360 KB combined script/style and 400 KB whole-page transfer budgets.
+370 KB combined script/style and 400 KB whole-page transfer budgets. Shared
+typography and interaction feedback account for the 10 KB asset allowance added
+in November 2026; the whole-page and responsiveness ceilings remain unchanged.
 New note, Pinned, and broken-link repair share `workspace-actions.js`; folder
 suggestions load only on the creation, editor, and Library screens.
 `internal/cli/web-build-args.json` is the shared entry manifest for local builds,
@@ -152,6 +154,11 @@ manual screen reader pass, use the
 vault. Record the exact build, device, OS, browser, assistive technology,
 observed results, and failures with release evidence. Automation cannot verify
 spoken order or announcement quality.
+
+`thinking-desk.spec.js` checks compact capture receipts and failure recovery,
+Library density and exact timestamps, reading/editor typography and passage
+continuity, remembered Brief invitations, connection previews, and reduced-motion
+Graph focus without relayout.
 
 `return-to-thought.spec.js` checks compact property preferences, Library result
 placement, capture expansion, passage/reference restoration in a fresh tab,

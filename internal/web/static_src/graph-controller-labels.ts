@@ -128,12 +128,12 @@ export const addZoomLabels = (cy: cytoscape.Core | null, labelIDs: Set<string>):
 };
 
 // The label-box estimate is derived from the base `node` style rule in
-// graph-style.ts: a 10px font, wrapped at `text-max-width: 130`, drawn below
+// graph-style.ts: a 10px font, wrapped at `text-max-width: 160`, drawn below
 // the node (`text-valign: bottom`) offset by `text-margin-y: 6`, with 2px of
 // text background padding around it.
 export const labelBoxGeometry = {
   fontSizePX: 10,
-  maxWidthPX: 130,
+  maxWidthPX: 160,
   marginYPX: 6,
   backgroundPaddingPX: 2,
   lineHeightRatio: 1.3,
@@ -158,8 +158,15 @@ export const estimateLabelBox = (
   const nodeWidth = Number.isFinite(renderedNodeWidth) ? Math.max(renderedNodeWidth, 0) : 0;
   const charWidthPX = labelBoxGeometry.fontSizePX * labelBoxGeometry.averageCharWidthRatio;
   const textWidthPX = Math.max(title.length, 1) * charWidthPX;
-  const wrappedWidthPX = Math.min(textWidthPX, labelBoxGeometry.maxWidthPX);
-  const lineCount = Math.max(1, Math.ceil(textWidthPX / labelBoxGeometry.maxWidthPX));
+  const longestWord = title.split(/\s+/).reduce((longest, word) => Math.max(longest, word.length), 0) * charWidthPX;
+  const wrappedWidthPX = Math.max(longestWord, Math.min(textWidthPX, labelBoxGeometry.maxWidthPX));
+  const charactersPerLine = labelBoxGeometry.maxWidthPX / charWidthPX;
+  let lineCount = 1;
+  let lineLength = 0;
+  for (const word of title.split(/\s+/)) {
+    if (lineLength && lineLength + 1 + word.length > charactersPerLine) { lineCount++; lineLength = 0; }
+    lineLength += word.length + (lineLength ? 1 : 0);
+  }
   const lineHeightPX = labelBoxGeometry.fontSizePX * labelBoxGeometry.lineHeightRatio;
   const width = (wrappedWidthPX + labelBoxGeometry.backgroundPaddingPX * 2) * scale;
   const height = (lineCount * lineHeightPX + labelBoxGeometry.backgroundPaddingPX * 2) * scale;

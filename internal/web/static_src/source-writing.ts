@@ -16,7 +16,9 @@ export const initWritingPreferences = (panel: HTMLElement, panes: SourcePanes): 
     catch { return fallback; }
   };
   layout.value = restore("bn.writing-layout", ["write", "split", "preview"], "write");
-  font.value = restore("bn.writing-font", ["prose", "mono"], "prose");
+  font.value = document.documentElement.dataset.readingType === "book" ? "prose" : "sans";
+  // Monospace is an editor-only preference; prose and sans share reading type.
+  if (restore("bn.writing-font", ["mono"], "") === "mono") font.value = "mono";
   const arrange = (): void => {
     if (desktop.matches) marker.after(preferences);
     else format?.append(preferences);
@@ -24,11 +26,15 @@ export const initWritingPreferences = (panel: HTMLElement, panes: SourcePanes): 
   const apply = (): void => {
     container.dataset.writingLayout = layout.value;
     panel.dataset.writingFont = font.value;
+    if (font.value !== "mono") document.documentElement.dataset.readingType = font.value === "prose" ? "book" : "";
     if (desktop.matches) panes.select(layout.value === "preview" ? "preview" : "edit");
   };
   for (const control of [layout, font]) control.addEventListener("change", () => {
     apply();
-    try { localStorage.setItem("bn.writing-layout", layout.value); localStorage.setItem("bn.writing-font", font.value); }
+    try {
+      localStorage.setItem("bn.writing-layout", layout.value); localStorage.setItem("bn.writing-font", font.value);
+      if (font.value !== "mono") localStorage.setItem("bn.reading-type", font.value === "prose" ? "book" : "");
+    }
     catch { /* Preferences still apply to this editor. */ }
   });
   // Find and formatting must always reveal the editable surface.

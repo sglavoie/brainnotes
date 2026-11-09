@@ -141,7 +141,10 @@ export const fixedRecentNotes = async (page) => {
       link.textContent = title;
       link.href = href;
       item.querySelector(".recent-note-meta span").textContent = folder;
-      item.querySelector(".recent-note-meta span:last-child").textContent = "2026-02-03 10:05";
+      item.querySelector(".recent-note-meta time").textContent = "Yesterday";
+      let excerpt = item.querySelector(".recent-note-excerpt");
+      if (!excerpt) { excerpt = document.createElement("p"); excerpt.className = "recent-note-excerpt"; link.after(excerpt); }
+      excerpt.textContent = "An observation worth returning to: compare these ideas with the notes from last week.";
       return item;
     }));
   });

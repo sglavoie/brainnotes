@@ -16,7 +16,12 @@ export const initReadingComfort = (): void => {
     button.addEventListener("click", () => {
       const enabled = root.dataset[preference.attribute] !== preference.value;
       root.dataset[preference.attribute] = enabled ? preference.value : "";
-      try { window.localStorage.setItem(preference.key, enabled ? preference.value : ""); } catch { /* This page still works. */ }
+      try {
+        window.localStorage.setItem(preference.key, enabled ? preference.value : "");
+        if (preference.attribute === "readingType" && localStorage.getItem("bn.writing-font") !== "mono") {
+          localStorage.setItem("bn.writing-font", enabled ? "prose" : "sans");
+        }
+      } catch { /* This page still works. */ }
       update();
     });
   }

@@ -1,5 +1,6 @@
 import { EditorView } from "@codemirror/view";
 import { readNoteResume, rememberNoteResume } from "./note-resume";
+import { restoredPassage, revealPassage } from "./source-prose";
 
 export const bodyStartLine = (text: string): number => {
   const header = /^(?:\uFEFF)?---[ \t]*\r?\n[\s\S]*?\r?\n(?:---|\.\.\.)[ \t]*(?:\r?\n|$)/.exec(text);
@@ -80,6 +81,22 @@ export const bindSourcePosition = (view: EditorView, host: HTMLElement): (() => 
       heading: "", offset: 0, ratio: 0, writing: true,
     });
   };
+  const returnLinks = [...document.querySelectorAll<HTMLAnchorElement>("[data-source-note-return]")];
+  const originalPosition = new URLSearchParams(location.search).get("read_at");
+  const originalLine = initialLine();
+  const carryCurrentPassage = (): void => {
+    const cursor = view.state.doc.lineAt(view.state.selection.main.head);
+    const position = { sourceLine: Math.max(1, cursor.number - bodyLine() + 1), heading: "", offset: 0, ratio: 0, writing: true };
+    // An unchanged cursor retains the reader's exact heading and pixel offset.
+    const target = originalPosition && position.sourceLine === originalLine ? originalPosition : JSON.stringify(position);
+    for (const link of returnLinks) {
+      const url = new URL(link.href);
+      url.searchParams.set("read_at", target);
+      link.href = url.href;
+    }
+  };
+  const returnEvents = ["pointerdown", "focus", "click", "contextmenu"];
+  for (const link of returnLinks) for (const event of returnEvents) link.addEventListener(event, carryCurrentPassage);
   window.addEventListener("pagehide", rememberSession);
   const observer = new MutationObserver(() => {
     const next = panes.dataset.sourceActive;
@@ -96,13 +113,19 @@ export const bindSourcePosition = (view: EditorView, host: HTMLElement): (() => 
   observer.observe(panes, { attributes: true, attributeFilter: ["data-source-active"] });
   observer.observe(preview, { childList: true });
   const line = initialLine();
+  let highlightTimer = 0;
   if (line) {
     passage = { line, offset: 0 };
     const target = view.state.doc.line(Math.min(view.state.doc.lines, line + bodyLine() - 1));
-    view.dispatch({ selection: { anchor: target.from } });
+    view.dispatch({ selection: { anchor: target.from }, effects: revealPassage.of(target.from) });
     revealEditor(passage);
+    highlightTimer = window.setTimeout(() => {
+      if (view.state.field(restoredPassage).size) view.dispatch({ effects: revealPassage.of(null) });
+    }, 1400);
   }
   return () => {
+    window.clearTimeout(highlightTimer);
+    for (const link of returnLinks) for (const event of returnEvents) link.removeEventListener(event, carryCurrentPassage);
     window.removeEventListener("pagehide", rememberSession);
     document.removeEventListener("bn:forget-workspace", forget);
     observer.disconnect(); cancelAnimationFrame(frame);

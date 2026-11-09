@@ -74,7 +74,7 @@
   --bn-graph-locked: #b8860b;
   --bn-graph-node-label: #252a28;
   --bn-graph-label-outline: #fffefa;
-  --bn-graph-edge: #8a93a3;
+  --bn-graph-edge: #929b91;
   --bn-graph-neighbor: #276650;
   --bn-graph-hovered: #172a25;
   --bn-graph-selected-text: #7a5200;
@@ -135,16 +135,16 @@
     --bn-success-border: #31553d;
 
     --bn-graph-canvas-bg: #131815;
-    --bn-graph-transient: #456fba;
+    --bn-graph-transient: #86c6a2;
     --bn-graph-locked: #ffd166;
     --bn-graph-node-label: #e8e9df;
-    --bn-graph-label-outline: #0b0f16;
-    --bn-graph-edge: #66718a;
+    --bn-graph-label-outline: #171b19;
+    --bn-graph-edge: #738175;
     --bn-graph-neighbor: #9acdb2;
-    --bn-graph-hovered: #f3f7ff;
+    --bn-graph-hovered: #f5f4e9;
     --bn-graph-selected-text: #fff3c2;
     --bn-graph-broken: #ff9d9d;
-    --bn-graph-orphan: #c7d2e7;
+    --bn-graph-orphan: #abb6a7;
   }
 }
 
@@ -195,15 +195,15 @@
   --bn-success-border: #31553d;
 
   --bn-graph-canvas-bg: #131815;
-  --bn-graph-transient: #456fba;
+  --bn-graph-transient: #86c6a2;
   --bn-graph-locked: #ffd166;
   --bn-graph-node-label: #e8e9df;
-  --bn-graph-label-outline: #0b0f16;
-  --bn-graph-edge: #66718a;
+  --bn-graph-label-outline: #171b19;
+  --bn-graph-edge: #738175;
   --bn-graph-neighbor: #9acdb2;
-  --bn-graph-hovered: #f3f7ff;
+  --bn-graph-hovered: #f5f4e9;
   --bn-graph-selected-text: #fff3c2;
   --bn-graph-broken: #ff9d9d;
-  --bn-graph-orphan: #c7d2e7;
+  --bn-graph-orphan: #abb6a7;
 }
 

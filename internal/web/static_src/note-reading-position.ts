@@ -6,6 +6,7 @@ const parameter = "read_at";
 const capture = (body: HTMLElement): ReadingPosition => {
   let heading: HTMLElement | undefined;
   for (const candidate of body.querySelectorAll<HTMLElement>("h1[id], h2[id], h3[id], h4[id], h5[id], h6[id]")) {
+    if (candidate.closest(".note-repeated-title")) continue;
     if (candidate.getBoundingClientRect().top <= 96) heading = candidate;
   }
   const height = Math.max(1, document.documentElement.scrollHeight - window.innerHeight);
@@ -15,8 +16,10 @@ const capture = (body: HTMLElement): ReadingPosition => {
 };
 
 const captureSourceLine = (body: HTMLElement): number | undefined => {
-  let passage = body.querySelector<HTMLElement>("[data-source-line]");
-  for (const candidate of body.querySelectorAll<HTMLElement>("[data-source-line]")) {
+  const candidates = [...body.querySelectorAll<HTMLElement>("[data-source-line]")]
+    .filter((block) => !block.closest(".note-repeated-title"));
+  let passage = candidates[0];
+  for (const candidate of candidates) {
     if (candidate.getBoundingClientRect().top <= 96) passage = candidate;
   }
   return Number(passage?.dataset.sourceLine) || undefined;
@@ -86,7 +89,9 @@ export const initReadingPosition = (): void => {
     const heading = document.getElementById(position.heading);
     const passage = [...body.querySelectorAll<HTMLElement>("[data-source-line]")].find((block) => Number(block.dataset.sourceLine) === position.sourceLine);
     window.scrollTo({ top: Math.max(0, restoreTop(body, heading, passage, position)), behavior: "instant" });
-    (passage || heading)?.classList.add("resume-passage");
+    const restored = passage || heading;
+    restored?.classList.add("resume-passage");
+    window.setTimeout(() => restored?.classList.remove("resume-passage"), 1400);
     const url = new URL(window.location.href);
     url.searchParams.delete(parameter);
     window.history.replaceState(window.history.state, "", url);

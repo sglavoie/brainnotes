@@ -74,9 +74,11 @@ export type GraphStyleRule = {
   style: Record<string, unknown>;
 };
 
-export const buildGraphStyleRules = (
-  palette: GraphPalette = DEFAULT_GRAPH_PALETTE
-): GraphStyleRule[] => [
+export const buildGraphStyleRules = (palette: GraphPalette = DEFAULT_GRAPH_PALETTE): GraphStyleRule[] => [
+  ...baseNodeRules(palette), ...nodeStateRules(palette), ...edgeRules(palette),
+];
+
+const baseNodeRules = (palette: GraphPalette): GraphStyleRule[] => [
   {
     selector: "node",
     style: {
@@ -89,8 +91,8 @@ export const buildGraphStyleRules = (
       "text-halign": "center",
       "text-margin-y": 6,
       "text-wrap": "wrap",
-      "text-overflow-wrap": "anywhere",
-      "text-max-width": 130,
+      "text-overflow-wrap": "whitespace",
+      "text-max-width": 160,
       "text-outline-width": 1,
       "text-outline-color": palette.labelOutline,
       "text-background-color": palette.labelBackground,
@@ -146,6 +148,9 @@ export const buildGraphStyleRules = (
       "background-blacken": -0.12,
     },
   },
+];
+
+const nodeStateRules = (palette: GraphPalette): GraphStyleRule[] => [
   {
     selector: "node.is-neighbor",
     style: {
@@ -203,6 +208,9 @@ export const buildGraphStyleRules = (
       opacity: 0.22,
     },
   },
+];
+
+const edgeRules = (palette: GraphPalette): GraphStyleRule[] => [
   {
     selector: "edge",
     style: {

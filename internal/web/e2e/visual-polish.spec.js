@@ -54,18 +54,7 @@ for (const [theme, width] of [["light", 1280], ["dark", 390], ["light", 390], ["
     test("Brief recommendations on entry", async ({ page }) => {
       await page.goto("/");
       await expect(page.locator("[data-brief-card]")).toHaveCount(3);
-      await page.locator("[data-brief-card]").evaluateAll((cards) => {
-        const titles = ["Field journal", "A small experiment in remembering what we read", "Connections worth revisiting"];
-        const excerpts = [
-          "The river is lower today. Compare the exposed roots with last month's sketches before drawing conclusions.",
-          "One question at the end of a chapter can be more useful than a page of highlights.",
-          "Both notes ask how repeated observation changes an explanation. What would make you revise yours?",
-        ];
-        for (const [index, card] of cards.entries()) {
-          card.querySelector(".brief-card-title a").textContent = titles[index];
-          card.querySelector(".brief-card-excerpt").textContent = excerpts[index];
-        }
-      });
+      await fixedBrief(page);
       await snapshot(page, "brief-entry");
     });
     test("reading and Contents", async ({ page }) => {
@@ -137,7 +126,7 @@ function experienceVisuals(snapshot) {
     await page.goto("/n/Survey");
     await page.locator(".note-actions-more > summary").click();
     await page.locator("button[data-reading-mode]").click();
-    await page.locator("button[data-reading-type]").click();
+    await expect(page.locator("button[data-reading-type]")).toHaveAttribute("aria-pressed", "true");
     await page.locator(".note-actions-more > summary").click();
     await snapshot(page, "quiet-reading");
     await page.locator("[data-capture-launch]").click();
@@ -187,5 +176,27 @@ function thinkingVisuals(snapshot) {
     await expect(page.locator(".command-switcher [role=status]")).toContainText(/\bresults?\b/);
     await page.evaluate(() => window.scrollTo(0, 0));
     await snapshot(page, "command-search");
+  });
+}
+
+async function fixedBrief(page) {
+  await expect(page.locator(".brief-connection-passages blockquote")).toHaveCount(2);
+  await page.locator("[data-brief-card]").evaluateAll((cards) => {
+    const titles = ["Field journal", "A small experiment in remembering what we read", "Connections worth revisiting"];
+    const excerpts = [
+      "The river is lower today. Compare the exposed roots with last month's sketches before drawing conclusions.",
+      "One question at the end of a chapter can be more useful than a page of highlights.",
+      "Both notes ask how repeated observation changes an explanation. What would make you revise yours?",
+    ];
+    for (const [index, card] of cards.entries()) {
+      card.querySelector(".brief-card-title a").textContent = titles[index];
+      const excerpt = card.querySelector(".brief-card-excerpt");
+      if (excerpt) excerpt.textContent = excerpts[index];
+      const passages = card.querySelectorAll(".brief-connection-passages blockquote");
+      passages.forEach((quote, i) => {
+        quote.querySelector("cite").textContent = ["Field journal", "Connections worth revisiting"][i];
+        quote.querySelector("p").textContent = [excerpts[0], excerpts[2]][i];
+      });
+    }
   });
 }

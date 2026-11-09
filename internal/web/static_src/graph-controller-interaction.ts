@@ -6,7 +6,7 @@ import {
   isDisplayedNodeID,
 } from "./graph-controller-runtime";
 import { type GraphSelectionOptions } from "./graph-controller-types";
-import { applyGraphVisualState, updateDisplayControls } from "./graph-controller-visual";
+import { applyGraphVisualState, updateDisplayControls, focusSelectedIdea } from "./graph-controller-visual";
 import { type GraphNodeModel, graphNodeModelFromData } from "./graph";
 
 export const renderDetailsPanel = (
@@ -55,6 +55,7 @@ export const selectNode = (
   // An aggregate is never a selection: it stands for a group, and every
   // selection-driven affordance (Open note, Isolate) means one note.
   const selectedNodeID = model.isAggregate ? "" : model.id;
+  const changed = selectedNodeID !== runtime.state.selectedNodeID;
   if (!selectedNodeID || selectedNodeID !== runtime.state.selectedNodeID) {
     runtime.state.showSelectedNeighborLabels = false;
   } else if (options.toggleNeighborLabels) {
@@ -67,6 +68,7 @@ export const selectNode = (
   renderDetailsPanel(runtime);
   applyGraphVisualState(runtime);
   updateDisplayControls(runtime);
+  if (changed) focusSelectedIdea(runtime);
 };
 
 export const clearSelectedNode = (
