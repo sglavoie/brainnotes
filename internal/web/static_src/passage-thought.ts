@@ -1,3 +1,4 @@
+import { collectInThread } from "./thread-loader";
 import { startConnectionWriting } from "./thought-writing-loader";
 import { notePathForKey } from "./filters";
 
@@ -13,7 +14,8 @@ export const initPassageThought = (body: HTMLElement): void => {
   button.type = "button"; button.className = "bn-button bn-primary";
   button.textContent = "Write a thought";
   const hint = document.createElement("span"); hint.textContent = "Quote and source included";
-  toolbar.append(button, hint); document.body.append(toolbar);
+  const collect = document.createElement("button"); collect.type = "button"; collect.className = "bn-button"; collect.textContent = "Add to thread";
+  toolbar.append(button, collect, hint); document.body.append(toolbar);
   let passage = "";
   let range: Range | undefined;
   const update = (): void => {
@@ -32,6 +34,10 @@ export const initPassageThought = (body: HTMLElement): void => {
     }
     passage = text; range = selected.cloneRange(); toolbar.hidden = false;
   };
+  collect.addEventListener("click", () => {
+    toolbar.hidden = true;
+    void collectInThread({ source: key, quote: passage, revision: body.dataset.noteRevision || "", returnTo: body });
+  });
   document.addEventListener("selectionchange", update);
   update();
   // Keyboard users can reach the same action without tabbing through the rest

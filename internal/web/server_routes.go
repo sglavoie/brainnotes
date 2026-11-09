@@ -30,6 +30,7 @@ func (srv *Server) routes(staticRoot fs.FS) http.Handler {
 	mux.HandleFunc(noteInsightAPIRoutePath, srv.handleNoteInsight)
 	srv.registerNoteMutationRoutes(mux)
 	srv.registerSourceRoutes(mux)
+	srv.registerThreadRoutes(mux)
 	srv.registerAttachmentRoutes(mux)
 	mux.HandleFunc("/api/graph.json", srv.handleGraphJSON)
 	mux.HandleFunc("/api/cockpit", srv.handleCockpitQueue)

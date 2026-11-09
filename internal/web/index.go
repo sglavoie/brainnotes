@@ -23,6 +23,7 @@ const (
 )
 
 type rootPageData struct {
+	Threads              []threadSummary
 	Title                string
 	Heading              string
 	CSRFToken            string
@@ -243,6 +244,7 @@ func (s *Server) buildRootPageData(snapshot vaultSnapshot) (rootPageData, error)
 	isEmptyVault := summary.NoteCount == 0 && !hasPartialSnapshot
 
 	return rootPageData{
+		Threads:              recentThreads(snapshot),
 		Title:                indexDefaultTitle,
 		Heading:              "Daily Brief",
 		DateISO:              dateISO,

@@ -16,6 +16,7 @@ const (
 // The anchor identity and the destination default are rendered server-side so
 // the page states what it is about even with scripting disabled.
 type synthesizePageData struct {
+	ThreadItems     []threadItemView
 	Title           string
 	CSRFToken       string
 	VaultID         string
@@ -81,6 +82,7 @@ func (s *Server) handleSynthesizePage(w http.ResponseWriter, r *http.Request) {
 	cfg := s.config()
 	agentConfigured, agentStatusMsg := s.agentAvailability(cfg, "Generation is unavailable until [agent].command is configured.")
 	data := synthesizePageData{
+		ThreadItems:     synthesisThreadItems(note, snapshot),
 		Title:           synthesizePageTitle,
 		CSRFToken:       s.csrfToken,
 		VaultID:         s.vaultID,

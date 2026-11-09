@@ -502,3 +502,9 @@ linked notes. An unrelated blockquote or an ambiguous source link is not attache
 A note preview kept beside the page retains its title and excerpt while the fuller
 reference loads. Connection comparisons and new thought markers use short transitions
 that respect reduced motion.
+
+## Threads
+
+[Threads](web-threads.md) keep a question, collected passages, source links, commentary,
+and a draft in one portable Markdown note. Start one from the Threads navigation
+link, collect from a note or selected passage, and resume it from Daily Brief.

@@ -1,3 +1,4 @@
+import { threadPresentation } from "./thread-presentation";
 import { codeTypography } from "./source-code-type";
 import { writingTools } from "./source-writing-tools";
 import { titlePresentation } from "./source-presentation";
@@ -77,6 +78,7 @@ export const createSourceSurfaceFactory = (
           writingTools(host),
           proseSyntax,
           titlePresentation(host),
+          threadPresentation(host),
           restoredPassage,
           autocompletion({ override: [wikilinkCompletionSource(options, refresh)] }),
           // Tab is deliberately not bound. CodeMirror's own documentation

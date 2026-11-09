@@ -8,6 +8,7 @@
   <title>{{ .Title }}</title>
   {{template "themeBoot" .}}
   <link rel="stylesheet" href="/static/app.css">
+  {{if .ThreadItems}}<link rel="stylesheet" href="/static/threads.css">{{end}}
 </head>
 <body>
   {{template "workspaceSkip" .}}
@@ -44,6 +45,7 @@
       aria-labelledby="synthesize-heading"
     >
       <h2 id="synthesize-heading" class="visually-hidden">Synthesis workbench</h2>
+      {{if .ThreadItems}}<details class="thread-synthesis-sources" open><summary>Sources collected in this thread</summary><p>Use up to {{.MaxSupporters}} supporting notes. Saved synthesis work is kept.</p><ul>{{range .ThreadItems}}<li>{{if .Key}}<button type="button" class="bn-button" data-thread-source-key="{{.Key}}" data-thread-source-title="{{.Title}}" data-thread-source-path="{{.Path}}">Add {{.Title}}</button>{{else}}{{.Title}}{{end}}{{if .Warning}}<p>{{.Warning}}</p>{{end}}</li>{{end}}</ul><p data-thread-synthesis-status role="status"></p></details>{{end}}
       <p class="synthesize-anchor-summary">Based on <a href="{{ .AnchorRoute }}">{{ .AnchorTitle }}</a></p>
       {{if not .AgentConfigured}}
         <p class="synthesize-agent-status" data-synthesize-agent-status hidden>{{ .AgentStatusMsg }}</p>

@@ -136,6 +136,7 @@
             {{end}}
             {{if not readOnly}}
               <div class="note-action-group">
+                <button type="button" class="bn-button" data-thread-collect="{{.Key}}">Add to thread</button>
                 <a class="bn-button synthesize-launch" href="{{.SynthesizePath}}" data-synthesize-launch>Synthesize from this note</a>
               </div>
               <div class="note-action-group" data-trash-note data-trash-key="{{.Key}}" data-trash-csrf="{{.CSRFToken}}" data-trash-confirm="Move &quot;{{.Title}}&quot; to Trash?" data-trash-redirect="/">
@@ -309,7 +310,7 @@
             </details>
           </section>
             {{/* The colon cannot occur in Goldmark's generated heading IDs. */}}
-            <div id="bn:note-body" class="note-body" tabindex="-1" data-note-key="{{.Key}}" data-note-body data-note-context-links>{{.BodyHTML}}</div>
+            <div id="bn:note-body" class="note-body" tabindex="-1" data-note-key="{{.Key}}" data-note-revision="{{.SourceRevision}}" data-note-body data-note-context-links>{{.BodyHTML}}</div>
             <section class="passage-thoughts" data-passage-thoughts {{if not .PassageThoughts}}hidden{{end}} aria-label="Thoughts from earlier passages">
               <h2>Thoughts from earlier passages</h2>
               <p class="passage-thoughts-hint">These quotations could not be placed uniquely in the current text. Your thoughts are still here.</p>

@@ -44,6 +44,7 @@ const (
 // revision tying them together, so a save could be planned against bytes the
 // editor never showed anybody.
 type editorPageData struct {
+	Thread    bool
 	Title     string
 	CSRFToken string
 	Key       string
@@ -132,6 +133,7 @@ func (s *Server) handleEditorPage(w http.ResponseWriter, r *http.Request) {
 		title = normalizedKey
 	}
 	data := editorPageData{
+		Thread:         isThreadNote(note),
 		Title:          editorPageTitle,
 		CSRFToken:      s.csrfToken,
 		Key:            normalizedKey,

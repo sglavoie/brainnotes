@@ -1,3 +1,4 @@
+import { initThreadSynthesis } from "./thread-synthesis";
 import { restoreSynthesisPosition } from "./synthesize-session";
 import { queryElement } from "./dom";
 import { bindSynthesisSelection, bindSynthesisDiscovery, bindSynthesisFields, bindSynthesisActions } from "./synthesize-bindings";
@@ -37,7 +38,9 @@ export const createSynthesisController = (
   runtime.render();
 
   const ready = (async (): Promise<void> => {
+    const hadSavedWork = runtime.readSaved() !== null;
     await create.restore();
+    initThreadSynthesis(runtime, root, hadSavedWork);
     runtime.offerRecovery(create.restore);
     await discovery.selectMode("balanced");
     restorePosition();

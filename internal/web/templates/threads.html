@@ -1,0 +1,34 @@
+{{define "threads"}}
+<!doctype html><html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Threads - Brain Notes</title><link rel="icon" type="image/svg+xml" sizes="any" href="/static/favicon.svg">
+{{template "themeBoot" .}}<link rel="stylesheet" href="/static/app.css">
+</head><body>{{template "workspaceSkip" .}}<main class="index-main">
+<header class="site-header focused-workspace-header"><h1>Threads</h1>{{template "workspaceMenu" "threads"}}</header>
+{{template "siteSync" .}}
+<p class="page-subtitle">Keep a question, collected passages, and your writing together.</p>
+<section id="workspace-content" tabindex="-1" class="panel" aria-labelledby="thread-list-title">
+<h2 id="thread-list-title">Pick up your thinking</h2>
+{{if .Items}}<ul>{{range .Items}}<li><a href="/edit?key={{.Key}}">{{.Title}}</a> · <a href="{{.Path}}">Read</a></li>{{end}}</ul>
+{{else}}<p>Start with a question. As you read, add notes or selected passages to your thread.</p>{{end}}
+</section>
+<details class="panel" {{if not .Items}}open{{end}}><summary>Start a thread</summary>
+<form class="new-note" data-new-note data-new-note-vault="{{.VaultID}}" data-new-note-context="title=thread" data-new-note-prefix="{{.Prefix}}" data-new-note-suffix="{{.Suffix}}" data-new-note-submit-label="Create thread" data-create-endpoint="/api/notes/new" data-editor-path="/edit" data-csrf="{{.CSRFToken}}">
+<label for="thread-title">Thread title</label><input id="thread-title" name="title" required maxlength="200" placeholder="Habits under stress" autocomplete="off">
+<label for="thread-question">Question</label><textarea id="thread-question" name="body" rows="3" maxlength="8000" required placeholder="What are you trying to understand?"></textarea>
+<label for="thread-folder">Folder</label><input id="thread-folder" name="folder" value="Threads" autocomplete="off">
+<p data-new-note-destination></p><button type="submit" class="bn-button">Create thread</button>
+<p data-new-note-draft-status role="status"></p><p data-new-note-status role="status"></p>
+<noscript>Enable JavaScript to create threads. Existing threads are readable as Markdown notes.</noscript>
+</form></details></main><script src="/static/app.js" defer></script><script src="/static/workspace-actions.js" defer></script></body></html>
+{{end}}
+
+{{define "briefThreads"}}
+{{if and (not readOnly) .Threads}}
+<section class="panel" aria-labelledby="resume-threads">
+  <h2 id="resume-threads">Resume a thread</h2>
+  <ul>{{range .Threads}}<li><a href="/edit?key={{.Key}}">{{.Title}}</a></li>{{end}}</ul>
+  <a href="/threads">All threads</a>
+</section>
+{{end}}
+{{end}}

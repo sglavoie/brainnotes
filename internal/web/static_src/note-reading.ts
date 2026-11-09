@@ -50,6 +50,25 @@ export const trackNoteSection = (body: HTMLElement): (() => void) => {
   };
 };
 
+const copyControls = (className: string, label: string, text: string, value: string): { controls: HTMLElement; button: HTMLButtonElement } => {
+  const controls = document.createElement("div");
+  controls.className = className;
+  controls.dataset.copyControls = "";
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "bn-button copy-button";
+  button.textContent = text;
+  button.dataset.copyText = value;
+  button.dataset.copyLabel = label;
+  const status = document.createElement("span");
+  status.className = "copy-status";
+  status.dataset.copyStatus = "";
+  status.setAttribute("role", "status");
+  status.setAttribute("aria-live", "polite");
+  controls.append(button, status);
+  return { controls, button };
+};
+
 export const addCodeCopyControls = (body: HTMLElement): void => {
   for (const pre of body.querySelectorAll("pre")) {
     const code = pre.querySelector("code");
@@ -57,21 +76,7 @@ export const addCodeCopyControls = (body: HTMLElement): void => {
     const wrapper = document.createElement("div");
     wrapper.className = "note-code-block";
     wrapper.dataset.codeCopy = "";
-    const controls = document.createElement("div");
-    controls.className = "note-code-copy";
-    controls.dataset.copyControls = "";
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "bn-button copy-button";
-    button.textContent = "Copy code";
-    button.dataset.copyText = code.textContent || "";
-    button.dataset.copyLabel = "Code";
-    const status = document.createElement("span");
-    status.className = "copy-status";
-    status.dataset.copyStatus = "";
-    status.setAttribute("role", "status");
-    status.setAttribute("aria-live", "polite");
-    controls.append(button, status);
+    const { controls } = copyControls("note-code-copy", "Code", "Copy code", code.textContent || "");
     pre.before(wrapper);
     wrapper.append(controls, pre);
   }
@@ -83,27 +88,12 @@ export const addSectionCopyControls = (body: HTMLElement): void => {
     const url = new URL(window.location.href);
     url.search = "";
     url.hash = encodeURIComponent(heading.id);
-    // Keep controls outside the heading so its accessible name and text stay
-    // intact, including after a failed copy adds a manual-copy field.
-    const controls = document.createElement("div");
-    controls.className = "note-section-copy";
+    // Keep controls outside the heading so its accessible name stays intact.
+    const { controls, button } = copyControls("note-section-copy", "Section link", "#", url.href);
     controls.dataset.sectionCopy = "";
-    controls.dataset.copyControls = "";
-    const button = document.createElement("button");
-    button.type = "button";
-    button.className = "bn-button copy-button";
-    button.textContent = "#";
     button.setAttribute("aria-label", "Copy section link");
     button.title = "Copy section link";
     button.setAttribute("aria-describedby", heading.id);
-    button.dataset.copyText = url.href;
-    button.dataset.copyLabel = "Section link";
-    const status = document.createElement("span");
-    status.className = "copy-status";
-    status.dataset.copyStatus = "";
-    status.setAttribute("role", "status");
-    status.setAttribute("aria-live", "polite");
-    controls.append(button, status);
     const wrapper = document.createElement("div");
     wrapper.className = "note-section-heading";
     heading.before(wrapper);

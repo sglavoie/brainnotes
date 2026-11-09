@@ -12,6 +12,7 @@ import (
 	"testing"
 
 	"github.com/sglavoie/brainnotes/internal/noteops"
+	"github.com/sglavoie/brainnotes/internal/threads"
 	"github.com/sglavoie/brainnotes/internal/web"
 )
 
@@ -126,6 +127,23 @@ func sourceMutations() []mutation {
 			// No no-op row: the save consumes the upload, so resubmitting it is a
 			// different request rather than the same one with nothing to do.
 			// TestAttachmentUploadStaysOutOfTheHistory covers the staging half.
+		},
+
+		{
+			name:    "web/thread-collection",
+			prepare: func(t *testing.T, h *harness) any { return getSource(t, h, sourceSaveKey) },
+			apply: func(t *testing.T, h *harness, state any) error {
+				doc, err := threads.Parse(threads.NewBody("A question"))
+				if err != nil {
+					t.Fatal(err)
+				}
+				err = doc.Add(threads.Item{Group: "Evidence", Link: "[[Beta]]", Quote: "A collected passage", Revision: strings.Repeat("a", 64)})
+				if err != nil {
+					t.Fatal(err)
+				}
+				return postSourceSave(t, h, sourceSaveKey, doc.String()+"A draft.\n", state.(sourceState).revision)
+			},
+			touches: []string{sourceSaveRel}, journaled: true, overHTTP: true,
 		},
 		{
 			name: "web/source-save",

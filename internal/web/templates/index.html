@@ -92,6 +92,8 @@
 
     {{end}}
 
+    {{template "briefThreads" .}}
+
     <section {{if and readOnly (not .IsEmptyVault)}}id="workspace-content" tabindex="-1"{{end}}
       class="panel brief-panel"
       data-brief-open-label="Read note"
@@ -412,6 +414,7 @@
       </details>
       <p id="brief-global-status" class="review-status brief-global-status" role="status" aria-live="polite"></p>
     </section>
+
 
     {{template "indexSummary" .}}
   </main>

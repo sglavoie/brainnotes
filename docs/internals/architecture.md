@@ -58,3 +58,8 @@ rules, read [locking](locking.md), [serving modes](serving-modes.md),
 | [internal/mutationmatrix](packages/mutationmatrix.md) | End-to-end mutation safety coverage |
 
 Contributor setup and validation live in [Development](../development.md).
+
+`internal/threads` parses the versioned Markdown collection within a thread note
+and prepares collection edits without filesystem access. The web thread controls
+use the existing new-note/source-save write classes; see [Threads](../web-threads.md)
+and [web write classes](web-write-classes.md#threads).

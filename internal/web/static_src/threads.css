@@ -1,0 +1,34 @@
+.thread-writing-layout { display: grid; grid-template-columns: minmax(15rem, 0.8fr) minmax(0, 1.5fr); gap: 1.5rem; align-items: start; }
+.thread-writing-layout > .source-editor-panes { grid-column: 2; grid-row: 1; }
+.thread-material { grid-column: 1; grid-row: 1; box-sizing: border-box; min-width: 0; max-height: 75vh; overflow: auto; padding: 1rem; background: var(--bn-surface); border: 1px solid var(--bn-border); border-radius: 0.6rem; }
+.thread-material h2 { font-size: 1.1rem; }
+.thread-material > p { font-size: 0.85rem; color: var(--bn-muted); }
+.thread-material .bn-button { margin: 0.2rem; font-size: 0.8rem; }
+.thread-passage { padding-block: 1rem; border-bottom: 1px solid var(--bn-border); overflow-wrap: anywhere; }
+.thread-passage h3 { font-size: 1rem; }
+.thread-passage blockquote, .thread-collection-dialog blockquote { margin: 0.75rem 0; padding-left: 0.8rem; border-left: 2px solid var(--bn-border); white-space: pre-wrap; }
+.thread-passage p { white-space: pre-wrap; }
+.thread-passage select { display: block; max-width: 100%; margin-block: 0.5rem; }
+.thread-collection-dialog { width: min(36rem, calc(100vw - 2rem)); max-height: 85vh; overflow: auto; border: 1px solid var(--bn-border); border-radius: 0.8rem; background: var(--bn-surface); color: var(--bn-text); padding: 1.5rem; }
+.thread-collection-dialog::backdrop { background: rgb(0 0 0 / 40%); }
+.thread-collection-dialog form, .thread-collection-dialog label { display: grid; gap: 0.5rem; }
+.thread-collection-dialog form { gap: 1rem; margin-block: 1rem; }
+.thread-collection-dialog :is(select, textarea), .thread-passage select { color: var(--bn-text); background: var(--bn-surface); font: inherit; border: 1px solid var(--bn-border); border-radius: 0.3rem; padding: 0.5rem; min-width: 0; }
+.thread-synthesis-sources { margin-block: 1rem; }
+@media (max-width: 960px) {
+ .thread-writing-layout { display: flex; flex-direction: column; gap: 1rem; }
+ .thread-writing-layout > * { width: 100%; min-width: 0; }
+ .thread-material { max-height: none; }
+}
+.thread-collection-dialog form > div { display: grid; gap: 0.5rem; }
+.thread-passage textarea { display: block; width: 100%; min-height: 6rem; box-sizing: border-box; background: var(--bn-surface); color: var(--bn-text); font: inherit; }
+:is(.thread-material, .thread-collection-dialog, .thread-synthesis-sources) .bn-button {
+  background: var(--bn-surface);
+  color: var(--bn-text);
+  border: 1px solid var(--bn-border);
+  border-radius: 0.4rem;
+  padding: 0.45rem 0.65rem;
+  cursor: pointer;
+}
+:is(.thread-material, .thread-collection-dialog, .thread-synthesis-sources) .bn-button:hover { background: var(--bn-hover); }
+:is(.thread-material, .thread-collection-dialog, .thread-synthesis-sources) .bn-button:disabled { opacity: 0.45; cursor: default; }

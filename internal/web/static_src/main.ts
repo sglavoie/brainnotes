@@ -1,3 +1,4 @@
+import { initThreadCollection } from "./thread-loader";
 import { initWorkspaceMemory } from "./workspace-memory";
 import { initCommandSwitcher } from "./command-switcher";
 import { initSideReference } from "./side-reference";
@@ -30,6 +31,7 @@ import { initPendingWriteOutcomes } from "./write-outcome-check";
   initWorkspacePopovers();
   initCommandSwitcher();
   if (!readOnly) {
+    initThreadCollection();
     initPendingWriteOutcomes();
     initGlobalCapture();
     initCapture();

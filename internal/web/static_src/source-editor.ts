@@ -1,3 +1,4 @@
+import { initThreadEditor } from "./thread-editor";
 import { confirmAction } from "./action-confirm";
 import { withLibraryContext } from "./note-navigation";
 import { normalizeSearchResults } from "./api";
@@ -112,7 +113,7 @@ export const initSourceEditor = (): void => {
   });
   initManagement(panel, config, () => controller);
   initFormatDisclosure(panel);
-  void controller.load();
+  void controller.load().then(() => { if (controller) initThreadEditor(panel, controller, config.token, config.key); });
 };
 
 // initAttachments builds the upload tracker and wires the panel around it, or

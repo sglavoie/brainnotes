@@ -65,3 +65,24 @@ The editor and History share `text-comparison.ts`: unchanged passages collapse,
 text is rendered without interpreting Markdown or HTML, and large rewrites use
 a bounded comparison with complete changed text. An editor conflict compares the
 current vault version to the live draft, including edits made after the refusal.
+
+### Threads
+
+Threads are clients of the existing new-note/source-save write classes. They
+introduce no direct writer. `GET /threads` and `GET /api/threads` discover ordinary
+Markdown notes with the versioned collection marker. `POST /api/threads/prepare`
+is CSRF-protected, body-bounded, and read-only: it parses submitted source,
+prepares an add/reorder/group/comment/remove edit, and returns the complete
+proposed Markdown and source warnings. It preserves all bytes outside the
+collection and refuses unknown collection text. Like the source editor, these
+routes are unavailable on read-only replicas and work in hosted mode.
+
+The parser and transformations live in `internal/threads`. Source identities
+live in ordinary wikilinks; source hashes describe provenance, not permission to
+rewrite a source. A changed/missing source never changes a collected quotation.
+The collection dialog pins the thread revision read before preparation and keeps
+its exact content/revision/save ID until a definitive response. Reordering and
+commentary edits inside the editor modify its current document through a
+compare-before-replace surface edit, preserving undo and refusing a response
+that arrived after more typing. Saving then uses the editor's existing ledger,
+conflict handling, configuration pins, journal, and Git snapshot.

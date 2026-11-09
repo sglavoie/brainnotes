@@ -129,3 +129,25 @@ it("suggests a title while writing, preserves an explicit title, and submits the
   await vi.waitFor(() => expect(h.navigate).toHaveBeenCalled());
   expect(new URLSearchParams(fetcher.mock.calls[0][1].body).get('body')).toBe(body.value);
 });
+
+it("wraps a thread question once and restores it without exposing collection markers", async () => {
+  sessionStorage.clear();
+  const form = document.querySelector<HTMLFormElement>("form")!;
+  form.dataset.newNoteVault = "thread-test";
+  form.dataset.newNotePrefix = "## Question\n\n";
+  form.dataset.newNoteSuffix = "\n\n<!-- bn:thread:v1 -->\n\n<!-- bn:thread:end -->\n\n## Draft\n\n";
+  const body = document.createElement("textarea"); body.name = "body"; body.value = "Why?"; form.prepend(body);
+  const fetcher = vi.fn().mockRejectedValue(new Error("lost"));
+  const h = setup(fetcher); h.submit();
+  await vi.waitFor(() => expect(h.button.disabled).toBe(false));
+  const before = fetcher.mock.calls[0][1].body;
+  const replacement = form.cloneNode(true) as HTMLFormElement;
+  form.replaceWith(replacement);
+  const restored = setup(fetcher);
+  expect(replacement.querySelector("textarea")!.value).toBe("Why?");
+  restored.submit();
+  await vi.waitFor(() => expect(fetcher).toHaveBeenCalledTimes(2));
+  expect(fetcher.mock.calls[1][1].body).toBe(before);
+  expect(new URLSearchParams(before).get("body")).toBe(form.dataset.newNotePrefix + "Why?" + form.dataset.newNoteSuffix);
+  sessionStorage.clear();
+});

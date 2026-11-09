@@ -73,6 +73,7 @@ func (s *Server) handleNote(w http.ResponseWriter, r *http.Request) {
 		Path:               notePath,
 		Key:                normalizedKey,
 		CSRFToken:          s.csrfToken,
+		SourceRevision:     note.SourceHash(),
 		BodyHTML:           bodyHTML,
 		Breadcrumbs:        breadcrumbsForNote(s.vault.Root, note, notePath),
 		TOC:                tableOfContentsForMarkdown(body, notePath),

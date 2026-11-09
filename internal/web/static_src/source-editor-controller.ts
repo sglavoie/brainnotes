@@ -66,6 +66,8 @@ export type SourceEditorController = {
   insertText(text: string): void;
   panes: SourcePanes;
   dirty(): boolean;
+  content(): string | null;
+  replaceContent(before: string, after: string): boolean;
   destroy(): void;
 };
 
@@ -169,6 +171,8 @@ export const createSourceEditorController = (
       applyCommand(state.surface, command, options),
 
     insertText: (text: string): void => insertAtCursor(state.surface, text),
+    content: () => state.surface?.getValue() ?? null,
+    replaceContent: (before, after) => replaceContent(state.surface, before, after),
 
     destroy(): void {
       // Flushed before anything is torn down: destroy() runs on a page that is
@@ -230,6 +234,7 @@ const createKeeper = (
   state: EditorState,
   ctx: RestoreContext & {
     dirty(): boolean;
+
     setStatus(message: string, kind: StatusKind): void;
   }
 ): DraftKeeper => {
@@ -424,4 +429,16 @@ export const refreshEditStatus = (
   } else {
     setStatus("Unsaved changes.");
   }
+};
+
+// Collection edits use the same surface transaction as typing, preserving undo.
+const replaceContent = (surface: SourceSurface | null, before: string, after: string): boolean => {
+  if (!surface || surface.getValue() !== before) return false;
+  let start = 0;
+  while (start < before.length && start < after.length && before[start] === after[start]) start++;
+  let oldEnd = before.length, newEnd = after.length;
+  while (oldEnd > start && newEnd > start && before[oldEnd - 1] === after[newEnd - 1]) { oldEnd--; newEnd--; }
+  const at = Math.min(surface.getSelection().from, after.length);
+  surface.applyEdit({ from: start, to: oldEnd, insert: after.slice(start, newEnd), selectionFrom: at, selectionTo: at });
+  return true;
 };

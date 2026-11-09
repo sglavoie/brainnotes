@@ -13,6 +13,7 @@ export const initNewNote = (root: ParentNode = document, deps: NewNoteDeps = {})
   const title = form.querySelector<HTMLInputElement>('[name="title"]')!;
   const body = form.querySelector<HTMLTextAreaElement>('[name="body"]');
   const prefix = form.dataset.newNotePrefix || "";
+  const suffix = form.dataset.newNoteSuffix || "";
   const folder = form.querySelector<HTMLInputElement>('[name="folder"]')!;
   const button = form.querySelector<HTMLButtonElement>('button[type="submit"]')!;
   const status = form.querySelector<HTMLElement>("[data-new-note-status]")!;
@@ -20,16 +21,16 @@ export const initNewNote = (root: ParentNode = document, deps: NewNoteDeps = {})
   const navigate = deps.navigate ?? ((url: string) => window.location.assign(url));
   const draft = newNoteDraft(form);
   const restored = draft.restore();
-  restoreInitialValues(form, restored, prefix);
+  restoreInitialValues(form, restored, prefix, suffix);
   let pending: PendingCreation | undefined = restored?.pending;
   let autoTitle = suggestTitleAutomatically(form, restored, title.value);
   let busy = false;
   let committed = false;
   const values = (): { title: string; folder: string; body?: string } => ({
     title: title.value.trim(), folder: folder.value.trim().replace(/\\/g, "/"),
-    ...(body?.value || prefix ? { body: prefix + (body?.value || "") } : {}),
+    ...(body?.value || prefix ? { body: prefix + (body?.value || "") + suffix } : {}),
   });
-  const keepDraft = (): void => draft.save({ title: title.value, folder: folder.value, body: prefix + (body?.value || ""), autoTitle, pending });
+  const keepDraft = (): void => draft.save({ title: title.value, folder: folder.value, body: prefix + (body?.value || "") + suffix, autoTitle, pending });
   const preview = (): void => {
     const value = values();
     button.textContent = pending?.signature === JSON.stringify(value) ? "Check creation" : (form.dataset.newNoteSubmitLabel || "Create and write");
@@ -102,12 +103,17 @@ const showOutcome = (
 
 const setBodyDisabled = (body: HTMLTextAreaElement | null, disabled: boolean): void => { if (body) body.disabled = disabled; };
 
-const restoreInitialValues = (form: HTMLFormElement, restored: NewNoteValues | null, prefix: string): void => {
+const restoreInitialValues = (form: HTMLFormElement, restored: NewNoteValues | null, prefix: string, suffix: string): void => {
   if (!restored) return;
   form.querySelector<HTMLInputElement>('[name="title"]')!.value = restored.title;
   form.querySelector<HTMLInputElement>('[name="folder"]')!.value = restored.folder;
   const body = form.querySelector<HTMLTextAreaElement>('[name="body"]');
-  if (body && restored.body !== undefined) body.value = prefix && restored.body.startsWith(prefix) ? restored.body.slice(prefix.length) : restored.body;
+  if (body && restored.body !== undefined) {
+    let value = restored.body;
+    if (prefix && value.startsWith(prefix)) value = value.slice(prefix.length);
+    if (suffix && value.endsWith(suffix)) value = value.slice(0, -suffix.length);
+    body.value = value;
+  }
 };
 
 const suggestTitleAutomatically = (form: HTMLFormElement, restored: NewNoteValues | null, title: string): boolean =>

@@ -115,6 +115,7 @@ type notePageData struct {
 	Path               string
 	Key                string
 	CSRFToken          string
+	SourceRevision     string
 	BodyHTML           template.HTML
 	Breadcrumbs        []breadcrumbItem
 	TOC                []tableOfContentsItem

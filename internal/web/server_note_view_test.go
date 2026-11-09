@@ -38,7 +38,7 @@ func TestServer_NoteView200(t *testing.T) {
 		`Explore nearby notes`,
 		`maxlength="2000"`,
 		`<a class="note-skip-link" href="#bn:note-body">Skip to note</a>`,
-		`<div id="bn:note-body" class="note-body" tabindex="-1" data-note-key="source" data-note-body data-note-context-links>`,
+		`<div id="bn:note-body" class="note-body" tabindex="-1" data-note-key="source" data-note-revision=`,
 		`href="https://www.merakialive.com"`,
 	} {
 		if !strings.Contains(body, want) {

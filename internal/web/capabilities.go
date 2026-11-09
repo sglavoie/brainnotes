@@ -67,7 +67,7 @@ func routeBodyLimit(path string) int64 {
 	switch path {
 	case synthesisPreviewAPIRoutePath:
 		return synthesisPreviewBodyLimit
-	case sourcePreviewAPIRoutePath, sourceSaveAPIRoutePath, sourceCreateAPIRoutePath:
+	case sourcePreviewAPIRoutePath, sourceSaveAPIRoutePath, sourceCreateAPIRoutePath, threadPrepareAPI:
 		return sourceRequestBodyLimit
 	case attachmentUploadAPIRoutePath:
 		return attachmentUploadBodyLimit

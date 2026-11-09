@@ -9,6 +9,7 @@
   {{template "themeBoot" .}}
   {{template "thoughtTransition" .}}
   <link rel="stylesheet" href="/static/editor-details.css">
+  {{if .Thread}}<link rel="stylesheet" href="/static/threads.css">{{end}}
   <link rel="stylesheet" href="/static/app.css">
 </head>
 <body>
@@ -37,6 +38,7 @@
     <section id="workspace-content" tabindex="-1"
       class="panel source-editor"
       data-source-editor
+      {{if .Thread}}data-thread-editor{{end}}
       data-source-key="{{ .Key }}"
       data-source-vault-id="{{ .VaultID }}"
       data-source-csrf="{{ .CSRFToken }}"
@@ -136,6 +138,7 @@
         </div>
       </section>
 
+      {{if .Thread}}<div class="thread-writing-layout">{{end}}
       <div class="source-editor-panes" data-source-panes>
         <div class="source-editor-tabs" role="tablist" aria-label="Editor and preview">
           <button type="button" role="tab" id="source-editor-tab-edit" class="bn-button source-editor-tab" data-source-tab="edit" aria-selected="true" aria-controls="source-editor-pane-edit">Edit</button>
@@ -153,6 +156,7 @@
         </div>
       </div>
 
+      {{if .Thread}}<aside class="thread-material" data-thread-material aria-label="Collected material"><h2>Collected material</h2><p>Loading passages…</p></aside></div>{{end}}
       <div class="source-writing-footer">
         <span data-writing-count title="Word count of Markdown source, excluding frontmatter. Links and code are included."></span>
         <label><input type="checkbox" data-writing-spellcheck checked> Spellcheck</label>
