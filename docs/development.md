@@ -45,8 +45,9 @@ compiler API. Drop the alias once typescript-eslint supports TypeScript 7.
 The generated JavaScript is committed so Go-only builds do not need Node. The
 editor and Sync pages load `editing.js` for CodeMirror; note reading loads only
 `app.js`. Each workspace loads its own small page bundle. Recent-history tools
-load with Library, Properties and Settings; connection-writing tools load only
-when someone chooses to write about a connection. Note-specific AI tools load
+load with Library, Properties and Settings. Connection dialogs and their styles
+load on demand; passage tools load on text selection, and both load the shared
+creation tools only when someone chooses to write. Note-specific AI tools load
 only when the note page offers a configured agent; ordinary reading keeps its
 370 KB combined script/style and 400 KB whole-page transfer budgets. Shared
 typography and interaction feedback account for the 10 KB asset allowance added
@@ -164,6 +165,12 @@ Graph focus without relayout.
 placement, capture expansion, passage/reference restoration in a fresh tab,
 forgetting remembered places, stable reference headers, and inline connection
 creation after a lost response.
+
+`personal-space.spec.js` checks passage-to-thought creation on desktop and mobile,
+literal quotations and canonical source links on disk, draft restoration,
+idempotent recovery after a lost reply and reload, accessibility of the composer,
+returning to the selection, and confirmed capture feedback. The visual matrix
+also covers selected passages, writing, and completed thoughts.
 
 `screen-polish.spec.js` checks usable mobile Properties filters, actual properties
 on entry, reading content near the top, Library action placement, Health's real

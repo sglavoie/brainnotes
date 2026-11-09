@@ -1,0 +1,47 @@
+/* The page leads; tools and context stay close without competing with it. */
+.note-print-body .frontmatter-panel { padding: 0; margin: -0.35rem 0 1.5rem; border: 0; border-radius: 0; background: transparent; box-shadow: none; font-family: system-ui, sans-serif; }
+.note-print-body .frontmatter-panel-header h2 { display: none; }
+.note-print-body .frontmatter-panel-header:has(.frontmatter-edit-status:empty) { display: none; }
+.note-print-body .note-properties > summary { font-size: 0.78rem; padding-block: 0.4rem; width: fit-content; }
+.note-print-body .note-properties[open] { padding-bottom: 1rem; border-bottom: 1px solid var(--bn-border); }
+.note-links-empty { display: none; }
+.note-meta-sidebar:not(:has(.backlink-item, .link-list a)) { display: none; }
+.quiet-reading-toggle { order: 1; background: transparent; color: var(--bn-text-subtle); border: 1px solid transparent; cursor: pointer; min-height: 2.75rem; }
+.quiet-reading-toggle:hover { background: var(--bn-hover); }
+.quiet-reading-toggle[aria-pressed='true'] { background: var(--bn-accent-subtle-bg); color: var(--bn-accent-subtle-text); border-color: var(--bn-accent-subtle-border); }
+:root[data-reading-mode='quiet'] .note-print-body .frontmatter-panel { display: none; }
+.brief-action-button[data-brief-action-another],
+.source-editor-workspace > summary { background: transparent; border-color: transparent; color: var(--bn-text-subtle); font-weight: 400; }
+.brief-action-button[data-brief-action-another]:hover,
+.source-editor-workspace > summary:hover { background: var(--bn-hover); color: var(--bn-text); }
+.brief-card-actions { align-items: center; }
+.brief-card-context { min-height: 1.4em; }
+.brief-connection-passages mark { background: var(--bn-accent-subtle-bg); color: var(--bn-accent-subtle-text); border-radius: 0.15rem; }
+.focused-workspace-header .focused-workspace-tools { margin-left: auto; }
+
+/* Reserve the confirmation line so ordinary save states never move the page. */
+.source-editor-actions .source-editor-status,
+.source-editor-actions .source-editor-status[data-expanded='true'] { grid-column: 1 / -1; grid-row: 2; text-align: left; min-height: 1.4em; }
+.source-editor-toolbar::after { content: ''; grid-column: 1 / -1; grid-row: 2; min-height: 1.2rem; pointer-events: none; }
+[data-capture-submit] { min-width: 7rem; }
+[data-capture-submit][data-confirmed='true'] { color: var(--bn-success); border-color: var(--bn-success-border); background: var(--bn-success-bg); }
+.note-actions .pin-button { min-width: 4.5rem; }
+.pin-button[aria-pressed='true']::before { content: '✓'; margin-right: 0.3rem; }
+@container (max-width: 28rem) {
+  .source-editor-actions .source-editor-status,
+  .source-editor-actions .source-editor-status[data-expanded='true'], .source-editor-toolbar::after { grid-row: 3; }
+}
+@media (max-width: 700px) {
+  .note-print-body .frontmatter-panel { margin-bottom: 0.2rem; }
+  .note-print-body .property-summary { gap: 0.75rem; flex-wrap: nowrap; }
+  .note-print-body .property-summary > div { min-width: 0; display: flex; align-items: baseline; gap: 0.35rem; }
+  .note-print-body .property-summary > div:first-child { flex-shrink: 0; max-width: 50%; }
+  .note-print-body .property-summary dd { margin: 0; min-width: 0; -webkit-line-clamp: 1; }
+  .source-editor #source-editor-heading { margin-top: 0; }
+  .quiet-reading-toggle { font-size: 0.85rem; padding-inline: 0.5rem; }
+  .brief-card-actions .brief-action-button[data-brief-action-another] { flex: 0 0 auto; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .pin-button[aria-pressed='true'], [data-capture-submit][data-confirmed='true'] { animation: confirmation-settle 160ms ease-out; }
+}
+@media print { .note-print-body .frontmatter-panel { display: none !important; } }

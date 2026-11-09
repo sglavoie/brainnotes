@@ -34,7 +34,7 @@ func TestConnectionDraftWritesBothSourcesAndReplays(t *testing.T) {
 
 func TestConnectionDraftRejectsUnavailableSources(t *testing.T) {
 	ts, _, _ := newSourceTestServer(t, Options{})
-	for _, query := range []string{"source=alpha", "source=alpha&source=missing", "source=alpha&source=../../private"} {
+	for _, query := range []string{"source=alpha&source=beta&source=alpha", "source=missing", "source=alpha&source=missing", "source=alpha&source=../../private"} {
 		response, err := ts.Client().Get(ts.URL + "/new?" + query)
 		if err != nil {
 			t.Fatal(err)
@@ -65,5 +65,25 @@ func TestReferencePassagesAreBoundedAndFindContextBeyondOpening(t *testing.T) {
 	matched, _ := peekPassages(document, "Deliberate Practice")
 	if len(matched) != 2 || matched[0].Text != blocks[18].Text || !matched[1].Relevant || matched[1].Text != blocks[19].Text {
 		t.Fatalf("context lost: %+v", matched)
+	}
+}
+
+func TestPassageDraftUsesCanonicalSourceWithoutWriting(t *testing.T) {
+	ts, _, root := newSourceTestServer(t, Options{Hosted: true})
+	before, err := os.ReadFile(filepath.Join(root, "Alpha.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	response, err := ts.Client().Get(ts.URL + "/new?source=alpha")
+	if err != nil {
+		t.Fatal(err)
+	}
+	page := readResponseBody(t, response)
+	if response.StatusCode != http.StatusOK || !strings.Contains(page, "From [[Alpha]]") {
+		t.Fatalf("canonical passage source missing: %d", response.StatusCode)
+	}
+	after, err := os.ReadFile(filepath.Join(root, "Alpha.md"))
+	if err != nil || string(after) != string(before) {
+		t.Fatal("preparing a thought changed its source")
 	}
 }

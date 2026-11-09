@@ -1,3 +1,5 @@
+import { initPassageThought } from "./passage-launcher";
+
 type Section = { link: HTMLAnchorElement; heading: HTMLElement };
 
 const noteSections = (body: HTMLElement): Section[] => {
@@ -112,4 +114,5 @@ export const initNoteReading = (): void => {
   addCodeCopyControls(body);
   addSectionCopyControls(body);
   trackNoteSection(body);
+  initPassageThought(body);
 };

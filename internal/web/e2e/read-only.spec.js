@@ -31,6 +31,7 @@ test("the read-only Brief browses notes while every document-write door stays cl
   await open.click();
   await expect(page).toHaveURL(/\/n\//);
   await expect(page.locator("[data-source-editor-launch]")).toBeHidden();
+  await expect(page.locator(".passage-tools")).toHaveCount(0);
   await expect(page.locator(".frontmatter-editor, .frontmatter-add")).toHaveCount(0);
 
   await page.addInitScript(() => {

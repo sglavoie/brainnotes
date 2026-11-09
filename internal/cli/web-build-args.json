@@ -1,5 +1,8 @@
 [
   "app=internal/web/static_src/main.ts",
+  "connection-dialog=internal/web/static_src/connection-dialog.ts",
+  "passage-thought=internal/web/static_src/passage-thought.ts",
+  "thought-tools=internal/web/static_src/thought-tools.css",
   "note-insight-page=internal/web/static_src/note-insight-page.ts",
   "connection-writing=internal/web/static_src/connection-writing.ts",
   "workspace-actions=internal/web/static_src/workspace-actions.ts",

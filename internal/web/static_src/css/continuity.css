@@ -1,8 +1,8 @@
 /* Keep the content close to the action that led to it. */
-.property-summary { margin: 0.6rem 0; font-size: 0.85rem; }
-.property-summary > div { margin-bottom: 0.65rem; }
-.property-summary dt { color: var(--bn-muted); font-size: 0.75rem; }
-.property-summary dd { margin: 0.15rem 0 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.property-summary { display: flex; flex-wrap: wrap; gap: 0.4rem 1.5rem; margin: 0; font-size: 0.85rem; }
+.property-summary > div { max-width: min(100%, 24rem); margin: 0; }
+.property-summary dt { color: var(--bn-text-subtle); font-size: 0.75rem; }
+.property-summary dd { font-size: 0.8rem; color: var(--bn-text-subtle); margin: 0.15rem 0 0; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 .property-summary :is(ul, li) { margin: 0; padding: 0; list-style: none; }
 .note-properties > summary { cursor: pointer; color: var(--bn-link); padding-block: 0.65rem; font-size: 0.85rem; }
 .frontmatter-panel:has(.note-properties[open]) > .property-summary { display: none; }
@@ -40,11 +40,7 @@
 .note-actions .pin-note-status { position: absolute; top: calc(100% + 0.4rem); right: 0; width: max-content; max-width: min(22rem, 80vw); z-index: var(--bn-z-popover); }
 .note-actions .pin-note-status:not(:empty) { padding: 0.5rem 0.65rem; background: var(--bn-surface); border: 1px solid var(--bn-border); border-radius: 0.5rem; box-shadow: var(--bn-shadow-card); }
 .note-actions .pin-note-status:empty { display: none; }
-.connection-saved { border-top: 1px solid var(--bn-accent-subtle-border); padding-top: 1rem; }
-.connection-saved h3 { font-family: var(--bn-book); font-size: 1.4rem; font-weight: 500; margin-block: 0.5rem; }
-.connection-saved-thought { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.75; max-height: 15rem; overflow-y: auto; }
-.connection-saved-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; }
-.connection-save-hint, .workspace-memory-hint { color: var(--bn-muted); font-size: 0.85rem; }
+.workspace-memory-hint { color: var(--bn-muted); font-size: 0.85rem; }
 .workspace-memory { margin-top: 0.75rem; }
 .workspace-memory button { cursor: pointer; }
 @media (max-width: 700px) {

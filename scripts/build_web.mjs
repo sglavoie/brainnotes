@@ -13,7 +13,8 @@ if (!process.argv.includes("--check")) {
   try {
     execFileSync(binary, [...args, `--outdir=${scratch}`], { stdio: "inherit" });
     for (const entry of args.filter((arg) => !arg.startsWith("--"))) {
-      const file = `${entry.split("=")[0]}.js`;
+      const [name, source] = entry.split("=");
+      const file = `${name}.${source.endsWith(".css") ? "css" : "js"}`;
       const generated = readFileSync(join(scratch, file));
       const committed = readFileSync(join("internal/web/static", file));
       if (!generated.equals(committed)) throw new Error(`Bundle drift in ${file}; run just web-build.`);

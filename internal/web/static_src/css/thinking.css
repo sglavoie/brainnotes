@@ -1,11 +1,9 @@
 /* A quiet writing desk: the content carries the strongest contrast. */
 .reading-home { font-size: 0.9rem; font-weight: 650; color: var(--bn-muted); letter-spacing: 0.025em; }
 .reading-title { font-family: var(--bn-book); font-weight: 500; font-size: clamp(2rem, 3.5vw, 3.2rem); line-height: 1.12; letter-spacing: -0.035em; margin: 0 0 1.5rem; color: var(--bn-text-strong); }
-.note-print-body > .note-body { letter-spacing: 0.005em; }
 /* An empty copy announcement must not add a blank line below each heading.
    Keep its live region mounted; populated feedback returns to normal flow. */
 .note-section-copy .copy-status:empty { position: absolute; min-height: 0; margin: 0; }
-:root[data-reading-type='book'] .note-print-body > .note-body { font-family: var(--bn-book); line-height: 1.8; }
 .note-print-body .note-body blockquote { border-left-color: var(--bn-accent-subtle-border); font-family: var(--bn-book); font-size: 1.12em; }
 .frontmatter-row { border-top-color: transparent; padding-block: 0.35rem; }
 .frontmatter-row dt { font-weight: 500; font-size: 0.75rem; }

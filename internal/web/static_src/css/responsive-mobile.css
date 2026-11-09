@@ -327,7 +327,7 @@
   .source-editor-main { margin-top: 0.5rem; }
   .source-editor-main > .site-header { margin-bottom: 0.5rem; }
   .source-editor-main > .site-header h1 { font-size: 1.35rem; margin: 0; }
-  .source-editor { padding: 0.5rem; gap: 0.35rem; }
+  .source-editor { padding: 0.5rem; gap: 0.125rem; }
   .source-editor-toolbar {
     border-bottom: 1px solid var(--bn-border);
   }

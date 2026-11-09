@@ -21,7 +21,7 @@ test("quiet reading and book type persist without changing note content", async 
   expect(await page.locator("[data-note-body]").textContent()).toBe(before);
   await page.locator(".note-actions-more > summary").click();
   await page.locator("button[data-reading-mode]").click();
-  await expect(page.locator(".note-meta-sidebar")).toBeVisible();
+  await expect(page.locator(".note-print-body [data-frontmatter-panel]")).toBeVisible();
 });
 
 test("preview supports keyboard, touch controls, failure recovery and search context", async ({ page }) => {
@@ -116,7 +116,7 @@ test("Continue resumes the passage last visited in this tab", async ({ page }) =
   await editor.click();
   await editor.press("ControlOrMeta+End");
   await page.goto("/");
-  await expect(page.locator('[data-brief-slot="continue"] .brief-card-context')).toContainText(/You left off|last passage/);
+  await expect(page.locator('[data-brief-slot="continue"] .brief-card-context')).toContainText(/Continue at|last passage/);
   await page.locator('[data-brief-slot="continue"] [data-brief-action-open]').click();
   await expect(page).toHaveURL(/read_at=/);
   const position = JSON.parse(new URL(page.url()).searchParams.get("read_at"));

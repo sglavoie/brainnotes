@@ -1,11 +1,11 @@
 import { showSavedThought, suggestThoughtTitle } from "./connection-completion";
 import { initNewNote } from "./new-note";
+import type { ThoughtWritingRequest } from "./connection-writing-loader";
+import { quotedPassage } from "./thought-quote";
 
 // Reuse the server-validated sources and ordinary creation receipt/recovery.
 // Fetching the form is read-only; only submitting its title creates a note.
-type ConnectionWritingRequest = { host: HTMLElement; sources: string[]; signal: AbortSignal };
-
-const openWriting = ({ host, sources, signal }: ConnectionWritingRequest): void => {
+const openWriting = ({ host, sources, signal, passage }: ThoughtWritingRequest): void => {
   const status = document.createElement("p"); status.setAttribute("role", "status");
   status.textContent = "Preparing your writing space…";
   host.replaceChildren(status);
@@ -18,7 +18,10 @@ const openWriting = ({ host, sources, signal }: ConnectionWritingRequest): void 
     if (signal.aborted) return;
     if (!sourceForm) throw new Error("Creation form unavailable");
     const form = document.importNode(sourceForm, true);
-    form.dataset.newNoteContext = params.toString();
+    const context = new URLSearchParams(params);
+    if (passage) context.set("passage", passage);
+    form.dataset.newNoteContext = context.toString();
+    form.dataset.thoughtSourceCount = String(sources.length);
     // This may be opened from New note; all label and status IDs stay unique.
     for (const element of [form, ...form.querySelectorAll<HTMLElement>("*")]) {
       for (const attribute of ["id", "for", "aria-describedby"]) {
@@ -28,7 +31,7 @@ const openWriting = ({ host, sources, signal }: ConnectionWritingRequest): void 
       element.removeAttribute("autofocus");
     }
     const thought = form.querySelector<HTMLTextAreaElement>('[name="body"]')!;
-    form.dataset.newNotePrefix = thought.value;
+    form.dataset.newNotePrefix = thought.value + (passage ? quotedPassage(passage) : "");
     thought.value = "";
     thought.maxLength = Math.max(0, 20000 - form.dataset.newNotePrefix.length);
     host.replaceChildren(form);
@@ -37,16 +40,16 @@ const openWriting = ({ host, sources, signal }: ConnectionWritingRequest): void 
     arrangeWriting(form);
   }).catch(() => {
     if (signal.aborted) return;
-    status.textContent = "Writing space unavailable. Neither source note has changed.";
+    status.textContent = "Writing space unavailable. Your source notes have not changed.";
     const retry = document.createElement("button");
     retry.type = "button"; retry.className = "bn-button"; retry.textContent = "Retry writing space";
-    retry.addEventListener("click", () => openWriting({ host, sources, signal }));
+    retry.addEventListener("click", () => openWriting({ host, sources, signal, passage }));
     host.append(retry);
   });
 };
 
 document.addEventListener("bn:connection-writing", (event) => {
-  openWriting((event as CustomEvent<ConnectionWritingRequest>).detail);
+  openWriting((event as CustomEvent<ThoughtWritingRequest>).detail);
 });
 
 const arrangeWriting = (form: HTMLFormElement): void => {
@@ -70,7 +73,8 @@ const arrangeWriting = (form: HTMLFormElement): void => {
   });
   const hint = document.createElement("p");
   hint.className = "connection-save-hint";
-  hint.textContent = "Creates a note linked to both sources.";
+  hint.textContent = form.dataset.thoughtSourceCount === "1"
+    ? "Your quotation and its source are included in the new note." : "Creates a note linked to both sources.";
   body.after(save, hint);
   body.focus({ preventScroll: true });
   body.setSelectionRange(body.value.length, body.value.length);

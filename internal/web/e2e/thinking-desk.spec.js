@@ -73,12 +73,12 @@ test("reading type and passage follow into writing without changing the source",
 test("Continue reflects only recorded passages and previews both connection sources", async ({ page }) => {
   await page.goto("/");
   const card = page.locator('article[data-brief-slot="continue"] [data-brief-card]');
-  await expect(card.locator(".brief-card-context")).toHaveText("Pick up this thread");
+  await expect(card.locator(".brief-card-context")).toContainText("Edited ");
   await card.locator(".brief-card-title a").click();
   await expect(page.locator("[data-note-body]")).toBeVisible();
   await page.goto("/");
   await expect(card.locator("[data-brief-action-open]")).toHaveText("Continue here");
-  await expect(card.locator(".brief-card-context")).toContainText(/You left off|last passage/);
+  await expect(card.locator(".brief-card-context")).toContainText(/Continue at|last passage/);
   const pair = await briefConnection(page);
   await expect(pair.locator("blockquote")).toHaveCount(2);
   await expect(pair.locator("cite").first()).not.toBeEmpty();

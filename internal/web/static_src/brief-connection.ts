@@ -1,5 +1,6 @@
 import { readableExcerpt } from "./note-excerpt";
 import { noteKeyFromPath, readNoteReference, type NoteReference } from "./note-reference";
+import { highlightedText } from "./text-highlight";
 
 // Preview only the two displayed sources. These reads never record an open or
 // change ranking, and a late answer cannot populate a replacement card.
@@ -34,7 +35,8 @@ const passage = (note: NoteReference): HTMLElement => {
   label.textContent = note.title;
   const text = document.createElement("p");
   const blocks = note.passages?.filter((block) => !block.heading) || [];
-  text.textContent = readableExcerpt(blocks.find((block) => block.relevant)?.text || blocks[0]?.text || note.excerpt) || "This note has no prose yet.";
+  const excerpt = readableExcerpt(blocks.find((block) => block.relevant)?.text || blocks[0]?.text || note.excerpt) || "This note has no prose yet.";
+  text.append(highlightedText(excerpt, note.context ? [note.context] : []));
   quote.append(label, text);
   return quote;
 };

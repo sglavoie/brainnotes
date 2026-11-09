@@ -5,7 +5,7 @@ import { withLibraryContext } from "./note-navigation";
 export type NoteReference = {
   title: string; excerpt: string; path: string;
   passages?: { text: string; heading: boolean; relevant: boolean }[];
-  truncated?: boolean; context?: string;
+  truncated?: boolean; context?: string; modified?: string;
 };
 
 export const noteKeyFromPath = (path: string): string => {

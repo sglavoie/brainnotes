@@ -58,10 +58,6 @@
 .brief-connection-passages blockquote { margin: 0; border-left: 2px solid var(--bn-accent-subtle-border); padding-left: 0.8rem; }
 .brief-connection-passages cite { display: block; color: var(--bn-muted); font-size: 0.75rem; font-style: normal; }
 .brief-connection-passages p { margin: 0.2rem 0 0; line-height: 1.6; font-size: 0.9rem; color: var(--bn-text-subtle); display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
-.connection-saved { background: var(--bn-accent-subtle-bg); border: 1px solid var(--bn-accent-subtle-border); border-radius: 0.7rem; padding: 1rem; }
-.connection-saved > [role='status'] { color: var(--bn-accent-subtle-text); font-size: 0.85rem; }
-.connection-saved > [role='status']::before { content: '✓'; margin-right: 0.35rem; }
-.connection-saved-thought { font-family: var(--bn-book); font-size: 1.15rem; }
 
 @media (max-width: 700px) {
   :root { --bn-prose-size: 1rem; }

@@ -200,6 +200,21 @@ async function recordWeb(world) {
     await page.mouse.wheel(0, 640);
     await shot("Related notes, ranked with reasons", 2600);
 
+    // Follow a passage into a new thought, then return to the same note.
+    await page.locator("[data-note-body] p").first().scrollIntoViewIfNeeded();
+    await page.locator("[data-note-body] p").first().evaluate((paragraph) => {
+      const range = document.createRange(); range.selectNodeContents(paragraph);
+      getSelection().removeAllRanges(); getSelection().addRange(range);
+    });
+    await t.click(page.getByRole("button", { name: "Write a thought", exact: true }));
+    await t.type(page.getByLabel("Your thought", { exact: true }), "Protect attention by making distractions harder to reach.");
+    await shot("A passage becomes a thought, with its source attached", 3000);
+    await t.click(page.getByRole("button", { name: "Save thought…", exact: true }));
+    await t.click(page.getByRole("button", { name: "Save thought", exact: true }));
+    await page.locator(".connection-saved").waitFor();
+    await shot("Saved as a linked Markdown note", 2200);
+    await t.click(page.getByRole("button", { name: "Back to your passage" }));
+
     // 4. Edit it in the browser and save.
     await t.click(page.getByRole("link", { name: "Edit", exact: true }));
     const surface = page.locator("[data-source-surface] .cm-content");

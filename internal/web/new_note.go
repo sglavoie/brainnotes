@@ -63,8 +63,8 @@ func (s *Server) connectionDraft(keys []string) (string, error) {
 	if len(keys) == 0 {
 		return "", nil
 	}
-	if len(keys) != 2 {
-		return "", noteops.Errorf(noteops.CodeInvalidRequest, "a connection needs two source notes")
+	if len(keys) > 2 {
+		return "", noteops.Errorf(noteops.CodeInvalidRequest, "writing needs one or two source notes")
 	}
 	snapshot, err := s.state.currentSnapshot()
 	if err != nil {
@@ -77,6 +77,9 @@ func (s *Server) connectionDraft(keys []string) (string, error) {
 			return "", noteops.Errorf(noteops.CodeNotFound, "a source note is no longer available")
 		}
 		links = append(links, "[["+wikilinkTargetForNote(s.vault.Root, note)+"]]")
+	}
+	if len(links) == 1 {
+		return "From " + links[0] + "\n\n", nil
 	}
 	return "## Connection\n\n" + strings.Join(links, " ↔ ") + "\n\n", nil
 }

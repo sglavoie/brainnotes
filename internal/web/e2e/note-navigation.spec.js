@@ -52,19 +52,20 @@ test("Library context survives body links, backlinks and outgoing links in a new
 });
 
 test("mobile sidebars collapse independently and preserve the desktop preference", async ({ page }) => {
-  await page.goto("/n/Reading");
+  await page.goto("/n/Writing");
   await page.locator("[data-note-sidebar-toggle]").click();
   await page.setViewportSize({ width: 390, height: 844 });
   await page.reload();
   const metadata = page.locator(".note-meta-sidebar > details");
   const contents = page.locator(".note-toc-sidebar details");
   await expect(metadata.locator(":scope > summary")).toBeVisible();
-  await expect(metadata.locator(".frontmatter-panel")).toBeHidden();
+  await expect(metadata.locator(".note-sidebar-content")).toBeHidden();
   await expect(contents.locator(".note-toc-list")).toBeHidden();
   await expect(page.locator("[data-note-body]")).toBeVisible();
+  await expect(page.locator(".note-print-body [data-frontmatter-panel]")).toBeVisible();
   await metadata.locator(":scope > summary").focus();
   await page.keyboard.press("Enter");
-  await expect(metadata.locator(".frontmatter-panel")).toBeVisible();
+  await expect(metadata.locator(".note-sidebar-content")).toBeVisible();
   await expect(contents.locator(".note-toc-list")).toBeHidden();
   await contents.locator("summary").click();
   await expect(contents.locator(".note-toc-list")).toBeVisible();
@@ -73,7 +74,7 @@ test("mobile sidebars collapse independently and preserve the desktop preference
   await expect(contents.locator(".note-toc-list")).toBeVisible();
   await expect(contents.locator("summary")).toBeHidden();
   await page.locator("[data-note-sidebar-toggle]").click();
-  await expect(metadata.locator(".frontmatter-panel")).toBeVisible();
+  await expect(metadata.locator(".note-sidebar-content")).toBeVisible();
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect(metadata.locator(".frontmatter-panel")).toBeVisible();
+  await expect(metadata.locator(".note-sidebar-content")).toBeVisible();
 });

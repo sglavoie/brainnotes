@@ -1,6 +1,7 @@
 // Keep the live status mounted for assistive technology, beside its destination.
 // Earlier receipts remain available without expanding the everyday capture flow.
 export const initCaptureFeedback = (root: HTMLElement, status: HTMLElement, recent: HTMLElement): (() => void) => {
+  initCaptureButton(root);
   const receipt = document.createElement("div");
   receipt.className = "capture-receipt";
   status.before(receipt);
@@ -21,4 +22,22 @@ export const initCaptureFeedback = (root: HTMLElement, status: HTMLElement, rece
     history.hidden = recent.children.length === 0;
     summary.textContent = `Captured this session (${recent.children.length})`;
   };
+};
+
+const initCaptureButton = (root: HTMLElement): void => {
+  const button = root.querySelector<HTMLButtonElement>("[data-capture-submit]");
+  const input = root.querySelector<HTMLTextAreaElement>("[data-capture-input]");
+  if (!button || !input) return;
+  let timer = 0;
+  const reset = (): void => {
+    window.clearTimeout(timer);
+    if (button.dataset.confirmed) button.textContent = "Capture";
+    delete button.dataset.confirmed;
+  };
+  input.addEventListener("input", reset);
+  button.addEventListener("click", reset);
+  root.addEventListener("bn:capture-complete", () => {
+    reset(); button.textContent = "Captured ✓"; button.dataset.confirmed = "true";
+    timer = window.setTimeout(reset, 1800);
+  });
 };

@@ -2,7 +2,9 @@ package web
 
 import (
 	"net/http"
+	"os"
 	"strings"
+	"time"
 
 	"github.com/sglavoie/brainnotes/internal/brief"
 	"github.com/sglavoie/brainnotes/internal/recall"
@@ -41,6 +43,10 @@ func (s *Server) handleNotePeek(w http.ResponseWriter, r *http.Request) {
 		context = other.Title()
 	}
 	passages, truncated := peekPassages(document, context)
+	modified := ""
+	if info, statErr := os.Stat(note.Path); statErr == nil {
+		modified = info.ModTime().Format(time.RFC3339)
+	}
 	writeManagementJSON(w, http.StatusOK, struct {
 		Title     string        `json:"title"`
 		Excerpt   string        `json:"excerpt"`
@@ -48,7 +54,8 @@ func (s *Server) handleNotePeek(w http.ResponseWriter, r *http.Request) {
 		Passages  []peekPassage `json:"passages"`
 		Truncated bool          `json:"truncated"`
 		Context   string        `json:"context,omitempty"`
-	}{document.Title, brief.RepresentativeExcerpt(document), path, passages, truncated, context})
+		Modified  string        `json:"modified,omitempty"`
+	}{document.Title, brief.RepresentativeExcerpt(document), path, passages, truncated, context, modified})
 }
 
 type peekPassage struct {

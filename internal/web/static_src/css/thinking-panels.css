@@ -1,21 +1,16 @@
-.connection-explorer, .command-switcher {
+.command-switcher {
   box-sizing: border-box; width: min(58rem, calc(100vw - 2rem)); max-height: calc(100dvh - 2rem);
   padding: 1.5rem; border: 1px solid var(--bn-border); border-radius: 1rem;
   background: var(--bn-surface); color: var(--bn-text); box-shadow: var(--bn-shadow-popover); overflow: auto;
 }
-.connection-explorer::backdrop, .command-switcher::backdrop { background: var(--bn-backdrop); }
-.connection-explorer > header, .side-reference > header { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
-.connection-explorer h2, .command-switcher h2 { font-family: var(--bn-book); font-size: 1.65rem; font-weight: 500; margin: 0; }
-.connection-explorer .bn-button, .side-reference .bn-button, .command-switcher .bn-button { border: 1px solid var(--bn-border); background: var(--bn-raised); color: var(--bn-text); cursor: pointer; }
-.connection-explanation { margin-block: 1rem 1.4rem; color: var(--bn-muted); }
-.connection-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1.5rem; }
-.connection-note { min-width: 0; padding: 1rem; background: var(--bn-bg); border-radius: 0.7rem; overflow-wrap: anywhere; }
-.connection-note h3, .reference-content h3 { font-family: var(--bn-book); font-size: 1.6rem; font-weight: 500; line-height: 1.25; margin: 0 0 1rem; }
-.connection-note h3 a, .reference-content h3 a { color: var(--bn-text-strong); }
-.connection-note p, .reference-content p { line-height: 1.75; margin-bottom: 1rem; }
-.connection-passage { border-left: 2px solid var(--bn-accent-subtle-border); padding-left: 0.85rem; }
-.connection-draft { display: inline-flex; margin-top: 1.5rem; }
-.connection-draft-hint, .reference-limit { font-size: 0.85rem; color: var(--bn-muted); margin-top: 0.5rem; }
+.command-switcher::backdrop { background: var(--bn-backdrop); }
+.side-reference > header { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
+.command-switcher h2 { font-family: var(--bn-book); font-size: 1.65rem; font-weight: 500; margin: 0; }
+.side-reference .bn-button, .command-switcher .bn-button { border: 1px solid var(--bn-border); background: var(--bn-raised); color: var(--bn-text); cursor: pointer; }
+.reference-content h3 { font-family: var(--bn-book); font-size: 1.6rem; font-weight: 500; line-height: 1.25; margin: 0 0 1rem; }
+.reference-content h3 a { color: var(--bn-text-strong); }
+.reference-content p { line-height: 1.75; margin-bottom: 1rem; }
+.reference-limit { font-size: 0.85rem; color: var(--bn-muted); margin-top: 0.5rem; }
 .side-reference { box-sizing: border-box; position: fixed; inset: 0 0 0 auto; width: min(26rem, 35vw); z-index: var(--bn-z-toolbar); background: var(--bn-surface); border-left: 1px solid var(--bn-border); box-shadow: var(--bn-shadow-popover); display: flex; flex-direction: column; }
 .side-reference > header { padding: 1rem; border-bottom: 1px solid var(--bn-border); }
 .side-reference h2 { font-size: 0.85rem; color: var(--bn-muted); margin: 0; }
@@ -37,9 +32,7 @@
 #switcher-results small { flex: 0 0 auto; max-width: 35%; color: var(--bn-muted); }
 .command-switcher > [role='status'] { font-size: 0.8rem; color: var(--bn-muted); min-height: 1.5em; }
 @media (max-width: 700px) {
-  .connection-pair { grid-template-columns: minmax(0, 1fr); gap: 0.75rem; }
-  .connection-explorer, .command-switcher { padding: 1rem; }
-  .connection-explorer > header { align-items: start; flex-direction: column; gap: 0.6rem; }
+  .command-switcher { padding: 1rem; }
   .switcher-launch { min-width: 2.75rem; min-height: 2.75rem; justify-content: center; padding-inline: 0.5rem; }
   .switcher-shortcut { display: none; }
   .focused-workspace-tools > .new-note-action { width: 2.75rem; padding: 0; justify-content: center; }
@@ -50,6 +43,6 @@
   .side-reference > header { padding: 0.6rem 1rem; }
 }
 @media (prefers-reduced-motion: no-preference) {
-  .connection-explorer[open], .command-switcher[open], .side-reference:not([hidden]) { animation: desk-enter 150ms ease-out; }
+  .command-switcher[open], .side-reference:not([hidden]) { animation: desk-enter 150ms ease-out; }
 }
 @media print { .side-reference, .connection-explorer, .command-switcher { display: none !important; } .has-reference { padding: 0; } }

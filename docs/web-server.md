@@ -344,7 +344,9 @@ the original card remains usable.
 **Quiet reading** hides the metadata, contents, and secondary reading panels;
 **Book type** uses a serif face for prose and is the default for a new browser.
 Turning it off selects Sans in reading and writing. Both preferences persist in this browser.
-These controls live under **Actions** to leave room for the note.
+**Quiet reading** is beside Edit and Pin; **Book type** lives under **Actions**.
+The compact property summary sits beneath the title, with **All properties**
+expanding the full editor there. Empty backlink and outgoing-link sections stay hidden.
 A leading heading that repeats the page title is visually suppressed without
 editing the Markdown. Printing retains a single title and the note body.
 
@@ -365,6 +367,25 @@ Related notes lead with the connection and excerpt. **Why this connection?**
 contains the supporting details; common filler words are omitted from textual
 match explanations. Unconfigured AI appears as an optional setup disclosure.
 Short confirmation and card transitions respect reduced-motion preferences.
+
+Select up to 8,000 characters in a note and choose **Write a thought** in the
+small floating toolbar (or press **Alt + Enter** with the selection focused).
+The composer keeps your quotation and source visible while you write. **Save
+thought…** suggests an editable title; **Save thought** creates a Markdown note
+with the quotation, a source wikilink, and your writing. **Back to your passage**
+restores the selection and reading position. Escape also returns to reading,
+keeping unfinished writing in this tab. Selecting the same passage again restores
+its draft; different passages have separate drafts. After an uncertain response,
+**Check creation** checks the original request without duplicating the note,
+including after a reload. This action is available on local and hosted writable
+servers. Ordinary reading loads the composer only when you select a passage.
+
+Confirmed captures briefly show **Captured ✓** on the button, and pinning marks
+the control in place. The editor reserves a status line for save feedback.
+Brief cards show a remembered section or the note's actual modification date
+when available; hover the date for the exact timestamp. Connection previews
+highlight the connecting reference, and a saved thought displays links back to
+its sources.
 
 ## Thinking workspace
 

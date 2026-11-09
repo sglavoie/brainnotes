@@ -34,7 +34,7 @@
 @media (max-width: 700px) {
   .note-page .note-actions { margin-block: 0.25rem 0.5rem; padding-bottom: 0.25rem; }
   .note-page .note-sidebar-details > summary { padding-block: 0.25rem; }
-  .note-page .reading-title { margin-bottom: 0.75rem; }
+  .note-page .reading-title { margin-bottom: 0.4rem; }
   .note-page .note-breadcrumbs { margin-bottom: 0; }
 }
 
@@ -62,14 +62,6 @@
   .writing-preferences select { padding-block: 0.2rem; }
 }
 
-.connection-writing { margin-top: 1rem; }
-.connection-writing .new-note { box-shadow: none; border: 0; padding: 0; background: transparent; }
-.connection-writing .new-note textarea { min-height: 9rem; font-family: var(--bn-book); font-size: 1.1rem; }
-.connection-naming { display: grid; gap: 0.35rem; border-top: 1px solid var(--bn-border); padding-top: 1rem; margin-top: 0.75rem; }
-.connection-naming[hidden] { display: none; }
-.connection-naming input { box-sizing: border-box; width: 100%; }
-.connection-writing [role='status']:empty { display: none; }
-.connection-writing .bn-primary, .connection-explorer .bn-primary { background: var(--bn-accent-subtle-bg); border-color: var(--bn-accent-subtle-border); color: var(--bn-accent-subtle-text); }
 
 .side-reference { width: min(var(--bn-reference-width, 26rem), 50vw); }
 .has-reference { padding-right: min(var(--bn-reference-width, 26rem), 50vw); }

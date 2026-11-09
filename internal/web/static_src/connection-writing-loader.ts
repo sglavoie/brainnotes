@@ -1,15 +1,8 @@
-let writingBundle: Promise<void> | undefined;
+import { loadWorkspaceScript } from "./workspace-script";
 
-const loadWriting = (): Promise<void> => {
-  writingBundle ||= new Promise<void>((resolve, reject) => {
-    const script = document.createElement("script");
-    script.src = "/static/connection-writing.js";
-    script.onload = () => resolve();
-    script.onerror = () => { script.remove(); writingBundle = undefined; reject(new Error("Writing tools unavailable")); };
-    document.head.append(script);
-  });
-  return writingBundle;
-};
+export type ThoughtWritingRequest = { host: HTMLElement; sources: string[]; signal: AbortSignal; passage?: string };
+
+export const loadWriting = (): Promise<void> => loadWorkspaceScript("connection-writing");
 
 // Reading never loads creation machinery until the user chooses to write.
 export const connectionWriting = (dialog: HTMLDialogElement, sources: string[], signal: AbortSignal): void => {

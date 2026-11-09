@@ -54,7 +54,7 @@ func TestServer_NoteViewRendersPolishedNavigationAndBacklinks(t *testing.T) {
 		`<svg class="note-sidebar-toggle-icon" viewBox="0 0 16 16" width="16" height="16" aria-hidden="true" focusable="false">`,
 		`<rect class="note-sidebar-toggle-panel" x="0.75" y="2.75" width="5" height="10.5" fill="currentColor" />`,
 		`<div class="note-layout note-layout-with-toc" data-note-layout>`,
-		`<aside id="note-metadata-sidebar" class="note-meta-sidebar" aria-label="Note metadata">`,
+		`<aside id="note-metadata-sidebar" class="note-meta-sidebar" aria-label="Note links">`,
 		`<div class="note-meta-resize-handle" data-note-meta-resize role="separator" aria-orientation="vertical" aria-label="Resize metadata sidebar"`,
 		`<aside class="note-toc-sidebar" aria-label="Table of contents">`,
 		`<div class="note-content">`,
