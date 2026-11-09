@@ -1,4 +1,5 @@
 import { codeTypography } from "./source-code-type";
+import { titlePresentation } from "./source-presentation";
 import { proseSyntax, restoredPassage } from "./source-prose";
 import {
   autocompletion,
@@ -73,6 +74,7 @@ export const createSourceSurfaceFactory = (
           syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
           codeTypography,
           proseSyntax,
+          titlePresentation(host),
           restoredPassage,
           autocompletion({ override: [wikilinkCompletionSource(options, refresh)] }),
           // Tab is deliberately not bound. CodeMirror's own documentation
@@ -99,7 +101,7 @@ export const createSourceSurfaceFactory = (
             }
           }),
         ],
-      })),
+      }), host.closest("[data-source-editor]")?.querySelector("[data-source-note-return]")?.textContent || ""),
     });
 
     const disposePosition = bindSourcePosition(view, host);

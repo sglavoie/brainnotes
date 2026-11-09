@@ -186,7 +186,7 @@ Ambiguous stems fail with the candidate paths so a relative path can disambiguat
 them. Paths and tokens are normalized to Unicode NFC for stable cross-platform
 identity.
 
-Ranking combines four explainable signals with fixed v1 weights:
+Ranking version 2 combines four explainable signals with these fixed weights:
 
 | Signal | Weight | Meaning |
 | --- | ---: | --- |
@@ -194,6 +194,12 @@ Ranking combines four explainable signals with fixed v1 weights:
 | Graph | 0.30 | Direct links or shared-neighbor/directed two-hop proximity. |
 | Metadata | 0.20 | Overlap in configured `[related].metadata_properties`, downweighted when common. |
 | Recall | 0.10 | Creation age plus useful/dismissed/snoozed/open-history state. |
+
+Shared references contribute less when they link to many notes, so a broad hub
+has less influence than a specific shared idea. Bridge selection prefers the
+less-connected note among eligible bridges, with path order breaking ties.
+Unindexed or excluded notes cannot serve as bridge evidence. Direct links retain
+their full graph signal. The four overall weights are unchanged from version 1.
 
 `balanced` returns every candidate with a meaningful signal. `rediscover`
 restricts results to direct or directed two-hop notes that are old or have not

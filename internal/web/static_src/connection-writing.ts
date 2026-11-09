@@ -36,6 +36,7 @@ const openWriting = ({ host, sources, signal, passage }: ThoughtWritingRequest):
     thought.maxLength = Math.max(0, 20000 - form.dataset.newNotePrefix.length);
     host.replaceChildren(form);
     form.dataset.newNoteSubmitLabel = "Save thought";
+    delete form.dataset.newNoteWriteFirst;
     initNewNote(host, { navigate: (url) => showSavedThought(form, url) });
     arrangeWriting(form);
   }).catch(() => {
@@ -58,9 +59,8 @@ const arrangeWriting = (form: HTMLFormElement): void => {
   bodyLabel.textContent = "Your thought";
   const title = form.querySelector<HTMLInputElement>('[name="title"]')!;
   const submit = form.querySelector<HTMLButtonElement>('button[type="submit"]')!;
-  const naming = document.createElement("div"); naming.className = "connection-naming";
-  while (form.firstElementChild && form.firstElementChild !== bodyLabel) naming.append(form.firstElementChild);
-  form.insertBefore(naming, submit.parentElement);
+  const naming = form.querySelector<HTMLElement>(".new-note-naming")!;
+  naming.classList.add("connection-naming");
   naming.hidden = !title.value;
   submit.hidden = naming.hidden;
   const save = document.createElement("button");

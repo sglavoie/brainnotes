@@ -80,6 +80,7 @@ func (s *Server) handleNote(w http.ResponseWriter, r *http.Request) {
 		Frontmatter:        renderFrontmatterEntries(front, snapshot.graph, &cfg.Frontmatter),
 		FrontmatterChoices: frontmatterPropertyChoices(&cfg.Frontmatter),
 		Backlinks:          backlinksForNote(snapshot, note),
+		PassageThoughts:    passageThoughtsForNote(snapshot, note),
 		Outgoing:           outgoingLinksForNote(snapshot.graph, note),
 		Broken:             brokenAffordancesForNote(note, snapshot.graph),
 		InsightConfigured:  insightConfigured,

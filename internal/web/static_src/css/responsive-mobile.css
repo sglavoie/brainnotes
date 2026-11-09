@@ -366,3 +366,25 @@
   .note-page .note-meta-sidebar:has(> details[open]),
   .note-page .note-toc-sidebar:has(details[open]) { grid-column: 1 / -1; }
 }
+
+/* Reading keeps the workspace and note actions together; creation remains in
+   Workspace and the command switcher. Touch targets retain their full size. */
+@media (min-width: 361px) and (max-width: 700px) {
+  .note-page .note-main { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0.3rem; }
+  .note-main > * { grid-column: 1 / -1; }
+  .note-main > .site-header { grid-column: 1; grid-row: 3; margin: 0; }
+  .note-main > .note-actions { grid-column: 2; grid-row: 3; margin: 0; padding: 0; border: 0; justify-content: flex-end; gap: 0.2rem; }
+  .note-page .note-actions .bn-button { padding-inline: 0.45rem; }
+  .note-page .focused-workspace-tools { gap: 0.2rem; }
+  .note-page .source-editor-workspace > summary { padding-inline: 0.25rem; }
+}
+@media (max-width: 700px) {
+  .note-page .focused-workspace-tools > :is(.new-note-action, .capture-launch) { display: none; }
+  .note-page .note-breadcrumbs { font-size: 0.75rem; }
+  .note-page .note-more-options .quiet-reading-toggle { display: inline-flex; }
+}
+@media (max-width: 700px) {
+  .note-page .source-editor-workspace-content > .capture-launch { width: fit-content; margin-bottom: 0.5rem; }
+  .note-page .source-editor-workspace-content .capture-launch-label { display: inline; }
+  .note-page .source-editor-workspace-content .capture-launch-icon { display: none; }
+}

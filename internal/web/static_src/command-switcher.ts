@@ -23,6 +23,7 @@ class CommandSwitcher {
   private readonly input = document.createElement("input");
   private readonly list = document.createElement("div");
   private readonly status = document.createElement("p");
+  private readonly nextActions = document.createElement("div");
   private origin: HTMLElement | null = null;
   private entries: SwitcherEntry[] = [];
   private views: SwitcherEntry[] = [];
@@ -61,7 +62,8 @@ class CommandSwitcher {
     beside.type = "button"; beside.className = "bn-button switcher-beside";
     beside.textContent = "Keep beside · Alt + Enter";
     beside.addEventListener("click", () => this.keepBeside());
-    this.dialog.append(title, label, this.input, this.list, this.status, beside, close);
+    this.nextActions.className = "switcher-next-actions";
+    this.dialog.append(title, label, this.input, this.list, this.status, this.nextActions, beside, close);
     document.body.append(this.dialog);
   }
 
@@ -95,6 +97,7 @@ class CommandSwitcher {
   private search(): void {
     this.request?.abort(); window.clearTimeout(this.timer);
     const query = this.input.value.trim().toLocaleLowerCase();
+    this.showNextActions();
     const local = [...recentEntries(), ...this.views, ...workspaceEntries()].filter((entry) => entry.label.toLocaleLowerCase().includes(query));
     this.render(local);
     this.status.textContent = query ? "Searching notes…" : "↑ ↓ to choose · Enter to open · Esc to return";
@@ -105,7 +108,7 @@ class CommandSwitcher {
         if (request.signal.aborted) return;
         const paths = new Set(notes.map((entry) => entry.path?.toLocaleLowerCase()));
         this.render([...notes, ...local.filter((entry) => !entry.path || !paths.has(entry.path.toLocaleLowerCase()))]);
-        this.status.textContent = this.entries.length ? `${this.entries.length} ${this.entries.length === 1 ? "result" : "results"}` : "No matches. Try another word or open Library.";
+        this.status.textContent = this.entries.length ? `${this.entries.length} ${this.entries.length === 1 ? "result" : "results"}` : "No matches. Try another search or use the actions below.";
       }).catch(() => {
         if (!request.signal.aborted) this.status.textContent = "Search unavailable. Try again or open Library.";
       });
@@ -136,10 +139,25 @@ class CommandSwitcher {
 
   private highlight(): void {
     const beside = this.dialog.querySelector<HTMLButtonElement>(".switcher-beside");
-    if (beside) beside.disabled = !this.entries[this.active]?.path?.startsWith("/n/");
+    if (beside) beside.hidden = !this.entries[this.active]?.path?.startsWith("/n/");
     Array.from(this.list.children).forEach((option, index) => option.setAttribute("aria-selected", String(index === this.active)));
     if (!this.entries.length) { this.input.removeAttribute("aria-activedescendant"); return; }
     this.input.setAttribute("aria-activedescendant", `switcher-option-${this.active}`);
+  }
+
+  private showNextActions(): void {
+    const query = this.input.value.trim();
+    this.nextActions.replaceChildren();
+    if (!query) return;
+    const library = document.createElement("a");
+    library.className = "bn-button"; library.textContent = "Search in Library";
+    library.href = `/library?${new URLSearchParams({ q: query })}`;
+    this.nextActions.append(library);
+    if (document.documentElement.dataset.readOnly === "true") return;
+    const create = document.createElement("a");
+    create.className = "bn-button"; create.textContent = `Create “${query}”`;
+    create.href = `/new?${new URLSearchParams({ title: query })}`;
+    this.nextActions.prepend(create);
   }
 
   private keydown(event: KeyboardEvent): void {

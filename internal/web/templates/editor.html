@@ -8,6 +8,7 @@
   <title>{{ .NoteTitle }} - {{ .Title }}</title>
   {{template "themeBoot" .}}
   {{template "thoughtTransition" .}}
+  <link rel="stylesheet" href="/static/editor-details.css">
   <link rel="stylesheet" href="/static/app.css">
 </head>
 <body>
@@ -94,7 +95,7 @@
           </div>
         </details>
         <div class="writing-preferences">
-          <label class="writing-layout-label">View <select data-writing-layout aria-label="Writing layout"><option value="write" selected>Write</option><option value="split">Split</option><option value="preview">Preview</option></select></label>
+          <label class="writing-layout-label">View <select data-writing-layout aria-label="Writing layout"><option value="write" selected>Write</option><option value="split">Split</option><option value="preview">Preview</option><option value="source">Source</option></select></label>
           <label>Type <select data-writing-font aria-label="Writing type"><option value="prose" selected>Book</option><option value="sans">Sans</option><option value="mono">Monospace</option></select></label>
         </div>
         <div class="source-editor-actions">

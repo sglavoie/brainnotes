@@ -61,3 +61,12 @@
   color: var(--bn-muted);
   cursor: pointer;
 }
+
+.note-meta-sidebar .panel h2 { font-size: 0.85rem; font-weight: 500; color: var(--bn-muted); }
+.note-meta-sidebar .link-list { list-style: none; padding-left: 0; }
+.backlink-more { font-size: 0.78rem; }
+.backlink-more > summary { width: fit-content; padding-block: 0.35rem; }
+.backlink-location { margin-top: 0.35rem; font-size: 0.75rem; }
+.backlink-location > summary { cursor: pointer; }
+.backlink-occurrences li { display: flex; flex-direction: column; }
+.backlink-snippet { order: -1; line-height: 1.65; }

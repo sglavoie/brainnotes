@@ -99,8 +99,10 @@ See [query expressions and saved views](web-server-query-bar.md) for syntax.
 
 ## Read and follow connections
 
-A note shows its rendered body, properties, backlinks, outgoing links, and
-Contents. Properties initially show a compact summary of the first two values.
+A note shows its rendered body, properties, references, outgoing links, and
+Contents. **Referenced in…** lists the notes that link here. Each **Read passages**
+disclosure reveals readable excerpts; **Source details** reveals line or property
+locations only when needed. Properties initially show a compact summary of the first two values.
 **All properties** reveals the complete values and editing controls; the expanded
 or compact preference is remembered in this browser. Choose **Edit** beside a
 property to reveal **Update property**, **Remove property**, and list controls.
@@ -123,7 +125,9 @@ result's position and keyboard focus after results load. If it no longer matches
 the search loads normally; interacting while loading cancels the automatic jump.
 Pinned, Brief, and Graph links also carry a named return destination.
 
-The reading toolbar keeps **Edit**, **Pin**, and **Actions** visible.
+The reading toolbar keeps **Edit**, **Pin**, and **Actions** visible. On phones,
+Search, Workspace and note actions share a compact row where space permits;
+Capture and New note are available in Workspace.
 **Actions** groups copying, note history, external-editor access, synthesis, and Trash.
 
 Use **Copy code** in a code block’s header, the **#** button beside a heading
@@ -141,9 +145,13 @@ and selects it. **Show whole graph** returns to the full vault view.
 
 ## Create and edit
 
-Choose **New note**, enter a title and optional vault-relative folder, and select
-**Create and write**. A blank folder uses the vault root. The new title-only note
-opens in the browser editor; **Save** writes your text. **Capture** sends a quick
+Choose **New note** and start in **Your thought**. The first sentence suggests an
+editable title; once you edit that title, further writing leaves it alone. The
+optional folder sits beneath it as an editable destination. A title supplied by
+search or restored after an uncertain creation is preserved. Select **Create and write**
+to create the note with this writing and continue in the editor. You can also start
+with just a title. A blank folder uses the vault root; **Save** stores further edits.
+**Capture** sends a quick
 thought to the configured inbox instead.
 
 Unfinished titles and folders are kept in this tab for this vault when browser
@@ -158,12 +166,15 @@ screen. Its toolbar keeps **Save** nearby while scrolling; **Format** reveals fo
 commands and Escape closes them. Frontmatter starts collapsed; **Show
 frontmatter** expands it and **Hide frontmatter** folds it again without changing
 the source or marking the note as edited. Find still searches the full source.
-On desktop, **View** chooses **Write**, **Split**, or **Preview**; **Type** offers
+On desktop, **View** chooses **Write**, **Split**, **Preview**, or **Source**; **Type** offers
 Book, Sans, or Monospace, with code always in monospace. Book and Sans follow the
 reading type preference in both directions; Monospace remains an editor choice.
 These choices are remembered in this browser. A browser without saved preferences
-starts with Write and Book. Inactive prose syntax is softened without hiding or
-changing the Markdown. Write centers the same reading measure and keeps Save in the
+starts with Write and Book. Inactive prose syntax and blank-line spacing are softened without changing the
+Markdown. An inactive leading heading that repeats the page title is folded in
+writing mode. Moving the cursor into it or finding it reveals the exact source;
+**Source** shows the original heading and syntax. On phones the View choice lives
+inside Format alongside Type. Write centers the same reading measure and keeps Save in the
 toolbar. Narrow screens retain Edit/Preview tabs, with the type choice inside Format.
 
 Below the writing surface, **This note and this vault** contains History and
@@ -351,7 +362,7 @@ the original card remains usable.
 **Quiet reading** hides the metadata, contents, and secondary reading panels;
 **Book type** uses a serif face for prose and is the default for a new browser.
 Turning it off selects Sans in reading and writing. Both preferences persist in this browser.
-**Quiet reading** is beside Edit and Pin; **Book type** lives under **Actions**.
+**Quiet reading** and **Book type** live under **Actions**.
 The compact property summary sits beneath the title, with **All properties**
 expanding the full editor there. Empty backlink and outgoing-link sections stay hidden.
 A leading heading that repeats the page title is visually suppressed without
@@ -399,7 +410,10 @@ its sources.
 Use **Search** in the header or **Ctrl/⌘ + K** from any workspace to find notes,
 recently visited notes in this browser, saved views, and actions. Arrow keys choose a
 result, Enter opens it, and Escape returns focus to your writing. Search covers
-the vault independently of the current Library filters. The editor uses
+the vault independently of the current Library filters. With a query entered,
+**Create “…”** opens a reviewable creation form and **Search in Library** carries
+the text into Library. Creation is absent on read-only replicas; Keep beside
+appears only when the selected result is a note. The editor uses
 **Ctrl/⌘ + Alt + K** for Markdown links; **Ctrl/⌘ + Shift + K** still inserts a wikilink.
 
 **Explore connection** in the Brief, Related Notes, or selected graph note opens
@@ -452,3 +466,23 @@ nodes; ordinary Filter mode preserves the viewport. Reduced motion makes these
 viewport changes immediate. Reading-to-writing title transitions are enabled
 only in browsers supporting cross-document view transitions, and only when
 reduced motion is off.
+
+### Thoughts beside their source
+
+A thought created from a selected passage leaves an expandable **Your thought**
+marker beside that passage. Multiple thoughts at the same passage share a count.
+**Read beside this passage** opens the saved note as a reference. Reload reconstructs
+these associations from the ordinary `From [[source]]` line and literal quotation
+in the saved note, including older thoughts created with that format. Source files
+are never annotated or rewritten, and the normal wikilink rename/move behavior
+keeps provenance connected.
+
+Only a unique match in the current rendered prose receives a marker. Changed,
+deleted or repeated quotations remain under **Thoughts from earlier passages**
+with their quotation and saved-note link, without guessing a location. Discovery
+is bounded to 50 matching notes per source; the references list still includes all
+linked notes. An unrelated blockquote or an ambiguous source link is not attached.
+
+A note preview kept beside the page retains its title and excerpt while the fuller
+reference loads. Connection comparisons and new thought markers use short transitions
+that respect reduced motion.

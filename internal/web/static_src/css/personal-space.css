@@ -45,3 +45,18 @@
   .pin-button[aria-pressed='true'], [data-capture-submit][data-confirmed='true'] { animation: confirmation-settle 160ms ease-out; }
 }
 @media print { .note-print-body .frontmatter-panel { display: none !important; } }
+
+.passage-annotation-group { font-family: system-ui, sans-serif; font-size: 0.85rem; margin: 0.5rem 0 1.25rem; border-left: 2px solid var(--bn-accent-subtle-border); padding-left: 0.85rem; }
+.passage-annotation-group > summary { width: fit-content; color: var(--bn-link); cursor: pointer; min-height: 2.75rem; align-content: center; }
+.passage-annotation { font-family: system-ui, sans-serif; font-size: 0.85rem; padding-block: 0.7rem; }
+.passage-annotation + .passage-annotation { border-top: 1px solid var(--bn-border); }
+.passage-annotation > a { font-weight: 600; }
+.passage-annotation p { color: var(--bn-text-subtle); margin-block: 0.45rem; line-height: 1.6; }
+.passage-annotation .bn-button { min-height: 2.75rem; border: 1px solid var(--bn-border); background: var(--bn-surface); color: var(--bn-link); cursor: pointer; font-size: 0.8rem; }
+.passage-thoughts-hint { color: var(--bn-muted); font-size: 0.85rem; }
+.passage-thoughts blockquote { font-size: 0.85rem; white-space: pre-wrap; }
+@media (prefers-reduced-motion: no-preference) {
+  .is-new-thought { animation: passage-return 1200ms ease-out; }
+  .passage-annotation-group[open] > article { animation: confirmation-settle 160ms ease-out; }
+}
+@media print { .passage-annotation-group, .passage-thoughts { display: none !important; } }

@@ -83,9 +83,9 @@ export BNOTES_VAULT=/path/to/vault
 bn serve
 ```
 
-In the browser, choose **Create your first note** (or **New note**), enter a
-title, and select **Create and write**. Add a sentence in the editor and select
-**Save**. Open **Library** and search for a word from that sentence to find the
+In the browser, choose **Create your first note** (or **New note**) and write a
+sentence. Keep or change its suggested title, then select **Create and write**.
+Open **Library** and search for a word from that sentence to find the
 note you just saved. Your note is a Markdown file in the vault; you can also edit
 it with your usual text editor.
 
@@ -166,9 +166,10 @@ deployment tooling; `bn-vault-sync` and `bn-vault-guard` are the building blocks
 ### Hosted server
 
 To write a new note in the browser, choose **New note** in the navigation,
-enter a title and optional vault-relative folder, then select **Create and write**.
-This saves a title-only note and opens the browser editor; use **Save** to store
-your writing. Leave the folder blank to use the vault root. **Capture** remains
+start writing, and keep or change the suggested title. Select **Create and write**
+to save your thought and open the browser editor; use **Save** for further edits.
+You can also start with just a title. Leave the optional folder blank to use the
+vault root. **Capture** remains
 the quick-thought flow into your configured inbox. Note creation and editing are
 available in local and hosted modes, but not on read-only replicas.
 

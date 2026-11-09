@@ -17,7 +17,9 @@ for (const width of [1280, 390]) {
   test(`a selected passage becomes a linked thought and returns to reading at ${width}`, async ({ page }) => {
     await page.setViewportSize({ width, height: 844 });
     await page.goto("/n/Survey");
+    await page.locator(".note-actions-more > summary").click();
     await expect(page.getByRole("button", { name: "Quiet reading", exact: true })).toBeVisible();
+    await page.locator(".note-actions-more > summary").click();
     const sourceBefore = readFileSync(join(manifest.localVault, "Survey.md"), "utf8");
     const selected = await selectPassage(page);
     await page.getByRole("button", { name: "Write a thought", exact: true }).click();
@@ -48,6 +50,15 @@ for (const width of [1280, 390]) {
     expect(Math.abs(await page.evaluate(() => scrollY) - selected.y)).toBeLessThan(2);
     await expect.poll(() => page.evaluate(() => getSelection().toString())).toBe(selected.text);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    const marker = page.locator('.passage-annotation-group').filter({ hasText: `A better next observation ${width}` });
+    await expect(marker).toBeVisible();
+    await marker.locator('summary').click();
+    await marker.locator('[data-passage-annotation]').filter({ hasText: `A better next observation ${width}` }).getByRole('button', { name: 'Read beside this passage' }).click();
+    await expect(page.locator('.side-reference')).toContainText(`A better next observation ${width}`);
+    await page.getByRole('button', { name: 'Close reference', exact: true }).click();
+    await page.reload();
+    await expect(marker).toBeVisible();
+
   });
 }
 
@@ -74,6 +85,7 @@ test("passage creation checks a lost response after reload without duplicating t
   await dialog.getByRole("button", { name: "Check creation", exact: true }).click();
   await expect(dialog.locator(".connection-saved")).toBeVisible();
   expect(requests).toHaveLength(2); expect(requests[1]).toBe(requests[0]);
+  await expect(page.locator('[data-passage-annotation]').filter({ hasText: 'An observation survives an uncertain save.' })).toHaveCount(1);
 });
 
 test("capture confirms in place only after a successful response", async ({ page }) => {

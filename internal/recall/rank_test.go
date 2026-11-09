@@ -13,6 +13,19 @@ import (
 	"github.com/sglavoie/brainnotes/internal/query"
 )
 
+func TestGraphConnectionCannotUseExcludedInbox(t *testing.T) {
+	documents := []Document{{Path: "Source.md", Title: "Source"}, {Path: "Candidate.md", Title: "Candidate"}, {Path: "Inbox.md", Title: "Inbox"}}
+	graph := rankGraphFixture(t, t.TempDir(), documents, map[string][]string{"inbox": {"source", "candidate"}})
+	included := buildGraphIndex(graph, documents).compare("Source.md", "Candidate.md")
+	if included.score <= 0 || included.bridge.path != "Inbox.md" {
+		t.Fatalf("fixture must connect through Inbox: %#v", included)
+	}
+	excluded := buildGraphIndex(graph, documents[:2]).compare("Source.md", "Candidate.md")
+	if excluded.score != 0 || excluded.bridge.path != "" {
+		t.Fatalf("excluded Inbox must not supply connection evidence: %#v", excluded)
+	}
+}
+
 func TestRankerGoldenSignalsAndModes(t *testing.T) {
 	t.Parallel()
 
@@ -169,20 +182,25 @@ func TestRankerGraphOverlapIncreasesScoreAndChoosesStableBridge(t *testing.T) {
 	byPath := resultsByPath(results)
 	one := byPath["CandidateOne.md"]
 	two := byPath["CandidateTwo.md"]
-	assertClose(t, "one shared neighbor", one.Signals.Graph, 0.6)
-	assertClose(t, "two shared neighbors", two.Signals.Graph, 0.8)
+	assertClose(t, "one shared hub", one.Signals.Graph, 0.4862295731793669)
+	assertClose(t, "two weighted neighbors", two.Signals.Graph, 0.7098417020524549)
 	if two.Signals.Graph <= one.Signals.Graph {
 		t.Errorf("two-overlap graph score %v <= one-overlap %v", two.Signals.Graph, one.Signals.Graph)
 	}
 	if one.Relationship != RelationshipSharedNeighbor || two.Relationship != RelationshipSharedNeighbor {
 		t.Errorf("shared-neighbor relationships = %q, %q", one.Relationship, two.Relationship)
 	}
-	if two.BridgePath != "BridgeA.md" || two.BridgeTitle != "Bridge A" {
-		t.Errorf("stable bridge = %q/%q, want BridgeA.md/Bridge A", two.BridgePath, two.BridgeTitle)
+	if two.BridgePath != "BridgeB.md" || two.BridgeTitle != "Bridge B" {
+		t.Errorf("stable bridge = %q/%q, want the more specific BridgeB.md/Bridge B", two.BridgePath, two.BridgeTitle)
 	}
-	if got := two.Reasons[0].Detail; got != "shared neighbor Bridge A (2 shared neighbors)" {
+	if got := two.Reasons[0].Detail; got != "shared neighbor Bridge B (2 shared neighbors)" {
 		t.Errorf("graph reason = %q", got)
 	}
+	assertSharedNeighborsNotRediscovered(t, ranker)
+}
+
+func assertSharedNeighborsNotRediscovered(t *testing.T, ranker *Ranker) {
+	t.Helper()
 	rediscover, err := ranker.Rank("Source.md", ModeRediscover)
 	if err != nil {
 		t.Fatalf("Rank rediscover: %v", err)

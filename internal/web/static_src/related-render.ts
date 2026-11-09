@@ -204,10 +204,13 @@ const renderLaterControl = (doc: Document, result: RelatedResult, serverDate: st
 };
 
 const appendRelatedInsight = (doc: Document, card: HTMLElement, result: RelatedResult): void => {
-  if (result.reasons.length === 0) return;
+  const reason = result.reasons.find((item) => item.kind !== "graph");
+  if (!reason) return;
   const insight = doc.createElement("p");
   insight.className = "related-card-insight";
-  insight.textContent = result.reasons[0].detail || relatedReasonLabel(result.reasons[0].kind);
+  insight.textContent = reason.detail.startsWith("shared terms: ")
+    ? `Both mention ${reason.detail.slice("shared terms: ".length)}.`
+    : relatedReasonLabel(reason.kind);
   card.appendChild(insight);
 };
 

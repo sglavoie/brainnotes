@@ -3,6 +3,7 @@ import { editorURLForKey, postManagement, type ManageOutcome } from "./source-ma
 import { newNoteDraft, type PendingCreation, type NewNoteValues } from "./new-note-draft";
 import { withLibraryContext } from "./note-navigation";
 import { newSaveID } from "./source-save";
+import { suggestThoughtTitle } from "./connection-completion";
 
 type NewNoteDeps = { fetch?: typeof fetch; navigate?: (url: string) => void };
 
@@ -21,13 +22,14 @@ export const initNewNote = (root: ParentNode = document, deps: NewNoteDeps = {})
   const restored = draft.restore();
   restoreInitialValues(form, restored, prefix);
   let pending: PendingCreation | undefined = restored?.pending;
+  let autoTitle = suggestTitleAutomatically(form, restored, title.value);
   let busy = false;
   let committed = false;
   const values = (): { title: string; folder: string; body?: string } => ({
     title: title.value.trim(), folder: folder.value.trim().replace(/\\/g, "/"),
     ...(body?.value || prefix ? { body: prefix + (body?.value || "") } : {}),
   });
-  const keepDraft = (): void => draft.save({ title: title.value, folder: folder.value, body: prefix + (body?.value || ""), pending });
+  const keepDraft = (): void => draft.save({ title: title.value, folder: folder.value, body: prefix + (body?.value || ""), autoTitle, pending });
   const preview = (): void => {
     const value = values();
     button.textContent = pending?.signature === JSON.stringify(value) ? "Check creation" : (form.dataset.newNoteSubmitLabel || "Create and write");
@@ -36,7 +38,11 @@ export const initNewNote = (root: ParentNode = document, deps: NewNoteDeps = {})
       ? `Destination: ${value.folder ? value.folder + "/" : ""}${name}.md`
       : "Enter a title to see where your note will be saved.";
   };
-  form.addEventListener("input", () => { preview(); keepDraft(); });
+  form.addEventListener("input", (event) => {
+    if (event.target === title) autoTitle = false;
+    if (event.target === body && autoTitle && !pending) title.value = suggestThoughtTitle(body?.value || "");
+    preview(); keepDraft();
+  });
   preview();
   if (pending) status.textContent = unconfirmedMessage;
 
@@ -103,3 +109,6 @@ const restoreInitialValues = (form: HTMLFormElement, restored: NewNoteValues | n
   const body = form.querySelector<HTMLTextAreaElement>('[name="body"]');
   if (body && restored.body !== undefined) body.value = prefix && restored.body.startsWith(prefix) ? restored.body.slice(prefix.length) : restored.body;
 };
+
+const suggestTitleAutomatically = (form: HTMLFormElement, restored: NewNoteValues | null, title: string): boolean =>
+  form.hasAttribute("data-new-note-write-first") && (restored?.autoTitle ?? !title);

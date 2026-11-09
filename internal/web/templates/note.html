@@ -85,7 +85,6 @@
       {{template "siteSync" .}}
 
       <div class="note-actions">
-        <button type="button" class="bn-button quiet-reading-toggle" data-reading-mode aria-pressed="false">Quiet reading</button>
         {{if not readOnly}}
           <div class="note-action-group">
             <a class="source-editor-launch bn-button bn-primary" href="{{.EditSourcePath}}" data-source-editor-launch>Edit</a>
@@ -109,6 +108,8 @@
           <summary class="bn-button copy-button">Actions</summary>
           <div class="note-more-options">
         <div class="reading-controls" role="group" aria-label="Reading preferences">
+        <button type="button" class="bn-button quiet-reading-toggle" data-reading-mode aria-pressed="false">Quiet reading</button>
+
           <button type="button" class="bn-button" data-reading-type aria-pressed="false">Book type</button>
         </div>
 
@@ -155,27 +156,19 @@
 
 
           <section class="panel{{if not .Backlinks}} note-links-empty{{end}}">
-            <h2>Backlinks</h2>
+            <h2>Referenced in {{len .Backlinks}} {{if eq (len .Backlinks) 1}}note{{else}}notes{{end}}</h2>
             {{if .Backlinks}}
               <ul class="link-list" data-note-context-links>
                 {{range .Backlinks}}
                   <li class="backlink-item">
                     <div class="backlink-summary">
                       <a href="{{.Path}}">{{.Title}}</a>
-                      {{if .Count}}
-                        <span class="backlink-count">
-                          {{if eq .Count 1}}1 mention{{else}}{{.Count}} mentions{{end}}
-                        </span>
-                      {{end}}
                     </div>
                     {{if .Occurrences}}
-                      {{template "backlinkOccurrences" .PreviewOccurrences}}
-                      {{with .RemainingOccurrences}}
-                        <details class="backlink-more">
-                          <summary>Show {{len .}} more {{if eq (len .) 1}}mention{{else}}mentions{{end}}</summary>
-                          {{template "backlinkOccurrences" .}}
-                        </details>
-                      {{end}}
+                      <details class="backlink-more">
+                        <summary>Read {{.Count}} {{if eq .Count 1}}passage{{else}}passages{{end}}</summary>
+                        {{template "backlinkOccurrences" .Occurrences}}
+                      </details>
                     {{end}}
                   </li>
                 {{end}}
@@ -317,6 +310,18 @@
           </section>
             {{/* The colon cannot occur in Goldmark's generated heading IDs. */}}
             <div id="bn:note-body" class="note-body" tabindex="-1" data-note-key="{{.Key}}" data-note-body data-note-context-links>{{.BodyHTML}}</div>
+            <section class="passage-thoughts" data-passage-thoughts {{if not .PassageThoughts}}hidden{{end}} aria-label="Thoughts from earlier passages">
+              <h2>Thoughts from earlier passages</h2>
+              <p class="passage-thoughts-hint">These quotations could not be placed uniquely in the current text. Your thoughts are still here.</p>
+              {{range .PassageThoughts}}
+              <article data-passage-annotation data-quote="{{.Quote}}" class="passage-annotation">
+                <a href="{{.Path}}">{{.Title}}</a>
+                <p>{{.Thought}}</p>
+                <blockquote>{{.Quote}}</blockquote>
+              </article>
+              {{end}}
+            </section>
+            {{if eq (len .PassageThoughts) 50}}<p class="passage-thoughts-hint">Showing up to 50 passage thoughts. All linked notes remain in References.</p>{{end}}
           </section>
 
           {{if .InsightConfigured}}
@@ -409,7 +414,7 @@
 <ul class="backlink-occurrences">
   {{range .}}
     <li>
-      {{if .Location}}<span class="backlink-location">{{.Location}}</span>{{end}}
+      {{if .Location}}<details class="backlink-location"><summary>Source details</summary>{{.Location}}</details>{{end}}
       {{if .Snippet}}<span class="backlink-snippet">{{.Snippet}}</span>{{end}}
     </li>
   {{end}}

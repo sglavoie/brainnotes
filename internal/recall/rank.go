@@ -10,7 +10,7 @@ import (
 )
 
 // RankingVersion identifies the stable scoring and explanation semantics.
-const RankingVersion = 1
+const RankingVersion = 2
 
 const (
 	TextScoreWeight     = 0.40
@@ -24,7 +24,7 @@ const (
 	UsefulRecallBoost = 0.50
 )
 
-// Weights contains the fixed v1 signal weights.
+// Weights contains the fixed signal weights.
 type Weights struct {
 	Text     float64
 	Graph    float64
@@ -32,7 +32,7 @@ type Weights struct {
 	Recall   float64
 }
 
-// RankingWeights returns a fresh copy of the fixed v1 weights.
+// RankingWeights returns a fresh copy of the fixed weights.
 func RankingWeights() Weights {
 	return Weights{
 		Text:     TextScoreWeight,

@@ -373,9 +373,7 @@ func (selector *DeterministicSelector) SelectConnect(corpus CorpusSnapshot, cont
 
 func (selector *DeterministicSelector) connectCard(source NoteRef, selected connectCandidate, explanation string) SlotResult {
 	reasons := connectReasonStrings(selected.result.Reasons)
-	if len(reasons) > 0 {
-		explanation = reasons[0]
-	} else if selected.result.Relationship == recall.RelationshipDirect {
+	if selected.result.Relationship == recall.RelationshipDirect {
 		explanation = "These notes link directly."
 	} else if bridge := connectBridge(selected.result); bridge != "" {
 		explanation = "These notes meet through " + strings.TrimSuffix(path.Base(bridge), ".md") + "."

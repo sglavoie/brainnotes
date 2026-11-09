@@ -122,6 +122,7 @@ type notePageData struct {
 	Frontmatter        []frontmatterEntry
 	FrontmatterChoices []string
 	Backlinks          []noteLinkView
+	PassageThoughts    []passageThought
 	Outgoing           []noteLinkView
 	Broken             []brokenAffordance
 	InsightConfigured  bool

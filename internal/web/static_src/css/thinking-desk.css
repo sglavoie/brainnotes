@@ -9,7 +9,9 @@
   font-family: var(--bn-prose-font); font-size: var(--bn-prose-size); line-height: var(--bn-prose-leading); letter-spacing: 0.005em;
 }
 .source-editor[data-writing-font='sans'] .cm-content :is(.tok-monospace, .cm-code) { font-family: var(--bn-mono); font-size: 0.9em; }
-.source-editor:not([data-writing-font='mono']) .cm-quiet-syntax { color: var(--bn-muted); font-weight: 400; text-decoration: none; }
+.source-editor:not([data-writing-source='true']) .cm-quiet-syntax { color: var(--bn-muted); opacity: 0.45; font-weight: 400; text-decoration: none; font-size: 0.85em; }
+.source-editor:not([data-writing-source='true']) .cm-content :is(.tok-link, .tok-url) { text-decoration-thickness: 1px; text-underline-offset: 0.15em; }
+.source-editor[data-writing-source='true'] .cm-content { font-family: var(--bn-mono); font-size: 0.95rem; line-height: 1.65; }
 .source-editor #source-editor-heading { box-sizing: border-box; width: 100%; max-width: var(--bn-prose-width); margin: 0.5rem auto 0; padding-inline: 0.75rem; font-family: var(--bn-book); font-size: clamp(2rem, 3.5vw, 3.2rem); font-weight: 500; line-height: 1.12; letter-spacing: -0.035em; overflow-wrap: anywhere; }
 #source-editor-heading a { color: var(--bn-text-strong); text-decoration: none; }
 .source-editor .source-editor-panes[data-writing-layout='write'],
@@ -78,3 +80,4 @@
   .resume-passage { animation: none; outline: 2px solid var(--bn-accent-subtle-border); outline-offset: 2px; }
 }
 @media print { .capture-history, .library-density { display: none; } }
+.source-editor:not([data-writing-source='true']) .cm-line.cm-prose-gap { line-height: 0.65; min-height: 0; }

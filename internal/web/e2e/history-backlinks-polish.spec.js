@@ -6,12 +6,11 @@ for (const width of [1280, 390]) {
     await page.goto("/n/Beta");
     if (width < 960) await page.locator("#note-metadata-sidebar > details > summary").click();
     const backlink = page.locator(".backlink-item", { hasText: "Gamma" });
-    await expect(backlink.locator(".backlink-count")).toHaveText("4 mentions");
-    await expect(backlink.locator(":scope > .backlink-occurrences > li")).toHaveCount(2);
+    await expect(backlink.locator(".backlink-occurrences > li")).toHaveCount(4);
     const hidden = backlink.locator("details li");
     await expect(hidden.first()).toBeHidden();
-    const summary = backlink.locator("summary");
-    await expect(summary).toHaveText("Show 2 more mentions");
+    const summary = backlink.locator(".backlink-more > summary");
+    await expect(summary).toHaveText("Read 4 passages");
     await summary.focus();
     await page.keyboard.press("Enter");
     await expect(hidden.first()).toBeVisible();

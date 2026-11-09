@@ -1,6 +1,6 @@
 import { asRecord } from "./api-internal";
 
-export type NewNoteValues = { title: string; folder: string; body?: string };
+export type NewNoteValues = { title: string; folder: string; body?: string; autoTitle?: boolean };
 export type PendingCreation = { signature: string; id: string };
 type Draft = NewNoteValues & { pending?: PendingCreation };
 
@@ -10,6 +10,7 @@ const parseDraft = (raw: string | null): Draft | null => {
   const pending = asRecord(value.pending);
   const draft: Draft = { title: value.title, folder: value.folder };
   if (typeof value.body === "string") draft.body = value.body;
+  if (typeof value.autoTitle === "boolean") draft.autoTitle = value.autoTitle;
   if (pending && typeof pending.signature === "string" && typeof pending.id === "string") {
     draft.pending = { signature: pending.signature, id: pending.id };
   }

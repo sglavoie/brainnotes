@@ -1,5 +1,6 @@
 import { keepReference } from "./side-reference";
 import { readableExcerpt } from "./note-excerpt";
+import type { NoteReference } from "./note-reference";
 
 const linkSelector = '[data-note-body] a[href^="/n/"], .backlink-summary a[href^="/n/"], .related-card-title a, .overview-result-link[href^="/n/"]';
 const linkTitle = (link: HTMLAnchorElement): string =>
@@ -15,6 +16,7 @@ class NotePeek {
   private returnTarget: HTMLElement | null = null;
   private request: AbortController | null = null;
   private timer = 0;
+  private preview?: NoteReference;
   private readonly resize = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(() => { if (this.active) this.position(this.active); });
 
   constructor() {
@@ -38,8 +40,9 @@ class NotePeek {
     keep.addEventListener("click", () => {
       const link = this.active;
       if (!link) return;
+      const preview = this.preview;
       this.close(false);
-      keepReference(link.href, link);
+      keepReference(link.href, link, preview);
     });
     this.panel.append(this.title, this.excerpt, this.openLink, keep, this.closeButton);
     document.body.append(this.panel);
@@ -98,6 +101,7 @@ class NotePeek {
     this.panel.hidePopover();
     this.panel.hidden = true;
     this.active = null;
+    this.preview = undefined;
     this.resize?.disconnect();
     if (restore) this.returnTarget?.focus({ preventScroll: true });
     this.returnTarget = null;
@@ -138,6 +142,7 @@ class NotePeek {
       if (request.signal.aborted) return;
       this.title.textContent = result.title || this.title.textContent;
       this.excerpt.textContent = readableExcerpt(result.excerpt || "This note has no excerpt yet.");
+      this.preview = { title: this.title.textContent || "Note", excerpt: this.excerpt.textContent, path: link.href };
       this.position(link);
     } catch {
       if (!request.signal.aborted) this.excerpt.textContent = "Preview unavailable. You can still try opening the note.";

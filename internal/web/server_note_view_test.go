@@ -150,7 +150,7 @@ func TestServer_NoteViewBacklinksPanel(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status: got %d, want %d", resp.StatusCode, http.StatusOK)
 	}
-	if !strings.Contains(body, "<h2>Backlinks</h2>") {
+	if !strings.Contains(body, "<h2>Referenced in 1 note</h2>") {
 		t.Fatalf("backlinks header missing, got %q", body)
 	}
 	if !strings.Contains(body, `href="/n/beta"`) {

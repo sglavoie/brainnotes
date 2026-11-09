@@ -57,7 +57,6 @@
 }
 
 @media (max-width: 960px) {
-  .writing-layout-label { display: none !important; }
   .writing-preferences { grid-column: 1 / -1; grid-row: 2; justify-content: flex-end; }
   .writing-preferences select { padding-block: 0.2rem; }
 }
@@ -90,3 +89,7 @@
   .side-reference:not([hidden]) { animation-name: reference-rise; }
   @keyframes reference-rise { from { transform: translateY(20px); } to { transform: translateY(0); } }
 }
+
+.switcher-next-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem; }
+.switcher-next-actions:empty { display: none; }
+.switcher-next-actions a { overflow-wrap: anywhere; max-width: 100%; white-space: normal; }

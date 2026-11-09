@@ -1,3 +1,6 @@
+import { arrangeMobileCapture } from "./note-mobile-sidebars";
+import { readableExcerpt } from "./note-excerpt";
+import { loadWorkspaceScript } from "./workspace-script";
 import { initPassageThought } from "./passage-launcher";
 
 type Section = { link: HTMLAnchorElement; heading: HTMLElement };
@@ -111,8 +114,11 @@ export const addSectionCopyControls = (body: HTMLElement): void => {
 export const initNoteReading = (): void => {
   const body = document.querySelector<HTMLElement>("[data-note-body]");
   if (!body) return;
+  for (const snippet of document.querySelectorAll(".backlink-snippet")) snippet.textContent = readableExcerpt(snippet.textContent || "");
+  arrangeMobileCapture();
   addCodeCopyControls(body);
   addSectionCopyControls(body);
   trackNoteSection(body);
+  if (document.querySelector('[data-passage-annotation]')) void loadWorkspaceScript('passage-annotations').catch(() => { /* Saved thoughts remain available below the note. */ });
   initPassageThought(body);
 };

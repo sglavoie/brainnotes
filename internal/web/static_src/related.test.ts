@@ -132,7 +132,7 @@ it("renders untrusted fields as text and leaves note links unintercepted", async
           relationship: "shared-neighbor",
           bridge: identity("bridge", { title: malicious, route: "/notes/bridge" }),
           reasons: [
-            { kind: "text", detail: malicious },
+            { kind: "text", detail: `shared terms: ${malicious}` },
             { kind: "graph", detail: "A shared link" },
             { kind: "metadata", detail: "A shared tag" },
             { kind: "recall", detail: "A fourth reason" },
@@ -155,7 +155,7 @@ it("renders untrusted fields as text and leaves note links unintercepted", async
   expect(card!.querySelector(".related-card-excerpt")!.textContent).toContain("<script>");
   expect(card!.querySelector(".related-card-relationship")!.textContent).toBe("Shared neighbor");
   expect(card!.querySelector(".related-card-bridge a")!.getAttribute("href")).toBe("/notes/bridge");
-  expect(card!.querySelector(".related-card-insight")!.textContent).toBe(malicious);
+  expect(card!.querySelector(".related-card-insight")!.textContent).toBe(`Both mention ${malicious}.`);
   expect(card!.querySelector(".related-card-insight script")).toBeNull();
   expect(card!.querySelectorAll(".related-card-reasons li")).toHaveLength(3);
   expect(card!.textContent).not.toContain("0.99");

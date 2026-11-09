@@ -15,3 +15,15 @@ export const initNoteMobileSidebars = (): void => {
     });
   }
 };
+
+export const arrangeMobileCapture = (): void => {
+  const launch = document.querySelector<HTMLElement>('.note-page [data-capture-launch]');
+  const workspace = document.querySelector('.note-page .source-editor-workspace-content');
+  if (!launch || !workspace) return;
+  const marker = document.createComment('capture toolbar position');
+  launch.before(marker);
+  const mobile = window.matchMedia('(max-width: 700px)');
+  const arrange = (): void => { if (mobile.matches) workspace.prepend(launch); else marker.after(launch); };
+  mobile.addEventListener('change', arrange);
+  arrange();
+};

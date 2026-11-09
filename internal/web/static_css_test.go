@@ -1,6 +1,7 @@
 package web
 
 import (
+	"os"
 	"strings"
 	"testing"
 )
@@ -414,19 +415,25 @@ func TestSavedViewsNavReservesHeightCSSContract(t *testing.T) {
 // container and the page scrolls sideways.
 func TestAutoFitGridTracksFitNarrowViewportsCSSContract(t *testing.T) {
 	css := readStaticCSS(t)
+	details, err := os.ReadFile("static/editor-details.css")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Editor details are a separately minified, page-specific stylesheet.
+	css = strings.Join(strings.Fields(css+string(details)), "")
 
 	for selector, track := range map[string]string{
 		".properties-list":             "repeat(auto-fill, minmax(min(18rem, 100%), 1fr))",
 		".source-editor-shortcut-list": "repeat(auto-fit, minmax(min(16rem, 100%), 1fr))",
 		".source-editor-manage-groups": "repeat(auto-fit, minmax(min(14rem, 100%), 1fr))",
 	} {
-		start := strings.Index(css, "\n"+selector+" {")
+		start := strings.Index(css, selector+"{")
 		if start == -1 {
 			t.Fatalf("CSS rule %q not found", selector)
 		}
 		block := css[start:]
 		block = block[:strings.Index(block, "}")]
-		if !strings.Contains(block, "grid-template-columns: "+track+";") {
+		if !strings.Contains(block, "grid-template-columns:"+strings.ReplaceAll(track, " ", "")+";") {
 			t.Fatalf("%s grid tracks are not clamped to the container; want %q in block:\n%s", selector, track, block)
 		}
 	}

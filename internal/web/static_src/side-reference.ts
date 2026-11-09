@@ -1,15 +1,19 @@
 import { readWorkspaceMemory, writeWorkspaceMemory } from "./workspace-memory";
 import { preserveReadingPlace, referenceControls } from "./reference-layout";
-import { noteKeyFromPath, readNoteReference, renderReference } from "./note-reference";
+import { noteKeyFromPath, readNoteReference, renderReference, type NoteReference } from "./note-reference";
 
 let panel: SideReference | undefined;
 
-export const keepReference = (path: string, returnTarget?: HTMLElement): void => {
+export const keepReference = (path: string, returnTarget?: HTMLElement, preview?: NoteReference): void => {
   panel ||= new SideReference();
-  void panel.open(noteKeyFromPath(path), returnTarget);
+  void panel.open(noteKeyFromPath(path), returnTarget, preview);
 };
 
 export const initSideReference = (): void => {
+  document.addEventListener('bn:passage-reference', (event) => {
+    const { path, target } = (event as CustomEvent<{ path: string; target: HTMLElement }>).detail;
+    keepReference(path, target);
+  });
   try {
     const key = readWorkspaceMemory("reference");
     if (key) { panel ||= new SideReference(); void panel.open(key); }
@@ -48,7 +52,7 @@ class SideReference {
     document.body.append(this.root);
   }
 
-  async open(key: string, returnTarget?: HTMLElement): Promise<void> {
+  async open(key: string, returnTarget?: HTMLElement, preview?: NoteReference): Promise<void> {
     this.request?.abort();
     const request = new AbortController();
     this.request = request;
@@ -58,7 +62,7 @@ class SideReference {
       this.root.hidden = false;
       document.body.classList.add("has-reference");
     });
-    this.content.textContent = "Loading reference…";
+    this.showPreview(preview);
     if (returnTarget) this.close.focus({ preventScroll: true });
     try { writeWorkspaceMemory("reference", key); } catch { /* Optional persistence. */ }
     try {
@@ -67,6 +71,11 @@ class SideReference {
     } catch {
       if (!request.signal.aborted) this.showRetry(key);
     }
+  }
+
+  private showPreview(preview?: NoteReference): void {
+    if (preview) renderReference(this.content, preview);
+    else this.content.textContent = "Loading reference…";
   }
 
   private showRetry(key: string): void {

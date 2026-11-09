@@ -17,6 +17,7 @@ export const showSavedThought = (form: HTMLFormElement, editorURL: string): void
   const thought = form.querySelector<HTMLTextAreaElement>('[name="body"]')!.value;
   const result = document.createElement("section"); result.className = "connection-saved";
   const single = form.dataset.thoughtSourceCount === "1";
+  announceSavedPassage(form, key, title, thought);
   const status = document.createElement("p"); status.setAttribute("role", "status");
   status.textContent = single ? "Thought saved with your quotation and source." : "Thought saved, linked to both sources.";
   const heading = document.createElement("h3"); heading.textContent = title; heading.tabIndex = -1;
@@ -37,4 +38,12 @@ export const showSavedThought = (form: HTMLFormElement, editorURL: string): void
   sources.setAttribute("aria-label", "Source notes");
   actions.append(keep, open); result.append(status, sources, heading, body, actions); form.replaceChildren(result);
   heading.focus({ preventScroll: true });
+};
+
+const announceSavedPassage = (form: HTMLFormElement, key: string, title: string, thought: string): void => {
+  const context = new URLSearchParams(form.dataset.newNoteContext);
+  if (form.dataset.thoughtSourceCount !== "1" || !context.get("passage")) return;
+  document.dispatchEvent(new CustomEvent("bn:thought-saved", {
+    detail: { source: context.get("source"), quote: context.get("passage"), path: notePathForKey(key), title, thought },
+  }));
 };

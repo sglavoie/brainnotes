@@ -1,6 +1,7 @@
 package recall
 
 import (
+	"math"
 	"path"
 	"path/filepath"
 	"sort"
@@ -138,10 +139,24 @@ func (index graphIndex) compare(sourcePath, candidatePath string) graphMatch {
 		return graphMatch{score: 1, relationship: RelationshipDirect}
 	}
 
-	sharedKeys := intersectStrings(index.neighbors[sourceKey], index.neighbors[candidateKey])
+	sharedKeys := index.sharedBridges(sourceKey, candidateKey)
 	if len(sharedKeys) == 0 {
 		return graphMatch{}
 	}
+	relationship, bridge := index.preferredBridge(sourceKey, candidateKey, sharedKeys)
+	overlap := 0.0
+	for _, key := range sharedKeys {
+		overlap += 1 / math.Log2(float64(max(2, len(index.neighbors[key]))))
+	}
+	return graphMatch{
+		score:        0.6 * overlap / (0.4 + 0.6*overlap),
+		relationship: relationship,
+		bridge:       bridge,
+		shared:       len(sharedKeys),
+	}
+}
+
+func (index graphIndex) preferredBridge(sourceKey, candidateKey string, sharedKeys []string) (RelationshipClass, graphNode) {
 	twoHopKeys := make([]string, 0, len(sharedKeys))
 	for _, bridgeKey := range sharedKeys {
 		if (sortedStringsContain(index.forward[sourceKey], bridgeKey) &&
@@ -158,6 +173,10 @@ func (index graphIndex) compare(sourcePath, candidatePath string) graphMatch {
 		bridgeKeys = twoHopKeys
 	}
 	sort.SliceStable(bridgeKeys, func(i, j int) bool {
+		// A specific shared idea explains more than an inbox or broad index.
+		if len(index.neighbors[bridgeKeys[i]]) != len(index.neighbors[bridgeKeys[j]]) {
+			return len(index.neighbors[bridgeKeys[i]]) < len(index.neighbors[bridgeKeys[j]])
+		}
 		left := index.nodes[bridgeKeys[i]].path
 		right := index.nodes[bridgeKeys[j]].path
 		if left != right {
@@ -165,13 +184,20 @@ func (index graphIndex) compare(sourcePath, candidatePath string) graphMatch {
 		}
 		return bridgeKeys[i] < bridgeKeys[j]
 	})
-	overlap := float64(len(sharedKeys))
-	return graphMatch{
-		score:        0.6 + 0.4*(overlap-1)/overlap,
-		relationship: relationship,
-		bridge:       index.nodes[bridgeKeys[0]],
-		shared:       len(sharedKeys),
+	return relationship, index.nodes[bridgeKeys[0]]
+}
+
+// Excluded or unindexed notes cannot provide inspectable evidence for a
+// connection. In the Brief this also excludes the configured capture inbox.
+func (index graphIndex) sharedBridges(source, candidate string) []string {
+	keys := intersectStrings(index.neighbors[source], index.neighbors[candidate])
+	eligible := make([]string, 0, len(keys))
+	for _, key := range keys {
+		if index.documentKeys[index.nodes[key].path] != "" {
+			eligible = append(eligible, key)
+		}
 	}
+	return eligible
 }
 
 func sortedStringsContain(values []string, wanted string) bool {

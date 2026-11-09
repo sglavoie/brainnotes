@@ -1,3 +1,4 @@
+import { proseSpacing } from "./source-prose-spacing";
 import { syntaxTree } from "@codemirror/language";
 import { StateEffect, StateField } from "@codemirror/state";
 import { Decoration, EditorView, ViewPlugin, type DecorationSet, type ViewUpdate } from "@codemirror/view";
@@ -7,6 +8,7 @@ import { Decoration, EditorView, ViewPlugin, type DecorationSet, type ViewUpdate
 const syntaxMarks = (view: EditorView): DecorationSet => {
   const ranges: ReturnType<Decoration["range"]>[] = [];
   for (const { from, to } of view.visibleRanges) {
+    ranges.push(...proseSpacing(view, from, to));
     syntaxTree(view.state).iterate({ from, to, enter(node) {
       if (["FencedCode", "CodeBlock", "InlineCode"].includes(node.name)) return false;
       if (!["HeaderMark", "EmphasisMark", "LinkMark", "QuoteMark", "ListMark"].includes(node.name)) return;

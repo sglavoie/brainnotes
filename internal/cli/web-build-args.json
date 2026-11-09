@@ -2,6 +2,8 @@
   "app=internal/web/static_src/main.ts",
   "connection-dialog=internal/web/static_src/connection-dialog.ts",
   "passage-thought=internal/web/static_src/passage-thought.ts",
+  "passage-annotations=internal/web/static_src/passage-annotations.ts",
+  "editor-details=internal/web/static_src/editor-details.css",
   "thought-tools=internal/web/static_src/thought-tools.css",
   "idea-thread=internal/web/static_src/idea-thread.css",
   "note-insight-page=internal/web/static_src/note-insight-page.ts",

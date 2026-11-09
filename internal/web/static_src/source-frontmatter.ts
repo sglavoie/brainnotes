@@ -1,6 +1,7 @@
 import { codeFolding, foldEffect, foldedRanges } from "@codemirror/language";
 import { EditorState } from "@codemirror/state";
 import { EditorView, ViewPlugin, type ViewUpdate } from "@codemirror/view";
+import { repeatedTitle } from "./source-presentation";
 
 const headerRange = (state: EditorState): { from: number; to: number; body: number } | null => {
   const header = /^(?:\uFEFF)?---[ \t]*\r?\n[\s\S]*?\r?\n(?:---|\.\.\.)[ \t]*(?:\r?\n|$)/.exec(state.doc.toString());
@@ -9,9 +10,10 @@ const headerRange = (state: EditorState): { from: number; to: number; body: numb
 
 // Folding is presentation only. The full source remains in the editor state,
 // including for draft recovery, Find, undo, preview and Save.
-export const initialSourceState = (state: EditorState): EditorState => {
+export const initialSourceState = (state: EditorState, title = ""): EditorState => {
   const range = headerRange(state);
-  return range ? state.update({ effects: foldEffect.of(range), selection: { anchor: range.body } }).state : state;
+  const heading = repeatedTitle(state, title);
+  return state.update({ effects: range ? foldEffect.of(range) : [], selection: { anchor: heading?.next ?? range?.body ?? 0 } }).state;
 };
 
 const frontmatterPlaceholder = (_view: EditorView, unfold: (event: Event) => void): HTMLElement => {

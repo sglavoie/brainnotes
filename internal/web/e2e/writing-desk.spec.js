@@ -68,6 +68,8 @@ test("writing layouts and typography preserve unsaved text and remain accessible
   await page.getByLabel("Writing layout").selectOption("preview");
   await page.setViewportSize({ width: 390, height: 640 });
   await page.reload();
+  await expect(page.getByRole("tab", { name: "Preview", exact: true })).toHaveAttribute("aria-selected", "true");
+  await page.getByRole("tab", { name: "Edit", exact: true }).click();
   await expect(editor).toBeVisible();
   await expect(page.getByRole("tab", { name: "Edit", exact: true })).toHaveAttribute("aria-selected", "true");
 });

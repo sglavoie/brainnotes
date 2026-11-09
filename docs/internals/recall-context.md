@@ -33,3 +33,25 @@ body and creation receipt use the same tab-local recovery key as the standalone
 form, scoped to the vault and source pair.
 Reference selection and recent switcher destinations store only bounded route
 identities/titles, scoped to the vault and browser tab; they never alter ranking.
+
+## Connection evidence and passage thoughts
+
+Ranking version 2 weights each indexed shared neighbor by `1 / log2(degree)`
+(with degree at least two), sums those weights as `overlap`, and maps the sum to
+`0.6 * overlap / (0.4 + 0.6 * overlap)`. Direct links still score one. Among eligible
+directed bridges (or shared neighbors when there is no directed bridge), lower
+degree precedes the stable path tie-break. Excluded documents cannot be bridges;
+this prevents the configured capture inbox from supplying Brief evidence. Saved
+daily cards remain stable until Another or a new day selects a replacement.
+The Brief shows a plain relationship description; detailed scoring reasons stay
+under Why this note. Related cards likewise keep graph reasons in their disclosure.
+
+Passage associations are a read-only interpretation of the generated Markdown
+shape: optional leading title, `From [[source]]`, literal escaped blockquote, and
+thought text. Only a unique source resolved in the served snapshot is accepted.
+At most 50 matching backlinks are rendered, and bodies over 128 KiB or quotations
+over 8,000 characters are skipped. Client anchoring normalizes whitespace and NFC,
+excludes controls/other annotations, and requires a unique quotation match. Missing
+or ambiguous matches stay in a visible fallback section. Confirmed creation emits
+an in-page event for immediate feedback; reload derives associations from notes,
+not local storage. No new mutation route or source-note write is introduced.

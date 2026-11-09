@@ -9,7 +9,8 @@ export const initPassageThought = (body: HTMLElement): void => {
     const selection = getSelection();
     if (loading || !selection || selection.isCollapsed || !body.contains(selection.anchorNode) || !body.contains(selection.focusNode)) return;
     loading = true;
-    void loadThoughtStyles().then(() => loadWorkspaceScript("passage-thought"))
+    void loadThoughtStyles().then(() => loadWorkspaceScript("passage-annotations"))
+      .then(() => loadWorkspaceScript("passage-thought"))
       .then(() => document.removeEventListener("selectionchange", load))
       .catch(() => { loading = false; });
   };

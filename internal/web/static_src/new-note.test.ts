@@ -108,3 +108,24 @@ it("recovers a connection thought and retries exactly the same prefixed creation
   expect(fetcher.mock.calls[1][1].body).toBe(fetcher.mock.calls[0][1].body);
   sessionStorage.clear();
 });
+
+it("suggests a title while writing, preserves an explicit title, and submits the reviewed values", async () => {
+  const form = document.querySelector<HTMLFormElement>('form')!;
+  form.dataset.newNoteWriteFirst = '';
+  form.querySelector<HTMLInputElement>('[name="title"]')!.value = '';
+  form.insertAdjacentHTML('afterbegin', '<textarea name="body"></textarea>');
+  const fetcher = vi.fn().mockResolvedValue(response({ ok: true, key: 'ideas/reviewed' }));
+  const h = setup(fetcher);
+  const body = form.querySelector('textarea')!;
+  body.value = 'A first idea. More detail.';
+  body.dispatchEvent(new Event('input', { bubbles: true }));
+  expect(h.title.value).toBe('A first idea');
+  h.title.value = 'Reviewed';
+  h.title.dispatchEvent(new Event('input', { bubbles: true }));
+  body.value += ' Another detail.';
+  body.dispatchEvent(new Event('input', { bubbles: true }));
+  expect(h.title.value).toBe('Reviewed');
+  h.submit();
+  await vi.waitFor(() => expect(h.navigate).toHaveBeenCalled());
+  expect(new URLSearchParams(fetcher.mock.calls[0][1].body).get('body')).toBe(body.value);
+});

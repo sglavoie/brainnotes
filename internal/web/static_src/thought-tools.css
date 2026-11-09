@@ -76,3 +76,9 @@
   border-radius: 50%;
   background: var(--bn-accent);
 }
+
+@media (prefers-reduced-motion: no-preference) {
+  .connection-explorer[open] { animation: connection-unfold 180ms ease-out; }
+  .connection-pair .connection-note:has(h3) { animation: confirmation-settle 160ms ease-out; }
+  @keyframes connection-unfold { from { opacity: 0.5; transform: translateY(6px) scale(0.985); } to { opacity: 1; transform: none; } }
+}

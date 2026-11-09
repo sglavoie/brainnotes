@@ -23,6 +23,9 @@ export const initPassageThought = (body: HTMLElement): void => {
       return;
     }
     const selected = selection.getRangeAt(0);
+    if ([...body.querySelectorAll('.passage-annotation-group')].some((group) => selected.intersectsNode(group))) {
+      toolbar.hidden = true; return;
+    }
     const text = selection.toString().trim();
     if (!body.contains(selected.startContainer) || !body.contains(selected.endContainer) || !text || text.length > 8000) {
       toolbar.hidden = true; return;

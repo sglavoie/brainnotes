@@ -98,6 +98,7 @@ test("reading and capture fit a small phone with reduced motion", async ({ page 
   await page.emulateMedia({ reducedMotion: "reduce", colorScheme: "dark" });
   await page.setViewportSize({ width: 320, height: 568 });
   await page.goto("/n/Alpha");
+  await page.locator(".source-editor-workspace > summary").click();
   await page.locator("[data-capture-launch]").click();
   await expect(page.locator("[data-capture-dialog] [data-capture-input]")).toBeInViewport();
   await expect(page.locator("[data-capture-close]")).toBeInViewport();

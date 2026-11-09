@@ -5341,6 +5341,15 @@ code {
   color: var(--bn-muted);
   cursor: pointer;
 }
+
+.note-meta-sidebar .panel h2 { font-size: 0.85rem; font-weight: 500; color: var(--bn-muted); }
+.note-meta-sidebar .link-list { list-style: none; padding-left: 0; }
+.backlink-more { font-size: 0.78rem; }
+.backlink-more > summary { width: fit-content; padding-block: 0.35rem; }
+.backlink-location { margin-top: 0.35rem; font-size: 0.75rem; }
+.backlink-location > summary { cursor: pointer; }
+.backlink-occurrences li { display: flex; flex-direction: column; }
+.backlink-snippet { order: -1; line-height: 1.65; }
 /* internal/web/static_src/css/broken.css */
 .broken-list {
   color: var(--bn-danger);
@@ -7702,316 +7711,6 @@ code {
   .source-editor-actions .source-editor-status,
   .source-editor-actions .source-editor-status[data-expanded="true"] { grid-column: 1 / -1; grid-row: 3; text-align: left; }
 }
-/* internal/web/static_src/css/source-editor-attachments.css */
-/*
- * Attachments.
- *
- * The file input is `hidden` in the markup and stays that way: the button beside
- * it is what the keyboard and the screen reader are given, and a rule here that
- * set `display` on the input would put the browser's own unstyleable widget back
- * on the page.
- */
-.source-editor-attach {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 0.5rem 0.75rem;
-}
-
-.source-editor-attachment-choose {
-  padding: 0.3rem 0.7rem;
-  border: 1px solid var(--bn-border);
-  border-radius: 0.4rem;
-  background: var(--bn-raised);
-  color: var(--bn-text);
-  font-size: 0.85rem;
-  cursor: pointer;
-}
-
-.source-editor-attachment-choose:hover {
-  background: var(--bn-hover);
-}
-
-.source-editor-attach-hint {
-  flex: 1 1 18rem;
-  margin: 0;
-  color: var(--bn-muted);
-  font-size: 0.85rem;
-}
-
-/*
- * The drop target outline is drawn inside the surface's own border rather than
- * replacing it, so the editor does not change size under a file being dragged
- * across it — a box that grows a pixel as the pointer enters is a box the file
- * is then dropped beside.
- */
-.source-editor-surface.is-drop-target {
-  outline: 2px dashed var(--bn-accent-subtle-border);
-  outline-offset: -2px;
-  background: var(--bn-accent-subtle-bg);
-}
-
-.source-editor-attachments {
-  display: grid;
-  gap: 0.5rem;
-  padding: 0.6rem 0.75rem;
-  border: 1px solid var(--bn-border);
-  border-radius: 0.4rem;
-  background: var(--bn-sunken);
-}
-
-/* The `display` + `hidden` pair every component here carries; see the conflict
- * panel above for why it is not optional. renderAttachmentList toggles `hidden`
- * on this element whenever the list empties. */
-.source-editor-attachments[hidden] {
-  display: none;
-}
-
-.source-editor-attachments h2 {
-  margin: 0;
-  font-size: 0.95rem;
-}
-
-.source-editor-attachment-list {
-  display: grid;
-  gap: 0.35rem;
-  margin: 0;
-  padding: 0;
-  list-style: none;
-}
-
-.source-editor-attachment {
-  display: grid;
-  grid-template-columns: minmax(0, 2fr) minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.35rem 0.5rem;
-  border: 1px solid var(--bn-border);
-  border-radius: 0.3rem;
-  background: var(--bn-surface);
-  font-size: 0.85rem;
-}
-
-.source-editor-attachment-name {
-  font-family: var(--bn-mono);
-  overflow-wrap: anywhere;
-}
-
-.source-editor-attachment-status {
-  color: var(--bn-muted);
-  overflow-wrap: anywhere;
-}
-
-/*
- * Staged is the state a person has to read correctly — the bytes are on the
- * server and are not in the vault — so it is the one that is coloured, and it is
- * coloured as an accent rather than as a success. Nothing has succeeded yet.
- */
-.source-editor-attachment.is-staged .source-editor-attachment-status {
-  color: var(--bn-accent-subtle-text);
-}
-
-.source-editor-attachment.is-failed .source-editor-attachment-status {
-  color: var(--bn-danger);
-}
-
-.source-editor-attachment-progress {
-  grid-column: 1 / -1;
-  width: 100%;
-  height: 0.4rem;
-}
-
-.source-editor-attachment-actions {
-  display: flex;
-  gap: 0.35rem;
-}
-
-.source-editor-attachment-action {
-  padding: 0.2rem 0.55rem;
-  border: 1px solid var(--bn-border-strong);
-  border-radius: 0.3rem;
-  background: var(--bn-surface);
-  color: var(--bn-text);
-  font-size: 0.8rem;
-  cursor: pointer;
-}
-
-.source-editor-attachment-action:hover {
-  background: var(--bn-hover);
-}
-
-/*
- * The management panel. It is a <details> so that the note's whole surface is
- * not a wall of controls above the editor, and it is styled as a bordered block
- * rather than as part of the panel because everything inside it writes.
- */
-.source-editor-manage {
-  padding: 0.6rem 0.75rem;
-  border: 1px solid var(--bn-border);
-  border-radius: 0.4rem;
-  background: var(--bn-sunken);
-}
-
-.source-editor-manage > summary {
-  color: var(--bn-text-strong);
-  font-weight: 600;
-  cursor: pointer;
-}
-
-.source-editor-manage-status {
-  min-height: 1.2rem;
-  margin: 0.5rem 0 0;
-  color: var(--bn-muted);
-  font-size: 0.9rem;
-  overflow-wrap: anywhere;
-}
-
-.source-editor-manage-status.is-error {
-  color: var(--bn-danger);
-}
-
-.source-editor-manage-status.is-success {
-  color: var(--bn-success);
-}
-
-.source-editor-manage-groups {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(min(14rem, 100%), 1fr));
-  gap: 0.75rem;
-  margin-top: 0.6rem;
-}
-
-.source-editor-manage-group {
-  display: grid;
-  gap: 0.35rem;
-  align-content: start;
-  padding: 0.6rem;
-  border: 1px solid var(--bn-border);
-  border-radius: 0.4rem;
-  background: var(--bn-surface);
-}
-
-.source-editor-manage-group h3 {
-  margin: 0;
-  font-size: 0.9rem;
-}
-
-.source-editor-manage-field {
-  color: var(--bn-muted);
-  font-size: 0.8rem;
-}
-
-.source-editor-manage-input {
-  box-sizing: border-box;
-  width: 100%;
-  padding: 0.3rem 0.45rem;
-  border: 1px solid var(--bn-border);
-  border-radius: 0.3rem;
-  background: var(--bn-surface);
-  color: var(--bn-text);
-  font-family: inherit;
-  font-size: 0.85rem;
-}
-
-.source-editor-manage-action {
-  justify-self: start;
-  padding: 0.3rem 0.7rem;
-  border: 1px solid var(--bn-border-strong);
-  border-radius: 0.4rem;
-  background: var(--bn-raised);
-  color: var(--bn-text);
-  font-size: 0.85rem;
-  cursor: pointer;
-}
-
-.source-editor-manage-action:hover {
-  background: var(--bn-hover);
-}
-
-/*
- * Trash is the only control in this panel that takes the note away from the
- * person looking at it, so it is the only one that says so before it is clicked.
- */
-.source-editor-manage-action.is-destructive {
-  border-color: var(--bn-danger-border);
-  color: var(--bn-danger);
-}
-
-.source-editor-manage-hint {
-  margin: 0;
-  color: var(--bn-muted);
-  font-size: 0.8rem;
-}
-
-/*
- * The dirty gate. Warning-coloured for the recovery panel's reason: nothing has
- * gone wrong and nothing has been lost — the operation is simply waiting — but a
- * question in the page's ordinary colours is one that gets clicked past.
- */
-.source-editor-gate {
-  display: grid;
-  gap: 0.5rem;
-  margin-top: 0.6rem;
-  padding: 0.6rem 0.75rem;
-  border: 1px solid var(--bn-warning-border);
-  border-radius: 0.4rem;
-  background: var(--bn-warning-bg);
-}
-
-.source-editor-gate[hidden] {
-  display: none;
-}
-
-.source-editor-gate h2 {
-  margin: 0;
-  color: var(--bn-warning);
-  font-size: 0.95rem;
-}
-
-.source-editor-gate-message {
-  margin: 0;
-  color: var(--bn-text-subtle);
-  font-size: 0.9rem;
-  overflow-wrap: anywhere;
-}
-
-.source-editor-gate-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.5rem;
-}
-
-/* Proceed is hidden for an operation that refuses to run over unsaved text, and
- * this is the rule that keeps it hidden inside a flex container. */
-.source-editor-gate-actions > [hidden] {
-  display: none;
-}
-
-.source-editor-gate-save,
-.source-editor-gate-proceed,
-.source-editor-gate-cancel {
-  padding: 0.3rem 0.7rem;
-  border: 1px solid var(--bn-border-strong);
-  border-radius: 0.4rem;
-  background: var(--bn-surface);
-  color: var(--bn-text);
-  font-size: 0.85rem;
-  cursor: pointer;
-}
-
-.source-editor-gate-save {
-  border-color: var(--bn-accent-subtle-border);
-  background: var(--bn-accent-subtle-bg);
-  color: var(--bn-accent-subtle-text);
-  font-weight: 600;
-}
-
-.source-editor-manage-action:disabled,
-.source-editor-gate-save:disabled,
-.source-editor-gate-proceed:disabled {
-  opacity: 0.6;
-  cursor: wait;
-}
 /* internal/web/static_src/css/new-note.css */
 .new-note {
   display: grid;
@@ -8046,6 +7745,19 @@ code {
 .new-note button:disabled { opacity: 0.6; cursor: default; }
 
 .new-note [data-new-note-draft-status]:empty { display: none; }
+
+.new-note[data-new-note-write-first] { margin-inline: auto; max-width: var(--bn-prose-width); border: 0; background: transparent; box-shadow: none; }
+.new-note[data-new-note-write-first] > label { font-size: 0.85rem; color: var(--bn-muted); font-weight: 400; }
+.new-note[data-new-note-write-first] textarea { font-family: var(--bn-prose-font); font-size: var(--bn-prose-size); line-height: var(--bn-prose-leading); padding: 1rem; min-height: 14rem; }
+.new-note-naming { display: grid; gap: 0.5rem; }
+.new-note-naming > label { font-size: 0.85rem; }
+.new-note-location { display: flex; align-items: center; gap: 0.75rem; font-size: 0.85rem; color: var(--bn-muted); }
+.new-note-location label { flex-shrink: 0; font-weight: 400; }
+.new-note-location input { border-color: transparent; background: transparent; min-height: 2.75rem; }
+.new-note-location input:focus { border-color: var(--bn-border); background: var(--bn-surface); }
+.new-note-folder-hint { visibility: hidden; font-size: 0.8rem; color: var(--bn-muted); }
+.new-note-location:focus-within + .new-note-folder-hint { visibility: visible; }
+.new-note [data-new-note-destination] { font-size: 0.8rem; color: var(--bn-muted); }
 /* internal/web/static_src/css/settings.css */
 .settings-actions {
   display: flex;
@@ -9474,7 +9186,7 @@ div.note-peek-anchor > .note-peek-trigger { position: absolute; right: 0; top: 0
 .switcher-launch > span:first-child { font-size: 1.3rem; line-height: 1; }
 .switcher-shortcut { font-size: 0.75rem; }
 .command-switcher { width: min(38rem, calc(100vw - 2rem)); }
-.command-switcher > label { display: block; margin-block: 0.8rem 0.4rem; color: var(--bn-muted); font-size: 0.85rem; }
+.command-switcher > label { display: block; margin-block: 0.8rem 0.4rem; color: var(--bn-muted); font-size: 0.875rem; line-height: 1.25rem; }
 .command-switcher input { box-sizing: border-box; width: 100%; padding: 0.8rem; font: inherit; border: 1px solid var(--bn-border-strong); border-radius: 0.5rem; color: var(--bn-text); background: var(--bn-bg); }
 #switcher-results { max-height: 48dvh; overflow: auto; margin-block: 0.6rem; }
 #switcher-results [role='option'] { display: flex; justify-content: space-between; gap: 0.75rem; padding: 0.75rem; border-radius: 0.45rem; cursor: pointer; overflow-wrap: anywhere; }
@@ -9556,7 +9268,6 @@ div.note-peek-anchor > .note-peek-trigger { position: absolute; right: 0; top: 0
 }
 
 @media (max-width: 960px) {
-  .writing-layout-label { display: none !important; }
   .writing-preferences { grid-column: 1 / -1; grid-row: 2; justify-content: flex-end; }
   .writing-preferences select { padding-block: 0.2rem; }
 }
@@ -9589,6 +9300,10 @@ div.note-peek-anchor > .note-peek-trigger { position: absolute; right: 0; top: 0
   .side-reference:not([hidden]) { animation-name: reference-rise; }
   @keyframes reference-rise { from { transform: translateY(20px); } to { transform: translateY(0); } }
 }
+
+.switcher-next-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem; }
+.switcher-next-actions:empty { display: none; }
+.switcher-next-actions a { overflow-wrap: anywhere; max-width: 100%; white-space: normal; }
 /* internal/web/static_src/css/continuity.css */
 /* Keep the content close to the action that led to it. */
 .property-summary { display: flex; flex-wrap: wrap; gap: 0.4rem 1.5rem; margin: 0; font-size: 0.85rem; }
@@ -9657,7 +9372,9 @@ div.note-peek-anchor > .note-peek-trigger { position: absolute; right: 0; top: 0
   font-family: var(--bn-prose-font); font-size: var(--bn-prose-size); line-height: var(--bn-prose-leading); letter-spacing: 0.005em;
 }
 .source-editor[data-writing-font='sans'] .cm-content :is(.tok-monospace, .cm-code) { font-family: var(--bn-mono); font-size: 0.9em; }
-.source-editor:not([data-writing-font='mono']) .cm-quiet-syntax { color: var(--bn-muted); font-weight: 400; text-decoration: none; }
+.source-editor:not([data-writing-source='true']) .cm-quiet-syntax { color: var(--bn-muted); opacity: 0.45; font-weight: 400; text-decoration: none; font-size: 0.85em; }
+.source-editor:not([data-writing-source='true']) .cm-content :is(.tok-link, .tok-url) { text-decoration-thickness: 1px; text-underline-offset: 0.15em; }
+.source-editor[data-writing-source='true'] .cm-content { font-family: var(--bn-mono); font-size: 0.95rem; line-height: 1.65; }
 .source-editor #source-editor-heading { box-sizing: border-box; width: 100%; max-width: var(--bn-prose-width); margin: 0.5rem auto 0; padding-inline: 0.75rem; font-family: var(--bn-book); font-size: clamp(2rem, 3.5vw, 3.2rem); font-weight: 500; line-height: 1.12; letter-spacing: -0.035em; overflow-wrap: anywhere; }
 #source-editor-heading a { color: var(--bn-text-strong); text-decoration: none; }
 .source-editor .source-editor-panes[data-writing-layout='write'],
@@ -9726,6 +9443,7 @@ div.note-peek-anchor > .note-peek-trigger { position: absolute; right: 0; top: 0
   .resume-passage { animation: none; outline: 2px solid var(--bn-accent-subtle-border); outline-offset: 2px; }
 }
 @media print { .capture-history, .library-density { display: none; } }
+.source-editor:not([data-writing-source='true']) .cm-line.cm-prose-gap { line-height: 0.65; min-height: 0; }
 /* internal/web/static_src/css/personal-space.css */
 /* The page leads; tools and context stay close without competing with it. */
 .note-print-body .frontmatter-panel { padding: 0; margin: -0.35rem 0 1.5rem; border: 0; border-radius: 0; background: transparent; box-shadow: none; font-family: system-ui, sans-serif; }
@@ -9774,6 +9492,21 @@ div.note-peek-anchor > .note-peek-trigger { position: absolute; right: 0; top: 0
   .pin-button[aria-pressed='true'], [data-capture-submit][data-confirmed='true'] { animation: confirmation-settle 160ms ease-out; }
 }
 @media print { .note-print-body .frontmatter-panel { display: none !important; } }
+
+.passage-annotation-group { font-family: system-ui, sans-serif; font-size: 0.85rem; margin: 0.5rem 0 1.25rem; border-left: 2px solid var(--bn-accent-subtle-border); padding-left: 0.85rem; }
+.passage-annotation-group > summary { width: fit-content; color: var(--bn-link); cursor: pointer; min-height: 2.75rem; align-content: center; }
+.passage-annotation { font-family: system-ui, sans-serif; font-size: 0.85rem; padding-block: 0.7rem; }
+.passage-annotation + .passage-annotation { border-top: 1px solid var(--bn-border); }
+.passage-annotation > a { font-weight: 600; }
+.passage-annotation p { color: var(--bn-text-subtle); margin-block: 0.45rem; line-height: 1.6; }
+.passage-annotation .bn-button { min-height: 2.75rem; border: 1px solid var(--bn-border); background: var(--bn-surface); color: var(--bn-link); cursor: pointer; font-size: 0.8rem; }
+.passage-thoughts-hint { color: var(--bn-muted); font-size: 0.85rem; }
+.passage-thoughts blockquote { font-size: 0.85rem; white-space: pre-wrap; }
+@media (prefers-reduced-motion: no-preference) {
+  .is-new-thought { animation: passage-return 1200ms ease-out; }
+  .passage-annotation-group[open] > article { animation: confirmation-settle 160ms ease-out; }
+}
+@media print { .passage-annotation-group, .passage-thoughts { display: none !important; } }
 /* internal/web/static_src/css/responsive.css */
 @media (max-width: 960px) {
   .synthesize-columns {
@@ -10254,4 +9987,26 @@ div.note-peek-anchor > .note-peek-trigger { position: absolute; right: 0; top: 0
   .note-page .note-content,
   .note-page .note-meta-sidebar:has(> details[open]),
   .note-page .note-toc-sidebar:has(details[open]) { grid-column: 1 / -1; }
+}
+
+/* Reading keeps the workspace and note actions together; creation remains in
+   Workspace and the command switcher. Touch targets retain their full size. */
+@media (min-width: 361px) and (max-width: 700px) {
+  .note-page .note-main { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0.3rem; }
+  .note-main > * { grid-column: 1 / -1; }
+  .note-main > .site-header { grid-column: 1; grid-row: 3; margin: 0; }
+  .note-main > .note-actions { grid-column: 2; grid-row: 3; margin: 0; padding: 0; border: 0; justify-content: flex-end; gap: 0.2rem; }
+  .note-page .note-actions .bn-button { padding-inline: 0.45rem; }
+  .note-page .focused-workspace-tools { gap: 0.2rem; }
+  .note-page .source-editor-workspace > summary { padding-inline: 0.25rem; }
+}
+@media (max-width: 700px) {
+  .note-page .focused-workspace-tools > :is(.new-note-action, .capture-launch) { display: none; }
+  .note-page .note-breadcrumbs { font-size: 0.75rem; }
+  .note-page .note-more-options .quiet-reading-toggle { display: inline-flex; }
+}
+@media (max-width: 700px) {
+  .note-page .source-editor-workspace-content > .capture-launch { width: fit-content; margin-bottom: 0.5rem; }
+  .note-page .source-editor-workspace-content .capture-launch-label { display: inline; }
+  .note-page .source-editor-workspace-content .capture-launch-icon { display: none; }
 }

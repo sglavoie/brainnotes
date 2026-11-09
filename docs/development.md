@@ -102,6 +102,11 @@ paragraphs, quotations, lists, a table, code, and long property values. Brief
 cards use distinct deterministic excerpts and uneven titles. The longer
 `Reading` and `Writing` fixtures still exercise scrolling and passage continuity.
 
+Passage annotation code loads only when a note has saved passage thoughts or a
+reader opens passage writing. Editor attachment and management styles live in
+`static_src/editor-details.css` and load only on the editor page. Keep these out of
+the initial reading assets so the browser transfer budget remains meaningful.
+
 ## README demos
 
 `just demo` re-records `docs/assets/demo-web.svg` and `docs/assets/demo-cli.svg`

@@ -130,6 +130,7 @@ function experienceVisuals(snapshot) {
     await expect(page.locator("button[data-reading-type]")).toHaveAttribute("aria-pressed", "true");
     await page.locator(".note-actions-more > summary").click();
     await snapshot(page, "quiet-reading");
+    if (!await page.locator("[data-capture-launch]").isVisible()) await page.locator(".source-editor-workspace > summary").click();
     await page.locator("[data-capture-launch]").click();
     await page.locator("[data-capture-dialog] [data-capture-input]").fill("An idea to come back to: compare the river sketches.");
     await snapshot(page, "global-capture");
@@ -164,6 +165,7 @@ function thinkingVisuals(snapshot) {
     await expect(page.locator(".connection-saved")).toContainText("Thought saved");
     await snapshot(page, "connection-saved");
     await page.getByRole("button", { name: "Keep exploring" }).click();
+    await expect(page.locator(".connection-explorer")).toHaveCount(0);
     const link = page.locator('[data-note-body] a[href^="/n/beta"]').first();
     await link.focus();
     await link.press("Alt+ArrowDown");
