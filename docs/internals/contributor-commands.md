@@ -29,6 +29,14 @@ The Go module is `github.com/sglavoie/brainnotes`; the README installs
 from a clone of `github.com/sglavoie/brainnotes`. Keep imports on the module
 path.
 
+## Releases
+
+`just release vX.Y.Z` checks that the checkout is clean, on `main`, and matches
+`origin/main`, rejects an existing local or remote tag, and runs `just ci` before
+creating and pushing an annotated tag. The tag triggers the existing GitHub
+release workflow. See [Releasing](../development.md#releasing) for prerequisites,
+publication details, and push failure recovery.
+
 ## Go tests and formatting
 
 - `just test` — `go test` over the filtered package list (`go_packages`, which

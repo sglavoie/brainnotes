@@ -27,6 +27,27 @@ Run commands from the repository root. Run `npm ci` before frontend work or afte
 package-lock changes. [Contributor commands](internals/contributor-commands.md)
 describes every recipe in detail.
 
+## Releasing
+
+From a clean `main` checkout, commit and push the version you want to ship, then
+run:
+
+```sh
+just release v0.1.2
+```
+
+Choose an unused `vMAJOR.MINOR.PATCH` tag. The recipe requires `HEAD` to match
+`origin/main`, runs `just ci`, then creates an annotated tag and pushes only that
+tag to `origin`. It needs the normal CI prerequisites above and Git push access.
+There is no version file to update: the tag supplies the release build identifier.
+
+The [release workflow](../.github/workflows/release.yml) builds archives for macOS
+and Linux (amd64 and arm64), each containing `bn`, `bn-vault-guard`, and
+`bn-vault-sync`, then publishes a GitHub Release with checksums and generated
+notes. The recipe returns after pushing; check the workflow for publication
+success. If the push fails, the local tag is retained so you can inspect the
+remote and retry `git push origin refs/tags/v0.1.2:refs/tags/v0.1.2`.
+
 ## Frontend assets
 
 `just web-build` regenerates the committed, minified JavaScript bundles under

@@ -90,6 +90,47 @@ install:
     @echo '  launchctl kickstart -k "gui/$(id -u)/com.sglavoie.brainnotes.vault-sync"'
     @echo "Then check: bn-vault-sync -check (build_mismatch) and bn doctor (stderr warnings)."
 
+# Validate and push a vX.Y.Z release tag; GitHub Actions builds and publishes it
+release VERSION:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    version={{ quote(VERSION) }}
+    if [[ ! "$version" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+        echo "Expected a version like v0.1.2: just release v0.1.2" >&2
+        exit 1
+    fi
+    if [ -n "$(git status --porcelain)" ]; then
+        echo "Commit or stash all changes before releasing." >&2
+        exit 1
+    fi
+    if [ "$(git branch --show-current)" != main ]; then
+        echo "Releases must be made from main." >&2
+        exit 1
+    fi
+    commit=$(git rev-parse HEAD)
+    remote_main=$(git ls-remote --exit-code origin refs/heads/main)
+    if [ "$commit" != "${remote_main%%$'\t'*}" ]; then
+        echo "Local HEAD must match origin/main; pull or push main before releasing." >&2
+        exit 1
+    fi
+    remote_tag=$(git ls-remote origin "refs/tags/$version")
+    if git show-ref --verify --quiet "refs/tags/$version" || [ -n "$remote_tag" ]; then
+        echo "Tag $version already exists locally or on origin." >&2
+        exit 1
+    fi
+    just ci
+    if [ -n "$(git status --porcelain)" ] || [ "$(git rev-parse HEAD)" != "$commit" ]; then
+        echo "The checkout changed during validation; review it before releasing." >&2
+        exit 1
+    fi
+    git tag -a "$version" "$commit" -m "Release $version"
+    if ! git -c push.followTags=false push origin "refs/tags/$version:refs/tags/$version"; then
+        echo "Push failed; the local tag $version was retained. Inspect origin before retrying the push." >&2
+        exit 1
+    fi
+    echo "Pushed $version. GitHub Actions will build the archives and publish the release."
+    echo "Track progress: https://github.com/sglavoie/brainnotes/actions/workflows/release.yml"
+
 # Run the full test suite
 test:
     @echo "Running tests..."
