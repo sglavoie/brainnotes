@@ -75,9 +75,11 @@ test("settings group links preserve drafts and size preview uses exact bytes", a
   await expect(row.locator("[data-settings-confirm]")).toBeFocused();
   const background = (button) => button.evaluate((element) => getComputedStyle(element).backgroundColor);
   const primaryBackground = await background(row.locator("[data-settings-confirm]"));
-  expect(await background(row.locator("[data-settings-save]"))).not.toBe(primaryBackground);
+  await expect(row.locator("[data-settings-save]")).not.toHaveCSS("background-color", primaryBackground);
   await row.locator("[data-settings-cancel]").click();
-  expect(await background(row.locator("[data-settings-save]"))).toBe(primaryBackground);
+  // Emphasis returns through the shared 140 ms button transition. Assert its
+  // exact settled color instead of sampling the first animation frame.
+  await expect(row.locator("[data-settings-save]")).toHaveCSS("background-color", primaryBackground);
   await control.fill("0.1");
   await row.locator("[data-settings-save]").click();
   await expect(row.locator("[data-settings-status]")).toContainText("No rounding was applied");

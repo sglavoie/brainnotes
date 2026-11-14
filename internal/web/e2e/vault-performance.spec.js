@@ -31,6 +31,17 @@ async function report(page, testInfo, measurements) {
   expect(Math.max(0, ...longTasks)).toBeLessThan(250);
 }
 
+// Measure when the browser exposes the update, not when a retrying assertion's
+// increasing polling interval next observes it. Keep the same seven-second
+// failure timeout and check on animation frames under the existing CPU throttle.
+async function waitForStatus(page, selector, text) {
+  await page.waitForFunction(
+    ({ selector, text }) => document.querySelector(selector)?.textContent?.includes(text),
+    { selector, text },
+    { polling: "raf", timeout: 7000 },
+  );
+}
+
 test("large vault Library search and filtering remain responsive", async ({ page, context }, testInfo) => {
   await throttle(page, context);
   await page.goto("/library?q=observation&sort=path");
@@ -42,14 +53,18 @@ test("large vault Library search and filtering remain responsive", async ({ page
     const start = Date.now();
     await page.locator("#search-input").fill(query);
     await response;
-    await expect(page.locator("[data-overview-search-results]")).toHaveAttribute("aria-busy", "false");
+    await page.waitForFunction(
+      () => document.querySelector("[data-overview-search-results]")?.getAttribute("aria-busy") === "false",
+      undefined,
+      { polling: "raf", timeout: 7000 },
+    );
     samples.push(Date.now() - start);
   }
   const filterStart = Date.now();
   await page.locator(".library-filters > summary").click();
   await page.locator("[data-library-expression] > summary").click();
   await page.locator("[data-query-bar-input]").fill("status:draft");
-  await expect(page.locator("[data-overview-search-status]")).toContainText(`of ${testInfo.project.metadata.noteCount > 10000 ? 5000 : 500}`);
+  await waitForStatus(page, "[data-overview-search-status]", `of ${testInfo.project.metadata.noteCount > 10000 ? 5000 : 500}`);
   const filterMilliseconds = Date.now() - filterStart;
   await report(page, testInfo, { searchMilliseconds: samples, filterMilliseconds });
   expect(Math.max(...samples)).toBeLessThan(1500);
@@ -74,7 +89,7 @@ test("long note editing remains responsive", async ({ page, context }, testInfo)
   }
   const saveStart = Date.now();
   await page.locator("[data-source-save]").click();
-  await expect(page.locator("[data-source-status]")).toContainText("Saved to vault");
+  await waitForStatus(page, "[data-source-status]", "Saved to vault");
   const saveConfirmationMilliseconds = Date.now() - saveStart;
   await report(page, testInfo, { typingMilliseconds: samples, coldNavigationMilliseconds, saveConfirmationMilliseconds });
   expect(coldNavigationMilliseconds).toBeLessThan(8000);

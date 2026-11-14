@@ -251,6 +251,8 @@ without throttling and 1,928 ms with 4× CPU throttling and 100 ms latency. The
 reading gate allows 1,500 ms and 3,500 ms respectively; the throttled note body
 must also become visible within 5,000 ms. These ceilings leave room for CI
 variation while catching a blank first screen that a transfer-size check misses.
+Timed search, filter, and save checks observe the browser DOM on animation
+frames so assertion retry intervals do not inflate the measured response time.
 Each test attaches JSON measurements with corpus size and long
 tasks. Inspect those artifacts when a budget fails; do not raise a ceiling
 merely to pass a slower run.
