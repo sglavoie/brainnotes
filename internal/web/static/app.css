@@ -1174,6 +1174,10 @@ a:focus-visible,
 }
 
 .facet-chip-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
   align-self: stretch;
   border: 0;
   border-left: 1px solid var(--bn-border-strong);
@@ -2584,16 +2588,6 @@ code {
   gap: 0.5rem;
   justify-content: flex-end;
   margin-top: 0.9rem;
-}
-
-.history-button.is-primary {
-  border-color: var(--bn-accent);
-  color: var(--bn-surface);
-  background: var(--bn-accent);
-}
-
-.history-button.is-primary:hover {
-  background: var(--bn-link-hover);
 }
 
 .history-button.is-primary:disabled {
@@ -6731,53 +6725,6 @@ code {
   font-size: 0.85rem;
 }
 
-.synthesize-panel .bn-button {
-  border: 1px solid var(--bn-border);
-  color: var(--bn-text);
-  background: var(--bn-raised);
-  cursor: pointer;
-}
-
-.synthesize-panel .bn-button:hover:not(:disabled) {
-  background: var(--bn-hover);
-  border-color: var(--bn-border-strong);
-}
-
-.synthesize-panel .bn-button.bn-primary {
-  color: var(--bn-accent-subtle-text);
-  background: var(--bn-accent-subtle-bg);
-  border-color: var(--bn-accent-subtle-border);
-  font-weight: 600;
-}
-
-.synthesize-panel .bn-button.bn-primary:hover:not(:disabled) {
-  color: var(--bn-accent-subtle-text);
-  background: var(--bn-accent-subtle-bg);
-  border-color: var(--bn-accent);
-}
-
-.synthesize-panel .bn-button.bn-danger {
-  color: var(--bn-danger);
-  background: var(--bn-danger-bg);
-  border-color: var(--bn-danger-border);
-}
-
-.synthesize-panel .bn-button.bn-danger:hover:not(:disabled) {
-  border-color: var(--bn-danger);
-  background: var(--bn-danger-bg);
-}
-
-.synthesize-panel .bn-button.is-quiet {
-  border-color: transparent;
-  color: var(--bn-muted);
-  background: transparent;
-}
-
-.synthesize-panel .bn-button.is-quiet:hover:not(:disabled) {
-  color: var(--bn-text-subtle);
-  background: var(--bn-hover);
-}
-
 .synthesize-panel .bn-button:disabled {
   color: var(--bn-faint);
   background: var(--bn-sunken);
@@ -7244,22 +7191,6 @@ code {
 
 .source-editor-command:hover {
   background: var(--bn-hover);
-}
-
-.source-editor-save {
-  border: 1px solid var(--bn-accent-subtle-border);
-  background: var(--bn-accent-subtle-bg);
-  color: var(--bn-accent-subtle-text);
-  font-weight: 600;
-  cursor: pointer;
-}
-
-/* A clean note has nothing to save; keep this resting state quiet. */
-.source-editor-save:disabled {
-  border-color: var(--bn-border);
-  background: var(--bn-sunken);
-  color: var(--bn-faint);
-  cursor: default;
 }
 
 .source-editor-status,
@@ -7736,9 +7667,6 @@ code {
 .new-note p { margin: 0; overflow-wrap: anywhere; }
 
 .new-note button {
-  color: var(--bn-surface);
-  background: var(--bn-accent);
-  border: 1px solid var(--bn-accent);
   cursor: pointer;
 }
 
@@ -8240,16 +8168,6 @@ dt.sync-fact {
   cursor: default;
 }
 
-/* Apply is the primary control and is deliberately *not* the danger colour: what
-   it does depends on the decisions above it, and a button that always looked
-   destructive would say nothing about the one case where it is. The discard
-   sentences carry that, per choice. */
-.sync-button.is-primary {
-  border-color: var(--bn-accent-subtle-border);
-  color: var(--bn-accent-subtle-text);
-  background: var(--bn-accent-subtle-bg);
-}
-
 .sync-operations {
   display: grid;
   gap: 0.9rem;
@@ -8727,7 +8645,7 @@ dt.sync-fact {
   }
 }
 /* internal/web/static_src/css/controls.css */
-/* Shared controls own geometry; workspace CSS owns placement and semantic variants. */
+/* Shared controls own geometry and levels; workspace CSS owns placement. */
 /* Older property/fix builders migrate independently; these two aliases share the same primitive. */
 .bn-button, .properties-button, .review-action {
   min-height: var(--bn-control-height);
@@ -8737,6 +8655,23 @@ dt.sync-fact {
   font-size: var(--bn-control-font-size);
   box-sizing: border-box;
 }
+
+/* Three levels: primary for one main action per region; .bn-button for the
+   default bordered action; .bn-quiet (legacy .is-quiet) for text-only actions.
+   Legacy primary aliases share this definition; danger remains semantic. */
+:where(.bn-button) {
+  border: 1px solid var(--bn-border);
+  color: var(--bn-text);
+  background: var(--bn-raised);
+  cursor: pointer;
+}
+:where(.bn-button:hover:not(:disabled)) { background: var(--bn-hover); }
+.bn-button:is(.bn-quiet, .is-quiet) {
+  border-color: transparent;
+  background: transparent;
+  color: var(--bn-text-subtle);
+}
+.bn-button:is(.bn-quiet, .is-quiet):hover:not(:disabled) { background: var(--bn-hover); }
 
 .bn-field {
   min-height: var(--bn-control-height);
@@ -8749,15 +8684,35 @@ dt.sync-fact {
   font-size: var(--bn-control-font-size);
   box-sizing: border-box;
 }
-.bn-button.bn-primary, .settings-button-primary, .properties-button-primary {
+/* A pending settings confirmation takes priority over its preview button. */
+.bn-button.bn-primary, .settings-button-primary:not([data-templates-save], [data-settings-save]),
+:where(.settings-row:not(:has([data-settings-confirm]:not([hidden])))) [data-settings-save],
+.settings-confirm-actions:has([data-templates-confirm][hidden]) [data-templates-save],
+.properties-button-primary,
+.source-editor-save, .history-button.is-primary, .sync-button.is-primary {
   background: var(--bn-accent-subtle-bg);
   color: var(--bn-accent-subtle-text);
   border: 1px solid var(--bn-accent-subtle-border);
   font-weight: 600;
 }
 .bn-button.bn-primary:hover:not(:disabled),
-.settings-button-primary:hover:not(:disabled),
-.properties-button-primary:hover:not(:disabled) { border-color: var(--bn-accent); }
+.settings-button-primary:not([data-templates-save], [data-settings-save]):hover:not(:disabled),
+:where(.settings-row:not(:has([data-settings-confirm]:not([hidden])))) [data-settings-save]:hover:not(:disabled),
+.settings-confirm-actions:has([data-templates-confirm][hidden]) [data-templates-save]:hover:not(:disabled),
+.properties-button-primary:hover:not(:disabled),
+.source-editor-save:hover:not(:disabled),
+.history-button.is-primary:hover:not(:disabled),
+.sync-button.is-primary:hover:not(:disabled) {
+  background: var(--bn-accent-subtle-bg);
+  border-color: var(--bn-accent);
+}
+/* A clean editor has nothing to save. */
+.source-editor-save:disabled {
+  border-color: var(--bn-border);
+  background: var(--bn-sunken);
+  color: var(--bn-faint);
+  cursor: default;
+}
 .bn-button.bn-secondary { background: var(--bn-raised); color: var(--bn-text-subtle); border-color: var(--bn-border); font-weight: 400; }
 .bn-button.bn-danger, .settings-danger {
   border-color: var(--bn-danger-border);
@@ -8781,15 +8736,58 @@ dt.sync-fact {
   :root { --bn-control-height: 2.75rem; }
 }
 
-/* Native disclosures share focus and touch geometry without imitating buttons. */
-summary { cursor: pointer; min-height: var(--bn-control-height); box-sizing: border-box; padding-block: 0.4rem; }
+/* Keep native details activation; only replace the browser's visual marker. */
+summary {
+  cursor: pointer;
+  min-height: var(--bn-control-height);
+  box-sizing: border-box;
+  padding-block: 0.4rem;
+  list-style: none;
+}
+summary::-webkit-details-marker { display: none; }
+summary::before {
+  content: "";
+  display: inline-block;
+  width: 0.4em;
+  height: 0.4em;
+  margin-inline: 0.1em 0.65em;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(-45deg);
+  vertical-align: 0.12em;
+}
+details[open] > summary::before { transform: rotate(45deg); }
+/* Menu triggers keep one downward chevron after their label in both states. */
+:is(.source-editor-workspace, .note-actions-more, .source-editor-format, .manage-nav) > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65em;
+  min-height: var(--bn-control-height);
+  padding: var(--bn-control-padding);
+  border: 1px solid var(--bn-border);
+  border-radius: var(--bn-control-radius);
+  background: var(--bn-raised);
+  color: var(--bn-text);
+  font: inherit;
+  font-size: var(--bn-control-font-size);
+}
+:is(.source-editor-workspace, .note-actions-more, .source-editor-format, .manage-nav) > summary:hover { background: var(--bn-hover); }
+:is(.source-editor-workspace, .note-actions-more, .source-editor-format, .manage-nav) > summary::before {
+  order: 1;
+  flex-shrink: 0;
+  margin: -0.2em 0.1em 0 0;
+  transform: rotate(45deg);
+}
+@media (prefers-reduced-motion: no-preference) {
+  summary::before { transition: transform 140ms ease; }
+}
 :is(button, summary, select, input, textarea):focus-visible {
   outline: 2px solid var(--bn-focus);
   outline-offset: 3px;
 }
 @media (pointer: coarse) {
   button, select, input:not([type="checkbox"]):not([type="radio"]), summary { min-height: 2.75rem; }
-  .facet-chip-remove { min-width: 2.75rem; }
+  .facet-chip-remove { min-width: 2.75rem; min-height: 2.75rem; box-sizing: border-box; }
   /* iOS zooms the page into any focused field set below 16px. */
   :is(select, textarea, input:not([type="checkbox"]):not([type="radio"]):not([type="range"])) {
     font-size: max(1rem, 16px) !important;
@@ -8818,20 +8816,6 @@ summary { cursor: pointer; min-height: var(--bn-control-height); box-sizing: bor
   min-height: 2.75rem;
   padding: 0.25rem 0.85rem;
   box-sizing: border-box;
-  border: 1px solid var(--bn-accent-subtle-border);
-  border-radius: var(--bn-control-radius);
-  background: var(--bn-accent-subtle-bg);
-  color: var(--bn-accent-subtle-text);
-  font-weight: 600;
-}
-
-.manage-nav summary {
-  padding: 0.25rem 0.7rem;
-  min-height: 2.1rem;
-  box-sizing: border-box;
-  cursor: pointer;
-  font-size: 0.9rem;
-  font-weight: 600;
 }
 
 .manage-nav[open] { flex-basis: 100%; }
@@ -8861,8 +8845,10 @@ summary { cursor: pointer; min-height: var(--bn-control-height); box-sizing: bor
 .active-constraints .facet-chips { margin: 0; }
 .active-constraints [hidden] { display: none; }
 .library-constraint {
-  display: inline-block;
-  padding: 0.25rem 0.55rem;
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  overflow: hidden;
   border: 1px solid var(--bn-accent-subtle-border);
   border-radius: 0.4rem;
   background: var(--bn-accent-subtle-bg);
@@ -9076,7 +9062,6 @@ div.note-peek-anchor > .note-peek-trigger { position: absolute; right: 0; top: 0
 .overview-result-link:hover .overview-result-title { color: var(--bn-link); }
 .bn-button { transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease; }
 .bn-button:focus-visible, .note-peek-trigger:focus-visible { outline: 2px solid var(--bn-focus); outline-offset: 2px; }
-.capture-dialog .bn-button, .capture-notice .bn-button, .note-peek .bn-button { border: 1px solid var(--bn-border); background: var(--bn-raised); color: var(--bn-text); cursor: pointer; }
 @media print { .reading-controls, .note-peek-trigger, .capture-launch, .capture-notice, .note-peek, .note-repeated-title { display: none !important; } }
 .pin-button[aria-pressed='true'] { background: var(--bn-accent-subtle-bg); color: var(--bn-accent-subtle-text); border-color: var(--bn-accent-subtle-border); }
 .source-editor-status.is-success { animation: confirmation-settle 180ms ease-out; }
@@ -9168,7 +9153,6 @@ div.note-peek-anchor > .note-peek-trigger { position: absolute; right: 0; top: 0
 .command-switcher::backdrop { background: var(--bn-backdrop); }
 .side-reference > header { display: flex; justify-content: space-between; align-items: center; gap: 1rem; }
 .command-switcher h2 { font-family: var(--bn-book); font-size: 1.65rem; font-weight: 500; margin: 0; }
-.side-reference .bn-button, .command-switcher .bn-button { border: 1px solid var(--bn-border); background: var(--bn-raised); color: var(--bn-text); cursor: pointer; }
 .reference-content h3 { font-family: var(--bn-book); font-size: 1.6rem; font-weight: 500; line-height: 1.25; margin: 0 0 1rem; }
 .reference-content h3 a { color: var(--bn-text-strong); }
 .reference-content p { line-height: 1.75; margin-bottom: 1rem; }
@@ -9223,10 +9207,9 @@ div.note-peek-anchor > .note-peek-trigger { position: absolute; right: 0; top: 0
 .note-page .note-breadcrumbs { margin-bottom: 0.35rem; font-size: 0.8rem; }
 .note-page .site-header { margin-bottom: 0.25rem; }
 .note-page .note-actions { gap: 0.4rem; margin-block: 0.4rem 1.25rem; }
-.note-actions .pin-button:not([aria-pressed='true']), .note-actions-more > summary { background: transparent; border-color: transparent; color: var(--bn-text-subtle); }
-.note-actions .pin-button:hover, .note-actions-more > summary:hover { background: var(--bn-hover); }
+.note-actions .pin-button:not([aria-pressed='true']) { background: transparent; border-color: transparent; color: var(--bn-text-subtle); }
+.note-actions .pin-button:hover { background: var(--bn-hover); }
 .note-more-options .reading-controls { order: 0; padding-bottom: 0.75rem; border-bottom: 1px solid var(--bn-border); width: 100%; }
-.note-more-options .bn-primary { background: transparent; border-color: var(--bn-border); font-weight: 400; }
 .note-section-heading { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; }
 .note-section-heading > .note-section-copy { align-self: start; position: relative; }
 .note-section-copy .copy-status:not(:empty) { position: absolute; right: 0; top: 100%; width: max-content; max-width: 12rem; z-index: var(--bn-z-raised); background: var(--bn-surface); padding: 0.35rem; border: 1px solid var(--bn-border); }
@@ -9457,10 +9440,8 @@ div.note-peek-anchor > .note-peek-trigger { position: absolute; right: 0; top: 0
 .quiet-reading-toggle:hover { background: var(--bn-hover); }
 .quiet-reading-toggle[aria-pressed='true'] { background: var(--bn-accent-subtle-bg); color: var(--bn-accent-subtle-text); border-color: var(--bn-accent-subtle-border); }
 :root[data-reading-mode='quiet'] .note-print-body .frontmatter-panel { display: none; }
-.brief-action-button[data-brief-action-another],
-.source-editor-workspace > summary { background: transparent; border-color: transparent; color: var(--bn-text-subtle); font-weight: 400; }
-.brief-action-button[data-brief-action-another]:hover,
-.source-editor-workspace > summary:hover { background: var(--bn-hover); color: var(--bn-text); }
+.brief-action-button[data-brief-action-another] { background: transparent; border-color: transparent; color: var(--bn-text-subtle); font-weight: 400; }
+.brief-action-button[data-brief-action-another]:hover { background: var(--bn-hover); color: var(--bn-text); }
 .brief-card-actions { align-items: center; }
 .brief-card-context { min-height: 1.4em; }
 .brief-connection-passages mark { background: var(--bn-accent-subtle-bg); color: var(--bn-accent-subtle-text); border-radius: 0.15rem; }

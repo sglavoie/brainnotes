@@ -73,7 +73,11 @@ test("settings group links preserve drafts and size preview uses exact bytes", a
   await row.locator("[data-settings-save]").click();
   await expect(row.locator("[data-settings-diff]")).toContainText("11010048");
   await expect(row.locator("[data-settings-confirm]")).toBeFocused();
+  const background = (button) => button.evaluate((element) => getComputedStyle(element).backgroundColor);
+  const primaryBackground = await background(row.locator("[data-settings-confirm]"));
+  expect(await background(row.locator("[data-settings-save]"))).not.toBe(primaryBackground);
   await row.locator("[data-settings-cancel]").click();
+  expect(await background(row.locator("[data-settings-save]"))).toBe(primaryBackground);
   await control.fill("0.1");
   await row.locator("[data-settings-save]").click();
   await expect(row.locator("[data-settings-status]")).toContainText("No rounding was applied");
@@ -173,4 +177,83 @@ test("Library invites a search without requesting the whole vault", async ({ pag
   await page.locator("#search-input").fill("Alpha");
   await expect(page.locator(".overview-result-link").first()).toBeVisible();
   await expect(page.getByRole("combobox", { name: "Sort results" })).toBeVisible();
+});
+
+for (const mode of ["light", "dark", "forced"]) {
+  test(`shared chevrons retain native disclosure activation in ${mode}`, async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: "reduce", forcedColors: mode === "forced" ? "active" : "none" });
+    await page.addInitScript((theme) => localStorage.setItem("bn.theme", theme), mode === "dark" ? "dark" : "light");
+    for (const [path, selector, menu] of [
+      ["/library", ".library-filters", false],
+      ["/library", ".source-editor-workspace", true],
+      ["/n/Reading", ".note-actions-more", true],
+      ["/edit?key=Writing", ".source-editor-format", true],
+    ]) {
+      await page.goto(path);
+      const details = page.locator(selector);
+      const summary = details.locator(":scope > summary");
+      const marker = () => summary.evaluate((element) => {
+        const before = getComputedStyle(element, "::before");
+        return {
+          native: getComputedStyle(element).listStyleType,
+          content: before.content,
+          border: before.borderRightWidth,
+          color: before.borderRightColor,
+          text: before.color,
+          transform: before.transform,
+          order: before.order,
+          after: getComputedStyle(element, "::after").content,
+        };
+      });
+      const closed = await marker();
+      expect(closed.native).toBe("none");
+      expect(closed.content).toBe('""');
+      expect(closed.border).toBe("2px");
+      expect(closed.color).toBe(closed.text);
+      expect(closed.after).toBe("none");
+      await summary.focus();
+      await summary.press("Enter");
+      await expect(details).toHaveAttribute("open", "");
+      const opened = await marker();
+      if (menu) {
+        expect(opened.transform).toBe(closed.transform);
+        expect(opened.order).toBe("1");
+      } else {
+        expect(opened.transform).not.toBe(closed.transform);
+      }
+      await summary.press("Space");
+      await expect(details).not.toHaveAttribute("open", "");
+      expect((await marker()).transform).toBe(closed.transform);
+    }
+    await page.goto("/library");
+    await page.locator(".source-editor-workspace > summary").click();
+    const manage = page.locator(".manage-nav > summary");
+    await manage.focus();
+    await manage.press("Enter");
+    await expect(page.locator(".manage-nav")).toHaveAttribute("open", "");
+    await manage.press("Space");
+    await expect(page.locator(".manage-nav")).not.toHaveAttribute("open", "");
+  });
+}
+
+test("New note follows header priority and chips share a removal affordance", async ({ page }) => {
+  for (const path of ["/", "/library", "/pinned", "/graph", "/properties", "/health", "/settings", "/sync", "/history", "/synthesize?source=Alpha"]) {
+    await page.goto(path);
+    await expect(page.locator(".focused-workspace-tools > .new-note-action")).toHaveClass(/bn-primary/);
+  }
+  for (const path of ["/n/Reading", "/edit?key=Writing", "/new", "/threads"]) {
+    await page.goto(path);
+    const actions = page.locator(".new-note-action");
+    expect(await actions.count()).toBeGreaterThan(0);
+    for (const action of await actions.all()) await expect(action).not.toHaveClass(/bn-primary/);
+  }
+  await page.goto("/library?q=body&status=draft&sort=title");
+  const facet = page.getByRole("button", { name: "Remove Status: draft", exact: true });
+  await expect(facet).toHaveText("×");
+  const text = page.getByRole("link", { name: "Remove text: body", exact: true });
+  await expect(text.locator(".facet-chip-remove")).toHaveText("×");
+  await expect(text).toHaveAttribute("href", "/library?status=draft&sort=title");
+  await facet.click();
+  await expect(page.locator(".facet-chip")).toHaveCount(0);
+  await expect(text).toBeVisible();
 });

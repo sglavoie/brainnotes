@@ -244,16 +244,6 @@
   margin-top: 0.9rem;
 }
 
-.history-button.is-primary {
-  border-color: var(--bn-accent);
-  color: var(--bn-surface);
-  background: var(--bn-accent);
-}
-
-.history-button.is-primary:hover {
-  background: var(--bn-link-hover);
-}
-
 .history-button.is-primary:disabled {
   opacity: 0.6;
   cursor: not-allowed;

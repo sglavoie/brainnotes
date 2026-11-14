@@ -68,22 +68,6 @@
   background: var(--bn-hover);
 }
 
-.source-editor-save {
-  border: 1px solid var(--bn-accent-subtle-border);
-  background: var(--bn-accent-subtle-bg);
-  color: var(--bn-accent-subtle-text);
-  font-weight: 600;
-  cursor: pointer;
-}
-
-/* A clean note has nothing to save; keep this resting state quiet. */
-.source-editor-save:disabled {
-  border-color: var(--bn-border);
-  background: var(--bn-sunken);
-  color: var(--bn-faint);
-  cursor: default;
-}
-
 .source-editor-status,
 .source-editor-preview-status {
   min-height: 1.2rem;

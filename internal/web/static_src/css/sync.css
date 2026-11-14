@@ -182,16 +182,6 @@ dt.sync-fact {
   cursor: default;
 }
 
-/* Apply is the primary control and is deliberately *not* the danger colour: what
-   it does depends on the decisions above it, and a button that always looked
-   destructive would say nothing about the one case where it is. The discard
-   sentences carry that, per choice. */
-.sync-button.is-primary {
-  border-color: var(--bn-accent-subtle-border);
-  color: var(--bn-accent-subtle-text);
-  background: var(--bn-accent-subtle-bg);
-}
-
 .sync-operations {
   display: grid;
   gap: 0.9rem;

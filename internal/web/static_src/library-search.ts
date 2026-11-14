@@ -13,7 +13,14 @@ const renderConstraint = (root: HTMLElement, selector: string, key: string, labe
   params.delete(key);
   link.href = params.size ? `/library?${params}` : "/library";
   link.className = "library-constraint";
-  link.textContent = `${label}: ${value} ×`;
+  const text = document.createElement("span");
+  text.className = "facet-chip-text";
+  text.textContent = `${label}: ${value}`;
+  const remove = document.createElement("span");
+  remove.className = "facet-chip-remove";
+  remove.textContent = "×";
+  remove.setAttribute("aria-hidden", "true");
+  link.append(text, remove);
   link.setAttribute("aria-label", `Remove ${label.toLowerCase()}: ${value}`);
   host.appendChild(link);
 };

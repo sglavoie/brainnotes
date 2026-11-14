@@ -141,6 +141,10 @@
 }
 
 .facet-chip-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
   align-self: stretch;
   border: 0;
   border-left: 1px solid var(--bn-border-strong);

@@ -73,7 +73,6 @@ div.note-peek-anchor > .note-peek-trigger { position: absolute; right: 0; top: 0
 .overview-result-link:hover .overview-result-title { color: var(--bn-link); }
 .bn-button { transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease; }
 .bn-button:focus-visible, .note-peek-trigger:focus-visible { outline: 2px solid var(--bn-focus); outline-offset: 2px; }
-.capture-dialog .bn-button, .capture-notice .bn-button, .note-peek .bn-button { border: 1px solid var(--bn-border); background: var(--bn-raised); color: var(--bn-text); cursor: pointer; }
 @media print { .reading-controls, .note-peek-trigger, .capture-launch, .capture-notice, .note-peek, .note-repeated-title { display: none !important; } }
 .pin-button[aria-pressed='true'] { background: var(--bn-accent-subtle-bg); color: var(--bn-accent-subtle-text); border-color: var(--bn-accent-subtle-border); }
 .source-editor-status.is-success { animation: confirmation-settle 180ms ease-out; }

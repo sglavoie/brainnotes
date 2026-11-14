@@ -30,7 +30,7 @@
           {{if readOnly}}
             Add a Markdown note to the source vault and sync it to this replica.
           {{else}}
-            <a class="bn-button new-note-action" href="/new">Create your first note</a>
+            <a class="bn-button bn-primary new-note-action" href="/new">Create your first note</a>
             {{if .CaptureConfigured}}
               or <a href="#capture-input">capture a thought</a> in your inbox.
             {{else}}
@@ -75,7 +75,7 @@
             {{if not .CaptureConfigured}}disabled{{end}}
           ></textarea>
           <button
-            class="bn-button brief-action-button"
+            class="bn-button bn-primary brief-action-button"
             type="button"
             data-capture-submit
             {{if not .CaptureConfigured}}disabled{{end}}
@@ -139,7 +139,7 @@
             {{if .Continue.Card.Excerpt}}<blockquote class="brief-card-excerpt">{{.Continue.Card.Excerpt}}</blockquote>{{end}}
             <div class="brief-card-actions">
               <button
-                class="bn-button brief-action-button"
+                class="bn-button bn-primary brief-action-button"
                 type="button"
                 data-brief-action-open
                 data-brief-action="open"
@@ -225,7 +225,7 @@
               {{if .Rediscover.Card.Excerpt}}<blockquote class="brief-card-excerpt">{{.Rediscover.Card.Excerpt}}</blockquote>{{end}}
               <div class="brief-card-actions">
                 <button
-                  class="bn-button brief-action-button"
+                  class="bn-button bn-primary brief-action-button"
                   type="button"
                   data-brief-action-open
                   data-brief-action="open"
@@ -315,7 +315,7 @@
               {{if .Connect.Card.Excerpt}}<blockquote class="brief-card-excerpt">{{.Connect.Card.Excerpt}}</blockquote>{{end}}
               <div class="brief-card-actions">
                 <button
-                  class="bn-button brief-action-button"
+                  class="bn-button bn-primary brief-action-button"
                   type="button"
                   data-brief-action-open
                   data-brief-action="open"

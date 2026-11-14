@@ -10,10 +10,8 @@
 .quiet-reading-toggle:hover { background: var(--bn-hover); }
 .quiet-reading-toggle[aria-pressed='true'] { background: var(--bn-accent-subtle-bg); color: var(--bn-accent-subtle-text); border-color: var(--bn-accent-subtle-border); }
 :root[data-reading-mode='quiet'] .note-print-body .frontmatter-panel { display: none; }
-.brief-action-button[data-brief-action-another],
-.source-editor-workspace > summary { background: transparent; border-color: transparent; color: var(--bn-text-subtle); font-weight: 400; }
-.brief-action-button[data-brief-action-another]:hover,
-.source-editor-workspace > summary:hover { background: var(--bn-hover); color: var(--bn-text); }
+.brief-action-button[data-brief-action-another] { background: transparent; border-color: transparent; color: var(--bn-text-subtle); font-weight: 400; }
+.brief-action-button[data-brief-action-another]:hover { background: var(--bn-hover); color: var(--bn-text); }
 .brief-card-actions { align-items: center; }
 .brief-card-context { min-height: 1.4em; }
 .brief-connection-passages mark { background: var(--bn-accent-subtle-bg); color: var(--bn-accent-subtle-text); border-radius: 0.15rem; }

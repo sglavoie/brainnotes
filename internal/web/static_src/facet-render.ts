@@ -16,7 +16,7 @@ export const renderFacetChip = (option: FacetFilterOption, remove: () => void): 
   const button = document.createElement("button");
   button.type = "button";
   button.className = "facet-chip-remove";
-  button.textContent = "x";
+  button.textContent = "×";
   button.setAttribute("aria-label", `Remove ${option.groupLabel}: ${option.label}`);
   button.addEventListener("click", remove);
   chip.append(button);

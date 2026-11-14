@@ -22,9 +22,6 @@
 .new-note p { margin: 0; overflow-wrap: anywhere; }
 
 .new-note button {
-  color: var(--bn-surface);
-  background: var(--bn-accent);
-  border: 1px solid var(--bn-accent);
   cursor: pointer;
 }
 

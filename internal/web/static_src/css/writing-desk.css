@@ -12,10 +12,9 @@
 .note-page .note-breadcrumbs { margin-bottom: 0.35rem; font-size: 0.8rem; }
 .note-page .site-header { margin-bottom: 0.25rem; }
 .note-page .note-actions { gap: 0.4rem; margin-block: 0.4rem 1.25rem; }
-.note-actions .pin-button:not([aria-pressed='true']), .note-actions-more > summary { background: transparent; border-color: transparent; color: var(--bn-text-subtle); }
-.note-actions .pin-button:hover, .note-actions-more > summary:hover { background: var(--bn-hover); }
+.note-actions .pin-button:not([aria-pressed='true']) { background: transparent; border-color: transparent; color: var(--bn-text-subtle); }
+.note-actions .pin-button:hover { background: var(--bn-hover); }
 .note-more-options .reading-controls { order: 0; padding-bottom: 0.75rem; border-bottom: 1px solid var(--bn-border); width: 100%; }
-.note-more-options .bn-primary { background: transparent; border-color: var(--bn-border); font-weight: 400; }
 .note-section-heading { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; }
 .note-section-heading > .note-section-copy { align-self: start; position: relative; }
 .note-section-copy .copy-status:not(:empty) { position: absolute; right: 0; top: 100%; width: max-content; max-width: 12rem; z-index: var(--bn-z-raised); background: var(--bn-surface); padding: 0.35rem; border: 1px solid var(--bn-border); }

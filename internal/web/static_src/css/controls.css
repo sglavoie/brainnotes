@@ -1,4 +1,4 @@
-/* Shared controls own geometry; workspace CSS owns placement and semantic variants. */
+/* Shared controls own geometry and levels; workspace CSS owns placement. */
 /* Older property/fix builders migrate independently; these two aliases share the same primitive. */
 .bn-button, .properties-button, .review-action {
   min-height: var(--bn-control-height);
@@ -8,6 +8,23 @@
   font-size: var(--bn-control-font-size);
   box-sizing: border-box;
 }
+
+/* Three levels: primary for one main action per region; .bn-button for the
+   default bordered action; .bn-quiet (legacy .is-quiet) for text-only actions.
+   Legacy primary aliases share this definition; danger remains semantic. */
+:where(.bn-button) {
+  border: 1px solid var(--bn-border);
+  color: var(--bn-text);
+  background: var(--bn-raised);
+  cursor: pointer;
+}
+:where(.bn-button:hover:not(:disabled)) { background: var(--bn-hover); }
+.bn-button:is(.bn-quiet, .is-quiet) {
+  border-color: transparent;
+  background: transparent;
+  color: var(--bn-text-subtle);
+}
+.bn-button:is(.bn-quiet, .is-quiet):hover:not(:disabled) { background: var(--bn-hover); }
 
 .bn-field {
   min-height: var(--bn-control-height);
@@ -20,15 +37,35 @@
   font-size: var(--bn-control-font-size);
   box-sizing: border-box;
 }
-.bn-button.bn-primary, .settings-button-primary, .properties-button-primary {
+/* A pending settings confirmation takes priority over its preview button. */
+.bn-button.bn-primary, .settings-button-primary:not([data-templates-save], [data-settings-save]),
+:where(.settings-row:not(:has([data-settings-confirm]:not([hidden])))) [data-settings-save],
+.settings-confirm-actions:has([data-templates-confirm][hidden]) [data-templates-save],
+.properties-button-primary,
+.source-editor-save, .history-button.is-primary, .sync-button.is-primary {
   background: var(--bn-accent-subtle-bg);
   color: var(--bn-accent-subtle-text);
   border: 1px solid var(--bn-accent-subtle-border);
   font-weight: 600;
 }
 .bn-button.bn-primary:hover:not(:disabled),
-.settings-button-primary:hover:not(:disabled),
-.properties-button-primary:hover:not(:disabled) { border-color: var(--bn-accent); }
+.settings-button-primary:not([data-templates-save], [data-settings-save]):hover:not(:disabled),
+:where(.settings-row:not(:has([data-settings-confirm]:not([hidden])))) [data-settings-save]:hover:not(:disabled),
+.settings-confirm-actions:has([data-templates-confirm][hidden]) [data-templates-save]:hover:not(:disabled),
+.properties-button-primary:hover:not(:disabled),
+.source-editor-save:hover:not(:disabled),
+.history-button.is-primary:hover:not(:disabled),
+.sync-button.is-primary:hover:not(:disabled) {
+  background: var(--bn-accent-subtle-bg);
+  border-color: var(--bn-accent);
+}
+/* A clean editor has nothing to save. */
+.source-editor-save:disabled {
+  border-color: var(--bn-border);
+  background: var(--bn-sunken);
+  color: var(--bn-faint);
+  cursor: default;
+}
 .bn-button.bn-secondary { background: var(--bn-raised); color: var(--bn-text-subtle); border-color: var(--bn-border); font-weight: 400; }
 .bn-button.bn-danger, .settings-danger {
   border-color: var(--bn-danger-border);
@@ -52,15 +89,58 @@
   :root { --bn-control-height: 2.75rem; }
 }
 
-/* Native disclosures share focus and touch geometry without imitating buttons. */
-summary { cursor: pointer; min-height: var(--bn-control-height); box-sizing: border-box; padding-block: 0.4rem; }
+/* Keep native details activation; only replace the browser's visual marker. */
+summary {
+  cursor: pointer;
+  min-height: var(--bn-control-height);
+  box-sizing: border-box;
+  padding-block: 0.4rem;
+  list-style: none;
+}
+summary::-webkit-details-marker { display: none; }
+summary::before {
+  content: "";
+  display: inline-block;
+  width: 0.4em;
+  height: 0.4em;
+  margin-inline: 0.1em 0.65em;
+  border-right: 2px solid currentColor;
+  border-bottom: 2px solid currentColor;
+  transform: rotate(-45deg);
+  vertical-align: 0.12em;
+}
+details[open] > summary::before { transform: rotate(45deg); }
+/* Menu triggers keep one downward chevron after their label in both states. */
+:is(.source-editor-workspace, .note-actions-more, .source-editor-format, .manage-nav) > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65em;
+  min-height: var(--bn-control-height);
+  padding: var(--bn-control-padding);
+  border: 1px solid var(--bn-border);
+  border-radius: var(--bn-control-radius);
+  background: var(--bn-raised);
+  color: var(--bn-text);
+  font: inherit;
+  font-size: var(--bn-control-font-size);
+}
+:is(.source-editor-workspace, .note-actions-more, .source-editor-format, .manage-nav) > summary:hover { background: var(--bn-hover); }
+:is(.source-editor-workspace, .note-actions-more, .source-editor-format, .manage-nav) > summary::before {
+  order: 1;
+  flex-shrink: 0;
+  margin: -0.2em 0.1em 0 0;
+  transform: rotate(45deg);
+}
+@media (prefers-reduced-motion: no-preference) {
+  summary::before { transition: transform 140ms ease; }
+}
 :is(button, summary, select, input, textarea):focus-visible {
   outline: 2px solid var(--bn-focus);
   outline-offset: 3px;
 }
 @media (pointer: coarse) {
   button, select, input:not([type="checkbox"]):not([type="radio"]), summary { min-height: 2.75rem; }
-  .facet-chip-remove { min-width: 2.75rem; }
+  .facet-chip-remove { min-width: 2.75rem; min-height: 2.75rem; box-sizing: border-box; }
   /* iOS zooms the page into any focused field set below 16px. */
   :is(select, textarea, input:not([type="checkbox"]):not([type="radio"]):not([type="range"])) {
     font-size: max(1rem, 16px) !important;
