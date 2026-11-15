@@ -112,9 +112,17 @@ export const reviewVisuals = (snapshot) => {
     await page.locator(SURFACE).click();
     await page.keyboard.press("ControlOrMeta+a");
     await page.keyboard.insertText(restored);
-    // The preview follows the draft after a debounce; wait for it so the
-    // snapshot never catches the note it replaced.
+    // Hidden previews render on reveal. Exercise that visible state before
+    // returning to the editing layout used by the conflict screenshots.
+    const previewTab = page.getByRole("tab", { name: "Preview", exact: true });
+    const usesTabs = await previewTab.isVisible();
+    if (usesTabs) await previewTab.click();
+    else await page.getByLabel("Writing layout").selectOption("preview");
+    await expect(page.locator('[data-source-pane="preview"]')).toBeVisible();
     await expect(page.locator("[data-source-preview]")).toContainText("The earlier ending");
+    if (usesTabs) await page.getByRole("tab", { name: "Edit", exact: true }).click();
+    else await page.getByLabel("Writing layout").selectOption("write");
+    await expect(page.locator(SURFACE)).toBeVisible();
     await page.locator("[data-source-save]").click();
     await expect(page.locator("[data-source-conflict]")).toBeVisible();
     await page.locator("[data-source-conflict]").scrollIntoViewIfNeeded();
