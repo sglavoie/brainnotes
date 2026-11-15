@@ -28,9 +28,14 @@ remain unchanged.
 Node fills encode folders, not note types or link direction. The legend beside the
 canvas names every folder in the displayed view (including collapsed groups), with
 “Vault root” for an empty folder. It uses the nodes' existing colours and refreshes
-with the native note list when displayed elements change. Folder hashes share six
-colours, so the legend retains colliding entries and explicitly says colours may
-repeat. Folder names are text, never markup.
+with the native note list when displayed elements change. There are six colours.
+A folder asks for the one its name hashes to and takes the next free one when
+another folder already holds it (`colorForFolder`, a page-lifetime table), so
+folders share a colour only once there are more than six; the table lasting for
+the page is what keeps a folder's colour still while the view is filtered,
+isolated or collapsed. The legend keeps every folder name and says colours may
+repeat only when two displayed folders actually share one. Folder names are
+text, never markup.
 
 The side list stays a native select. Its checked option uses accent-subtle text
 and background tokens in both themes; the same-colour gradient keeps native
