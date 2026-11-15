@@ -1,7 +1,12 @@
 import { test, expect } from "./fixture.js";
 import AxeBuilder from "@axe-core/playwright";
 
-async function accessible(page) {
+async function accessible(page, animatedRegion) {
+  // Audit the presented colors, after both the dialog and its loaded passages
+  // finish fading in. The nodes can be ready before their animations settle.
+  if (animatedRegion) await animatedRegion.evaluate(async (element) => {
+    await Promise.all(element.getAnimations({ subtree: true }).map((animation) => animation.finished));
+  });
   const result = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
   expect(result.violations, JSON.stringify(result.violations, null, 2)).toEqual([]);
 }
@@ -68,7 +73,7 @@ test("connection opens two passages and creates a recoverable draft with both so
   const dialog = page.getByRole("dialog", { name: "Where these ideas meet" });
   await expect(dialog.locator(".connection-note h3")).toHaveCount(2);
   await expect(dialog.locator(".connection-note").first()).toContainText("Alpha");
-  await accessible(page);
+  await accessible(page, dialog);
   await dialog.getByRole("button", { name: "Write a thought about this connection" }).click();
   const body = dialog.getByLabel("Your thought", { exact: true });
   await expect(body).toHaveValue("");
@@ -84,7 +89,7 @@ test("connection opens two passages and creates a recoverable draft with both so
   await page.getByRole("button", { name: "Save thought", exact: true }).click();
   await expect(dialog.locator(".connection-saved")).toContainText("Practice becomes useful");
   await expect(dialog.locator(".connection-note h3")).toHaveCount(2);
-  await accessible(page);
+  await accessible(page, dialog);
   await dialog.getByRole("link", { name: "Open note", exact: true }).click();
   await expect(page.locator("[data-note-body]")).toContainText("Practice becomes useful");
   const sourceTitles = sources.match(/\[\[([^\]]+)\]\]/g).map((link) => link.slice(2, -2));
