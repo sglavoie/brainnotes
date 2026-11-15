@@ -35,6 +35,8 @@ for (const width of [1280, 390]) {
     expect(Math.abs(await page.evaluate(() => scrollY) - selected.y)).toBeLessThan(2);
     await page.getByRole("button", { name: "Write a thought", exact: true }).click();
     await expect(thought).toHaveValue(`A better next observation ${width}. Keep the explanation provisional.`);
+    // Audit the presented colors after the composer's opacity entrance settles.
+    await dialog.evaluate(async (element) => { await Promise.all(element.getAnimations({ subtree: true }).map((animation) => animation.finished)); });
     const audit = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
     expect(audit.violations).toEqual([]);
     await dialog.getByRole("button", { name: "Save thought…", exact: true }).click();

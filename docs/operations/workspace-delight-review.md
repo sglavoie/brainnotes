@@ -57,10 +57,23 @@ panes. It also awaits the demo server's exit during cleanup.
   the revised recording passed and those frames were inspected again.
 - Browser-test lint and `git diff --check` passed.
 
-Full CI, the full browser suite (which already includes the visual project),
-the conditional race check, and the final clean-tree check remain the ASL
-runner's authoritative gates. This report does not claim those final gates ran
-inside the worker turn.
+The runner's first authoritative verification passed CI and the conditional race
+check. The full browser suite (including visuals) passed 437 of 439 cases and
+exposed two test assumptions: the first pinned note can have an empty body after
+the editor journey, and the passage composer can still be animating when its
+contrast audit starts. The Pinned test now checks the exact row destination and
+heading, and the passage audit awaits the dialog subtree's animations without
+disabling motion or skipping any accessibility rules.
+
+Focused repair validation passed all four selected cases: the editor journey
+that leaves the empty pinned note, the Pinned/Threads keyboard flow, and passage
+creation with its full accessibility audit at 1280 and 390 px. Browser-test lint
+also passed. No application asset or baseline changed during this repair.
+
+The clean-tree check also found the session changes uncommitted; the runner
+subsequently retained them in checkpoint `c18132e`. The repair is committed before
+handoff so this check can run on a clean tree. Final full-suite verification
+remains with the runner.
 
 ## Visual and manual evidence
 

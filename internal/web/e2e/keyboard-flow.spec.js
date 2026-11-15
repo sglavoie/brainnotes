@@ -137,8 +137,12 @@ test("Pinned and Threads use their existing row links", async ({ page }) => {
   const pinned = page.locator(".pinned-note-title");
   await page.keyboard.press("j");
   await expect(pinned.first()).toBeFocused();
+  const destination = new URL(await pinned.first().getAttribute("href"), page.url()).href;
+  const title = await pinned.first().innerText();
   await page.keyboard.press("o");
-  await expect(page.locator("[data-note-body]")).toBeVisible();
+  // Other journeys can pin an empty note; opening its exact row is the contract.
+  await expect(page).toHaveURL(destination);
+  await expect(page.getByRole("heading", { level: 1, name: title, exact: true })).toBeVisible();
   await page.goto("/threads");
   const details = page.locator("details").filter({ has: page.locator("[data-new-note]") });
   await details.locator("summary").click();
