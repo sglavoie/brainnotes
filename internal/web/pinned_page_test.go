@@ -89,7 +89,8 @@ func TestPinnedPage_AppearsInSiteNav(t *testing.T) {
 			t.Fatalf("GET %s: %v", path, err)
 		}
 		body := readResponseBody(t, resp)
-		if !strings.Contains(body, `<a href="/pinned">`) && !strings.Contains(body, `<a href="/pinned" aria-current="page">`) {
+		link := `<a href="/pinned" aria-keyshortcuts="g p" title="Go to Pinned (g then p)"`
+		if !strings.Contains(body, link+`>Pinned</a>`) && !strings.Contains(body, link+` aria-current="page">Pinned</a>`) {
 			t.Fatalf("%s is missing the Pinned navigation link", path)
 		}
 	}

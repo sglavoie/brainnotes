@@ -147,7 +147,7 @@ var graphPageMarkup = []struct{ what, markup string }{
 	{"graph degree detail", `id="graph-hover-degree"`},
 	{"graph issue detail", `id="graph-hover-issues"`},
 	{"initially disabled graph open note link", `aria-disabled="true"`},
-	{"focusable graph canvas", `id="graph-canvas" aria-label="Notes graph" tabindex="0"`},
+	{"focusable graph canvas", `id="graph-canvas" aria-keyshortcuts="ArrowUp ArrowDown ArrowLeft ArrowRight Home End Enter Space Escape" aria-label="Notes graph" tabindex="0" role="application" aria-describedby="graph-keyboard-help"`},
 	{"app.js asset", `/static/app.js`},
 }
 
