@@ -43,7 +43,7 @@ describe("graph thinning controls", () => {
     // delta has no edges, so the degree floor takes it; the three survivors all
     // sit in Notes and fold into one aggregate.
     expect(statusText()).toContain(
-      "Showing 1 of 4 nodes — degree ≥ 1, folders collapsed to depth 1."
+      "Showing 1 note or folder group from 4 notes — degree ≥ 1, folders collapsed to depth 1."
     );
 
     moveSlider("graph-mindegree-input", "0");
@@ -68,7 +68,7 @@ describe("graph thinning controls", () => {
     expect(control<HTMLInputElement>("graph-collapse-input").value).toBe("1");
     expect(control("graph-collapse-value").textContent).toBe("depth 1");
     expect(statusText()).toContain(
-      'Showing 1 of 6 nodes — isolated 1 hop from "Hub", degree ≥ 2, folders collapsed to depth 1.'
+      'Showing 1 note or folder group from 6 notes — isolated 1 hop from "Hub", degree ≥ 2, folders collapsed to depth 1.'
     );
   });
 

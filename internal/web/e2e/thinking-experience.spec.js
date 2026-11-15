@@ -116,3 +116,77 @@ test("graph selection reveals a passage and a connection without leaving the gra
   await page.keyboard.press("Escape");
   await expect(page).toHaveURL(/\/graph/);
 });
+
+test("switcher keeps query actions selected as notes arrive and opens Library with the original query", async ({ page }) => {
+  await page.goto("/n/Survey");
+  const launch = page.locator("[data-switcher-launch]");
+  await launch.click();
+  const dialog = page.locator(".command-switcher");
+  const close = dialog.getByRole("button", { name: "Close search", exact: true });
+  await expect(close).toHaveText("");
+  await expect(dialog.locator("header")).toContainText("Find your next thought");
+  await expect(dialog.locator("footer kbd")).toHaveText(["Enter", "Alt Enter", "Escape"]);
+  await expect(dialog.getByRole("button", { name: "Keep beside", exact: true })).toBeHidden();
+  await close.click();
+  await expect(launch).toBeFocused();
+  await launch.click();
+
+  let release;
+  const pending = new Promise((resolve) => { release = resolve; });
+  await page.route("**/api/search?**", async (route) => {
+    await pending;
+    await route.fulfill({ json: [{ key: "alpha", title: "Alpha", path: "/n/alpha" }] });
+  });
+  const input = page.locator("#switcher-input");
+  const query = "Alpha & Café";
+  await input.fill(query);
+  await input.press("ArrowUp");
+  const library = dialog.getByRole("option", { name: /^Search in Library/ });
+  await expect(library).toHaveAttribute("aria-selected", "true");
+  release();
+  await expect(dialog.getByRole("status")).toHaveText("1 result");
+  await expect(dialog.getByRole("option")).toHaveCount(3);
+  await expect(library).toHaveAttribute("aria-selected", "true");
+  await input.press("Alt+Enter");
+  await expect(dialog).toBeVisible();
+  await expect(page.getByRole("complementary", { name: "Reference note" })).toHaveCount(0);
+  await input.press("ArrowDown");
+  await expect(dialog.getByRole("option").first()).toHaveAttribute("aria-selected", "true");
+  await input.press("ArrowUp");
+  await input.press("Enter");
+  await expect(page).toHaveURL(/\/library\?/);
+  expect(new URL(page.url()).searchParams.get("q")).toBe(query);
+});
+
+test("switcher keeps a note beside writing with Alt Enter", async ({ page }) => {
+  await page.goto("/n/Survey");
+  await page.locator("[data-switcher-launch]").click();
+  const input = page.locator("#switcher-input");
+  await input.fill("Beta");
+  await expect(page.locator(".command-switcher [role=status]")).toHaveText(/^[1-9]\d* results?$/);
+  await expect(page.getByRole("button", { name: "Keep beside", exact: true })).toBeHidden();
+  await input.press("Alt+Enter");
+  await expect(page.locator(".command-switcher")).toBeHidden();
+  await expect(page.getByRole("complementary", { name: "Reference note" })).toContainText("Beta");
+  await expect(page).toHaveURL(/\/n\/Survey/);
+});
+
+test.describe("touch switcher", () => {
+  test.use({ hasTouch: true, viewport: { width: 390, height: 844 } });
+
+  test("keeps a selected note beside with a touch button", async ({ page }) => {
+    await page.goto("/n/Survey");
+    await page.locator("[data-switcher-launch]").tap();
+    const input = page.locator("#switcher-input");
+    await input.fill("Beta");
+    await expect(page.locator(".command-switcher [role=status]")).toHaveText(/^[1-9]\d* results?$/);
+    await expect(page.locator(".switcher-keys")).toBeHidden();
+    const beside = page.getByRole("button", { name: "Keep beside", exact: true });
+    await expect(beside).toBeVisible();
+    await input.press("ArrowUp");
+    await expect(beside).toBeHidden();
+    await input.press("ArrowDown");
+    await beside.tap();
+    await expect(page.getByRole("complementary", { name: "Reference note" })).toContainText("Beta");
+  });
+});

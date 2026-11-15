@@ -8799,6 +8799,12 @@ details[open] > summary::before { transform: rotate(45deg); }
   button:disabled { color: GrayText; border-color: GrayText; opacity: 1; }
   [aria-selected="true"], [aria-current] { outline: 2px solid Highlight; outline-offset: 2px; }
 }
+
+
+.bn-button.bn-close {
+  display: inline-flex; align-items: center; justify-content: center;
+  flex: 0 0 auto; width: 2.75rem; min-height: 2.75rem; padding: 0;
+}
 /* internal/web/static_src/css/workspace.css */
 .workspace-navigation {
   display: flex;
@@ -9014,7 +9020,8 @@ details[open] > summary::before { transform: rotate(45deg); }
   border: 1px solid var(--bn-border); border-radius: 0.85rem;
   background: var(--bn-surface); color: var(--bn-text); box-shadow: var(--bn-shadow-popover);
 }
-.note-peek h2 { font-size: 1.1rem; line-height: 1.35; overflow-wrap: anywhere; }
+.note-peek > .bn-close { position: absolute; top: 0.5rem; right: 0.5rem; }
+.note-peek h2 { padding-right: 2.75rem; font-size: 1.1rem; line-height: 1.35; overflow-wrap: anywhere; }
 .note-peek p { line-height: 1.65; color: var(--bn-text-subtle); overflow-wrap: anywhere; }
 .note-peek > a { display: inline-block; margin-right: 1rem; padding-block: 0.6rem; }
 .note-peek-trigger {
@@ -9165,7 +9172,7 @@ div.note-peek-anchor > .note-peek-trigger { position: absolute; right: 0; top: 0
 .has-reference .note-layout { display: block; max-width: 48rem; margin-inline: auto; }
 .has-reference .note-meta-sidebar, .has-reference .note-toc-sidebar { display: none; }
 .has-reference .note-main { padding-inline: 1.5rem; }
-.note-peek > button { margin: 0.3rem 0.4rem 0 0; }
+.note-peek > button:not(.bn-close) { margin: 0.3rem 0.4rem 0 0; }
 .switcher-launch { display: inline-flex; align-items: center; gap: 0.4rem; border: 1px solid var(--bn-border); color: var(--bn-muted); background: transparent; cursor: pointer; }
 .switcher-launch > span:first-child { font-size: 1.3rem; line-height: 1; }
 .switcher-shortcut { font-size: 0.75rem; }
@@ -9192,11 +9199,21 @@ div.note-peek-anchor > .note-peek-trigger { position: absolute; right: 0; top: 0
   .command-switcher[open], .side-reference:not([hidden]) { animation: desk-enter 150ms ease-out; }
 }
 @media print { .side-reference, .connection-explorer, .command-switcher { display: none !important; } .has-reference { padding: 0; } }
+
+
+.command-switcher > header { display: flex; align-items: start; justify-content: space-between; gap: 1rem; }
+#switcher-results .switcher-query-action { color: var(--bn-accent); }
+#switcher-results .switcher-query-action:not(.switcher-query-action + .switcher-query-action) { border-top: 1px solid var(--bn-border); margin-top: 0.5rem; }
+.switcher-keys { margin: 0; color: var(--bn-muted); font-size: 0.8rem; }
+.switcher-beside { display: none; }
+@media (pointer: coarse) {
+  .switcher-keys { display: none; }
+  .switcher-beside:not([hidden]) { display: inline-flex; }
+}
 /* internal/web/static_src/css/writing-desk.css */
 /* Shared writing and reading presentation; responsive parts remain last. */
 .switcher-shortcut kbd { margin-left: 0.45rem; font: inherit; font-size: 0.7rem; color: var(--bn-text-subtle); border: 1px solid var(--bn-border); border-radius: 0.25rem; padding: 0.1rem 0.25rem; }
 .switcher-excerpt { display: block; font-size: 0.85rem; line-height: 1.5; color: var(--bn-muted); margin-top: 0.3rem; }
-.switcher-beside { margin-right: 0.5rem; }
 :is(.command-switcher, .connection-explorer) mark { color: var(--bn-accent-subtle-text); background: var(--bn-accent-subtle-bg); border-radius: 0.15rem; font-weight: 600; }
 #switcher-results [role='option'] > span { min-width: 0; }
 .capture-destination { position: relative; font-size: 0.8rem; color: var(--bn-muted); }
@@ -9283,10 +9300,6 @@ div.note-peek-anchor > .note-peek-trigger { position: absolute; right: 0; top: 0
   .side-reference:not([hidden]) { animation-name: reference-rise; }
   @keyframes reference-rise { from { transform: translateY(20px); } to { transform: translateY(0); } }
 }
-
-.switcher-next-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem; }
-.switcher-next-actions:empty { display: none; }
-.switcher-next-actions a { overflow-wrap: anywhere; max-width: 100%; white-space: normal; }
 /* internal/web/static_src/css/continuity.css */
 /* Keep the content close to the action that led to it. */
 .property-summary { display: flex; flex-wrap: wrap; gap: 0.4rem 1.5rem; margin: 0; font-size: 0.85rem; }

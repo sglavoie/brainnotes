@@ -48,3 +48,12 @@ export const searchEntries = async (query: string, signal: AbortSignal): Promise
   if (!response.ok) throw new Error("Search unavailable. Try again or open Library.");
   return normalizeSearchResults(await response.json()).map((note) => ({ label: note.title || note.key, detail: note.folder || "Note", excerpt: searchExcerptText(note.snippet), path: searchResultPath(note) }));
 };
+
+
+// Query actions share the result selection model but are not matching results.
+export const queryEntries = (query: string): SwitcherEntry[] => {
+  if (!query) return [];
+  const library = { label: "Search in Library", detail: "Action", path: `/library?${new URLSearchParams({ q: query })}` };
+  if (document.documentElement.dataset.readOnly === "true") return [library];
+  return [{ label: `Create “${query}”`, detail: "Action", path: `/new?${new URLSearchParams({ title: query })}` }, library];
+};

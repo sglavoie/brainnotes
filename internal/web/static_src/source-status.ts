@@ -1,7 +1,7 @@
 import { setStatusText, statusClassNames, type StatusKind } from "./status";
 
-// idle marks a line that says nothing worth room on a narrow toolbar ("Ready to
-// edit.", "No unsaved changes."). It is passed by the caller rather than read
+// idle marks routine feedback such as "No unsaved changes." that needs no room
+// on a narrow toolbar. It is passed by the caller rather than read
 // from the words, so rewording a message cannot change what is shown.
 export const setSourceStatus = (
   element: HTMLElement | null,

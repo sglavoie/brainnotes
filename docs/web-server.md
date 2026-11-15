@@ -390,7 +390,9 @@ editing the Markdown. Printing retains a single title and the note body.
 
 Hover deliberately over a note link to preview an excerpt. The eye button also
 opens the preview by touch or keyboard; **Alt + Down** works on a focused link.
-**Escape** closes it, and **Open note** preserves the originating Library search.
+**Escape** or the corner close icon (**Close preview**) closes it and returns
+focus to the control that opened it. Hover previews close when the pointer leaves,
+unless focus is inside the preview. **Open note** preserves the originating Library search.
 Previews are available in note bodies, backlinks, related notes, and Library
 results. They do not record an open or send content to an agent.
 
@@ -419,7 +421,7 @@ including after a reload. This action is available on local and hosted writable
 servers. Ordinary reading loads the composer only when you select a passage.
 
 Confirmed captures briefly show **Captured ✓** on the button, and pinning marks
-the control in place. The editor reserves a status line for save feedback.
+the control in place. The editor starts quietly and reserves its status line for changes, save feedback, and errors.
 Brief cards show a remembered section or the note's actual modification date
 when available; hover the date for the exact timestamp. Connection previews
 highlight the connecting reference, and a saved thought displays links back to
@@ -431,9 +433,12 @@ Use **Search** in the header or **Ctrl/⌘ + K** from any workspace to find note
 recently visited notes in this browser, saved views, and actions. Arrow keys choose a
 result, Enter opens it, and Escape returns focus to your writing. Search covers
 the vault independently of the current Library filters. With a query entered,
-**Create “…”** opens a reviewable creation form and **Search in Library** carries
-the text into Library. Creation is absent on read-only replicas; Keep beside
-appears only when the selected result is a note. The editor uses
+**Create “…”** and **Search in Library** are the last rows, reachable with the
+same arrow keys as results. Create opens a reviewable creation form; Search in
+Library carries the text into Library. Creation is absent on read-only replicas.
+The footer shows Enter, Alt Enter (keep beside), and Escape on devices with a
+fine pointer. On touch devices it offers **Keep beside** when a note is selected.
+The header's close icon is named **Close search** for assistive technology. The editor uses
 **Ctrl/⌘ + Alt + K** for Markdown links; **Ctrl/⌘ + Shift + K** still inserts a wikilink.
 
 **Explore connection** in the Brief, Related Notes, or selected graph note opens

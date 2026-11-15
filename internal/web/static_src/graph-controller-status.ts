@@ -1,5 +1,10 @@
 import { type GraphRuntime, findSourceNodeModel } from "./graph-controller-runtime";
+import type { GraphDisplayStats } from "./graph-controller-view";
 import { type StatusKind, setStatusText } from "./status";
+
+const displayCounts = (stats: GraphDisplayStats): string => stats.aggregateCount > 0
+  ? `Showing ${stats.displayedNodeCount} ${stats.displayedNodeCount === 1 ? "note or folder group" : "notes or folder groups"} from ${stats.sourceNodeCount} notes`
+  : `Showing ${stats.displayedNodeCount} of ${stats.sourceNodeCount} notes`;
 
 /**
  * The explicit account of what the display pipeline removed.
@@ -13,7 +18,7 @@ export const displayReductionSentence = (runtime: GraphRuntime): string => {
   if (!stats || stats.displayedNodeCount >= stats.sourceNodeCount) {
     return "";
   }
-  const counts = `Showing ${stats.displayedNodeCount} of ${stats.sourceNodeCount} nodes`;
+  const counts = displayCounts(stats);
   const reasons: string[] = [];
   if (stats.isolated) {
     const anchor = findSourceNodeModel(runtime, runtime.state.display.isolateID);

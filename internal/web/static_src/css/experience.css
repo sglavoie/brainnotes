@@ -25,7 +25,8 @@
   border: 1px solid var(--bn-border); border-radius: 0.85rem;
   background: var(--bn-surface); color: var(--bn-text); box-shadow: var(--bn-shadow-popover);
 }
-.note-peek h2 { font-size: 1.1rem; line-height: 1.35; overflow-wrap: anywhere; }
+.note-peek > .bn-close { position: absolute; top: 0.5rem; right: 0.5rem; }
+.note-peek h2 { padding-right: 2.75rem; font-size: 1.1rem; line-height: 1.35; overflow-wrap: anywhere; }
 .note-peek p { line-height: 1.65; color: var(--bn-text-subtle); overflow-wrap: anywhere; }
 .note-peek > a { display: inline-block; margin-right: 1rem; padding-block: 0.6rem; }
 .note-peek-trigger {

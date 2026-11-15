@@ -86,6 +86,10 @@ test("replica connection and reference previews offer only reading actions", asy
   await page.locator("[data-switcher-launch]").click();
   await expect(page.locator("#switcher-results")).not.toContainText("Create a note");
   await expect(page.locator("#switcher-results")).not.toContainText("Capture a thought");
+  await page.locator("#switcher-input").fill("An unwritten idea");
+  await expect(page.locator(".command-switcher [role=status]")).toContainText("No matches");
+  await expect(page.locator("#switcher-results [role=option]")).toHaveCount(1);
+  await expect(page.getByRole("option", { name: /^Search in Library/ })).toHaveAttribute("aria-selected", "true");
   await page.keyboard.press("Escape");
   await page.locator('[data-related-card="beta"] .connection-launch').click();
   await expect(page.locator(".connection-note h3")).toHaveCount(2);

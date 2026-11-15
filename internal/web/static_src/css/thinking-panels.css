@@ -18,7 +18,7 @@
 .has-reference .note-layout { display: block; max-width: 48rem; margin-inline: auto; }
 .has-reference .note-meta-sidebar, .has-reference .note-toc-sidebar { display: none; }
 .has-reference .note-main { padding-inline: 1.5rem; }
-.note-peek > button { margin: 0.3rem 0.4rem 0 0; }
+.note-peek > button:not(.bn-close) { margin: 0.3rem 0.4rem 0 0; }
 .switcher-launch { display: inline-flex; align-items: center; gap: 0.4rem; border: 1px solid var(--bn-border); color: var(--bn-muted); background: transparent; cursor: pointer; }
 .switcher-launch > span:first-child { font-size: 1.3rem; line-height: 1; }
 .switcher-shortcut { font-size: 0.75rem; }
@@ -45,3 +45,14 @@
   .command-switcher[open], .side-reference:not([hidden]) { animation: desk-enter 150ms ease-out; }
 }
 @media print { .side-reference, .connection-explorer, .command-switcher { display: none !important; } .has-reference { padding: 0; } }
+
+
+.command-switcher > header { display: flex; align-items: start; justify-content: space-between; gap: 1rem; }
+#switcher-results .switcher-query-action { color: var(--bn-accent); }
+#switcher-results .switcher-query-action:not(.switcher-query-action + .switcher-query-action) { border-top: 1px solid var(--bn-border); margin-top: 0.5rem; }
+.switcher-keys { margin: 0; color: var(--bn-muted); font-size: 0.8rem; }
+.switcher-beside { display: none; }
+@media (pointer: coarse) {
+  .switcher-keys { display: none; }
+  .switcher-beside:not([hidden]) { display: inline-flex; }
+}

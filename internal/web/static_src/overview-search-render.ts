@@ -253,7 +253,7 @@ const renderResultMetadata = (doc: Document, result: SearchResult): HTMLElement 
   meta.className = "overview-result-meta";
 
   const folder = doc.createElement("span");
-  folder.textContent = result.folder ? `Folder: ${result.folder}` : "Folder: /";
+  folder.textContent = result.folder ? `Folder: ${result.folder}` : "Vault root";
   meta.appendChild(folder);
   renderSearchModified(meta, result.modified);
 

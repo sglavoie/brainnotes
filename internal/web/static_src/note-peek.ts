@@ -1,3 +1,4 @@
+import { closeButton } from "./close-button";
 import { keepReference } from "./side-reference";
 import { readableExcerpt } from "./note-excerpt";
 import type { NoteReference } from "./note-reference";
@@ -11,7 +12,7 @@ class NotePeek {
   private readonly title = document.createElement("h2");
   private readonly excerpt = document.createElement("p");
   private readonly openLink = document.createElement("a");
-  private readonly closeButton = document.createElement("button");
+  private readonly closeButton = closeButton("Close preview", () => this.close(true));
   private active: HTMLAnchorElement | null = null;
   private returnTarget: HTMLElement | null = null;
   private request: AbortController | null = null;
@@ -29,10 +30,6 @@ class NotePeek {
     this.title.id = "note-peek-title";
     this.excerpt.setAttribute("role", "status");
     this.openLink.textContent = "Open note";
-    this.closeButton.type = "button";
-    this.closeButton.className = "bn-button";
-    this.closeButton.textContent = "Close preview";
-    this.closeButton.addEventListener("click", () => this.close(true));
     const keep = document.createElement("button");
     keep.type = "button";
     keep.className = "bn-button";

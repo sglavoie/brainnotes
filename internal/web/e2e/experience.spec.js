@@ -143,3 +143,44 @@ test("a dismissed hover preview cannot reappear when its request finishes", asyn
   await expect(page.locator("#note-peek")).toBeHidden();
   await expect(page.locator("#note-peek h2")).not.toHaveText("Late note");
 });
+
+test("preview corner close restores focus and hover leave respects a focused panel", async ({ page }) => {
+  await page.goto("/n/Alpha");
+  await expect(page.locator(".sync-line-review")).toBeVisible();
+  const link = page.locator('[data-note-body] a[href^="/n/"]').first();
+  const peek = page.locator("#note-peek");
+  const close = peek.getByRole("button", { name: "Close preview", exact: true });
+  await link.hover();
+  await expect(peek).toBeVisible();
+  await expect(close).toHaveText("");
+  await page.mouse.move(0, 0);
+  await expect(peek).toBeHidden();
+  await link.hover();
+  await expect(peek).toBeVisible();
+  await close.focus();
+  await page.mouse.move(0, 0);
+  // Wait beyond the deliberate hover-close delay and prove focus protects it.
+  await page.waitForTimeout(300);
+  await expect(peek).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(peek).toBeHidden();
+  await link.focus();
+  await link.press("Alt+ArrowDown");
+  await expect(close).toBeFocused();
+  await close.click();
+  await expect(peek).toBeHidden();
+  await expect(link).toBeFocused();
+});
+
+for (const width of [1280, 390]) {
+  test(`editor starts quietly at ${width} and reports edits`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 844 });
+    await page.goto("/edit?key=Writing");
+    const editor = page.locator(".cm-content");
+    await expect(editor).toContainText("The morning trail");
+    await expect(page.locator("[data-source-status]")).toHaveText("");
+    await editor.press("End");
+    await editor.press("Enter");
+    await expect(page.locator("[data-source-status]")).toHaveText("Unsaved changes.");
+  });
+}

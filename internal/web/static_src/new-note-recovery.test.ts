@@ -31,7 +31,9 @@ it("retains unsent details and a pending identity across reload, then clears the
   let page = mount(fetcher);
   page.title.value = "Kept"; page.folder.value = "Folder"; page.input();
   page.body.value = "[[Alpha]] ↔ [[Beta]]\n\nAn unfinished thought."; page.input();
+  expect(document.querySelector("[data-new-note-draft-status]")?.textContent).toBe("Draft kept in this tab.");
   page = mount(fetcher);
+  expect(document.querySelector("[data-new-note-draft-status]")?.textContent).toBe("Unfinished note restored in this tab.");
   expect(page.title.value).toBe("Kept");
   expect(page.folder.value).toBe("Folder");
   expect(page.body.value).toBe("[[Alpha]] ↔ [[Beta]]\n\nAn unfinished thought.");

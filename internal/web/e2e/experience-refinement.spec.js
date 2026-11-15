@@ -10,9 +10,9 @@ for (const width of [1280, 390]) {
     const search = page.locator('#switcher-input');
     await search.fill('An unwritten Café idea');
     await expect(page.locator('.command-switcher [role="status"]')).toContainText('No matches');
-    await expect(page.getByRole('button', { name: 'Keep beside · Alt + Enter' })).toBeHidden();
-    await expect(page.getByRole('link', { name: 'Search in Library', exact: true })).toHaveAttribute('href', '/library?q=An+unwritten+Caf%C3%A9+idea');
-    await page.getByRole('link', { name: 'Create “An unwritten Café idea”', exact: true }).click();
+    await expect(page.getByRole('button', { name: 'Keep beside', exact: true })).toBeHidden();
+    await expect(page.getByRole('option', { name: /^Search in Library/ })).toBeVisible();
+    await page.getByRole('option', { name: /^Create “An unwritten Café idea”/ }).click();
     await expect(page.getByLabel('Title', { exact: true })).toHaveValue('An unwritten Café idea');
     await expect(page.getByLabel('Your thought (optional)', { exact: true })).toBeFocused();
     await page.goto('/new');
@@ -20,7 +20,9 @@ for (const width of [1280, 390]) {
     await body.fill(`# A more inviting first sentence ${width}\n\nThere is room to think here.`);
     await expect(page.getByLabel('Title', { exact: true })).toHaveValue(`A more inviting first sentence ${width}`);
     expect((await body.boundingBox()).y).toBeLessThan((await page.getByLabel('Title', { exact: true }).boundingBox()).y);
+    await expect(page.locator('[data-new-note-draft-status]')).toHaveText('Draft kept in this tab.');
     await page.reload();
+    await expect(page.locator('[data-new-note-draft-status]')).toHaveText('Unfinished note restored in this tab.');
     await expect(body).toHaveValue(`# A more inviting first sentence ${width}\n\nThere is room to think here.`);
     await page.getByRole('button', { name: 'Create and write', exact: true }).click();
     await expect(page.locator('[data-source-save]')).toBeDisabled();

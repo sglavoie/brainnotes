@@ -29,7 +29,7 @@ export function graphVisuals(snapshot) {
       edges: [["alpha", "beta"], ["alpha", "field"], ["field", "writing"]].map(([source, target], index) => ({ data: { id: `edge-${index}`, source, target } })),
     } }));
     await page.goto("/graph");
-    await expect(page.locator("#graph-status")).toContainText("Loaded 4 nodes");
+    await expect(page.locator("#graph-status")).toContainText("4 notes");
     await expect(page.locator("[data-sync-line]")).toContainText("Review 5 incoming changes");
     const list = page.getByLabel("Notes and folders in this view");
     await list.selectOption("field");

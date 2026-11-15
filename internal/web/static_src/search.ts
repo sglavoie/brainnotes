@@ -23,7 +23,7 @@ export const searchResultTitle = (result: SearchResult): string =>
   result.title || result.key || "Untitled";
 
 export const searchResultFolderLabel = (result: SearchResult): string =>
-  result.folder ? `Folder: ${result.folder}` : "Folder: /";
+  result.folder ? `Folder: ${result.folder}` : "Vault root";
 
 export const nextSearchActiveIndex = (
   activeIndex: number,

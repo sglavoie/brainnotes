@@ -83,7 +83,7 @@ afterEach(resetGraphTest);
     expect(isolateButton.disabled).toBe(true);
     expect(canvas.classList.contains("is-node-hovered")).toBe(false);
     expect(displayParam("g_isolate")).toBe("alpha");
-    expect(statusText()).toContain('Showing 2 of 4 nodes — isolated 1 hop from "Alpha"');
+    expect(statusText()).toContain('Showing 2 of 4 notes — isolated 1 hop from "Alpha"');
 
     // The hidden node cannot be acted on either: the isolate control stays dead,
     // so clicking it cannot re-anchor the view onto gamma.
@@ -219,7 +219,7 @@ afterEach(resetGraphTest);
     expect(openNote.hasAttribute("href")).toBe(false);
     expect(isolateButton.disabled).toBe(true);
     expect(displayParam("g_isolate")).toBe("alpha");
-    expect(statusText()).toContain('Showing 2 of 4 nodes — isolated 1 hop from "Alpha"');
+    expect(statusText()).toContain('Showing 2 of 4 notes — isolated 1 hop from "Alpha"');
     expect(mountedNodeIDs()).toEqual(["alpha", "beta"]);
     expect(mountedEdgeIDs()).toEqual(["e1"]);
     expect(mountCount()).toBe(mountsBefore);

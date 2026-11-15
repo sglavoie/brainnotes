@@ -8,10 +8,10 @@ export const renderOverviewEmptyHelp = (root: HTMLElement): void => {
   const params = new URLSearchParams(window.location.search);
   const facets = hasActiveSharedFilters(params);
   const expression = readExprParam(params) !== "";
-  const constraints = [readPageQuery() ? "text" : "", facets ? "filters" : "", expression ? "expression" : ""]
+  const constraints = [readPageQuery() ? "search text" : "", facets ? "filters" : "", expression ? "expression" : ""]
     .filter(Boolean);
   const summary = document.createElement("span");
-  summary.textContent = `Searching with: ${constraints.join(", ")}.`;
+  summary.textContent = `Try changing your ${new Intl.ListFormat("en", { type: "conjunction" }).format(constraints)}.`;
   help.replaceChildren(summary);
   if (readPageQuery()) addLink(help, params, ["q"], "Remove search text");
   if (facets) addLink(help, params, sharedFilterParamKeys, "Remove filters");

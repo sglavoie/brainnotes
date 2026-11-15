@@ -177,7 +177,7 @@ const reportGraphLoaded = (
     }
     setStatus(
       runtime,
-      `Focusing ${state.matchIDs.size} of ${graphElements.nodes.length} nodes matching ${scopeLabel}.`
+      `Focusing ${state.matchIDs.size} of ${graphElements.nodes.length} notes matching ${scopeLabel}.`
     );
     return;
   }
@@ -189,14 +189,14 @@ const reportGraphLoaded = (
     }
     setStatus(
       runtime,
-      `Showing ${graphElements.nodes.length} nodes and ${graphElements.edges.length} edges for ${scopeLabel}.`
+      `Showing ${graphElements.nodes.length} notes and ${graphElements.edges.length} links for ${scopeLabel}.`
     );
     return;
   }
 
   setStatus(
     runtime,
-    `Loaded ${graphElements.nodes.length} nodes and ${graphElements.edges.length} edges.`
+    `${graphElements.nodes.length} notes and ${graphElements.edges.length} links.`
   );
 };
 

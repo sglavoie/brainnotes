@@ -1,7 +1,6 @@
 /* Shared writing and reading presentation; responsive parts remain last. */
 .switcher-shortcut kbd { margin-left: 0.45rem; font: inherit; font-size: 0.7rem; color: var(--bn-text-subtle); border: 1px solid var(--bn-border); border-radius: 0.25rem; padding: 0.1rem 0.25rem; }
 .switcher-excerpt { display: block; font-size: 0.85rem; line-height: 1.5; color: var(--bn-muted); margin-top: 0.3rem; }
-.switcher-beside { margin-right: 0.5rem; }
 :is(.command-switcher, .connection-explorer) mark { color: var(--bn-accent-subtle-text); background: var(--bn-accent-subtle-bg); border-radius: 0.15rem; font-weight: 600; }
 #switcher-results [role='option'] > span { min-width: 0; }
 .capture-destination { position: relative; font-size: 0.8rem; color: var(--bn-muted); }
@@ -88,7 +87,3 @@
   .side-reference:not([hidden]) { animation-name: reference-rise; }
   @keyframes reference-rise { from { transform: translateY(20px); } to { transform: translateY(0); } }
 }
-
-.switcher-next-actions { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem; }
-.switcher-next-actions:empty { display: none; }
-.switcher-next-actions a { overflow-wrap: anywhere; max-width: 100%; white-space: normal; }

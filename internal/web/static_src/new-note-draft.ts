@@ -31,7 +31,7 @@ export const newNoteDraft = (form: HTMLElement) => {
       if (!vault) return null;
       try {
         const draft = parseDraft(window.sessionStorage.getItem(key));
-        if (draft) report("Unfinished note creation restored in this tab.");
+        if (draft) report("Unfinished note restored in this tab.");
         return draft;
       } catch { report("Draft recovery is unavailable in this browser."); return null; }
     },
@@ -39,7 +39,7 @@ export const newNoteDraft = (form: HTMLElement) => {
       if (!vault) return;
       try {
         window.sessionStorage.setItem(key, JSON.stringify(draft));
-        report("Creation details kept in this tab.");
+        report("Draft kept in this tab.");
       } catch { report("The browser could not keep these details. Keep this page open until creation is confirmed."); }
     },
     clear: (): void => {

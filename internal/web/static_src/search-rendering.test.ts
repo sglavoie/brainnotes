@@ -443,3 +443,15 @@ it("shows the server's reason for a rejected Library query and hides Retry searc
   expect(status.classList.contains("is-error")).toBe(true);
   expect(document.querySelector<HTMLButtonElement>("[data-overview-search-retry]")!.hidden).toBe(true);
 });
+
+it("names the vault root in both result surfaces while preserving named folders", () => {
+  const result = searchResult({ folder: "" });
+  const option = renderSearchResultOption(document, result, 0, { activate: () => {} });
+  expect(option.querySelector(".search-result-folder")?.textContent).toBe("Vault root");
+  const list = document.createElement("ul");
+  renderOverviewSearchResult(list, result);
+  expect(list.querySelector(".overview-result-meta > span")?.textContent).toBe("Vault root");
+  list.replaceChildren();
+  renderOverviewSearchResult(list, searchResult({ folder: "Projects" }));
+  expect(list.querySelector(".overview-result-meta > span")?.textContent).toBe("Folder: Projects");
+});

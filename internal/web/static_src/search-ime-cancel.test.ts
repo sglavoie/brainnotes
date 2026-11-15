@@ -58,13 +58,13 @@ it("restores the settled graph status when a load is canceled", () => {
   vi.stubGlobal("fetch", vi.fn(() => new Promise(() => {})));
   vi.stubGlobal("cytoscape", () => ({}));
   const { runtime, status } = graphRuntime();
-  setStatus(runtime, "Loaded 3 nodes and 2 edges.");
+  setStatus(runtime, "3 notes and 2 links.");
   scheduleLoad(runtime, "new", 0);
   expect(status.textContent).toBe("Loading graph…");
   expect(status.classList.contains("is-loading")).toBe(true);
 
   cancelGraphLoad(runtime);
-  expect(status.textContent).toBe("Loaded 3 nodes and 2 edges.");
+  expect(status.textContent).toBe("3 notes and 2 links.");
   expect(status.classList.contains("is-loading")).toBe(false);
 });
 

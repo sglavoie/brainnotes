@@ -36,7 +36,7 @@ describe("loading", () => {
     expect(harness.surface().getValue()).toBe(LOADED);
     expect(harness.controller.dirty()).toBe(false);
     expect(harness.saveButton().disabled).toBe(true);
-    expect(harness.status()).toContain("Ready to edit");
+    expect(harness.status()).toBe("");
     expect(document.title).toBe("Edit Alpha - bn serve");
   });
 

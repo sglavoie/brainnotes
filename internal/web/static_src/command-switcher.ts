@@ -1,6 +1,7 @@
+import { closeButton } from "./close-button";
 import { keepReference } from "./side-reference";
 import { highlightedText } from "./text-highlight";
-import { recentEntries, rememberCurrentNote, savedViewEntries, searchEntries, workspaceEntries, type SwitcherEntry } from "./switcher-data";
+import { queryEntries, recentEntries, rememberCurrentNote, savedViewEntries, searchEntries, workspaceEntries, type SwitcherEntry } from "./switcher-data";
 
 export const initCommandSwitcher = (): void => {
   rememberCurrentNote();
@@ -23,7 +24,6 @@ class CommandSwitcher {
   private readonly input = document.createElement("input");
   private readonly list = document.createElement("div");
   private readonly status = document.createElement("p");
-  private readonly nextActions = document.createElement("div");
   private origin: HTMLElement | null = null;
   private entries: SwitcherEntry[] = [];
   private views: SwitcherEntry[] = [];
@@ -52,18 +52,21 @@ class CommandSwitcher {
     this.list.setAttribute("role", "listbox");
     this.list.setAttribute("aria-label", "Notes and actions");
     this.status.setAttribute("role", "status");
-    const close = document.createElement("button");
-    close.type = "button"; close.className = "bn-button"; close.textContent = "Close search";
-    close.addEventListener("click", () => this.dialog.close());
+    const header = document.createElement("header");
+    header.append(title, closeButton("Close search", () => this.dialog.close()));
     this.input.addEventListener("input", () => { this.selectionMoved = false; this.search(); });
     this.input.addEventListener("keydown", (event) => this.keydown(event));
     this.dialog.addEventListener("close", () => this.closed());
     const beside = document.createElement("button");
     beside.type = "button"; beside.className = "bn-button switcher-beside";
-    beside.textContent = "Keep beside · Alt + Enter";
+    beside.textContent = "Keep beside";
     beside.addEventListener("click", () => this.keepBeside());
-    this.nextActions.className = "switcher-next-actions";
-    this.dialog.append(title, label, this.input, this.list, this.status, this.nextActions, beside, close);
+    const footer = document.createElement("footer");
+    const keys = document.createElement("p");
+    keys.className = "switcher-keys";
+    keys.innerHTML = "<kbd>Enter</kbd> to open · <kbd>Alt Enter</kbd> to keep beside · <kbd>Escape</kbd> to close";
+    footer.append(keys, beside);
+    this.dialog.append(header, label, this.input, this.list, this.status, footer);
     document.body.append(this.dialog);
   }
 
@@ -97,10 +100,9 @@ class CommandSwitcher {
   private search(): void {
     this.request?.abort(); window.clearTimeout(this.timer);
     const query = this.input.value.trim().toLocaleLowerCase();
-    this.showNextActions();
     const local = [...recentEntries(), ...this.views, ...workspaceEntries()].filter((entry) => entry.label.toLocaleLowerCase().includes(query));
     this.render(local);
-    this.status.textContent = query ? "Searching notes…" : "↑ ↓ to choose · Enter to open · Esc to return";
+    if (query) this.status.textContent = "Searching notes…";
     if (!query) return;
     const request = new AbortController(); this.request = request;
     this.timer = window.setTimeout(() => {
@@ -108,7 +110,6 @@ class CommandSwitcher {
         if (request.signal.aborted) return;
         const paths = new Set(notes.map((entry) => entry.path?.toLocaleLowerCase()));
         this.render([...notes, ...local.filter((entry) => !entry.path || !paths.has(entry.path.toLocaleLowerCase()))]);
-        this.status.textContent = this.entries.length ? `${this.entries.length} ${this.entries.length === 1 ? "result" : "results"}` : "No matches. Try another search or use the actions below.";
       }).catch(() => {
         if (!request.signal.aborted) this.status.textContent = "Search unavailable. Try again or open Library.";
       });
@@ -116,12 +117,14 @@ class CommandSwitcher {
   }
 
   private render(entries: SwitcherEntry[]): void {
+    const results = [...entries, ...queryEntries(this.input.value.trim())];
     const previous = this.entries[this.active];
-    const selected = entries.findIndex((entry) => this.selectionMoved && previous && entry.path === previous.path && entry.label === previous.label);
-    this.entries = entries; this.active = Math.max(0, selected); this.list.replaceChildren();
-    entries.forEach((entry, index) => {
+    const selected = results.findIndex((entry) => this.selectionMoved && previous && entry.path === previous.path && entry.label === previous.label);
+    this.entries = results; this.active = Math.max(0, selected); this.list.replaceChildren();
+    results.forEach((entry, index) => {
       const option = document.createElement("div");
       option.id = `switcher-option-${index}`; option.setAttribute("role", "option");
+      if (index >= entries.length) option.className = "switcher-query-action";
       const label = document.createElement("span");
       const terms = this.input.value.trim().split(/\s+/);
       const name = document.createElement("span"); name.className = "switcher-result-title"; name.append(highlightedText(entry.label, terms)); label.append(name);
@@ -134,6 +137,7 @@ class CommandSwitcher {
       option.addEventListener("click", () => this.choose(index));
       this.list.append(option);
     });
+    this.status.textContent = entries.length ? `${entries.length} ${entries.length === 1 ? "result" : "results"}` : "No matches. Try another search or use the actions below.";
     this.highlight();
   }
 
@@ -143,21 +147,6 @@ class CommandSwitcher {
     Array.from(this.list.children).forEach((option, index) => option.setAttribute("aria-selected", String(index === this.active)));
     if (!this.entries.length) { this.input.removeAttribute("aria-activedescendant"); return; }
     this.input.setAttribute("aria-activedescendant", `switcher-option-${this.active}`);
-  }
-
-  private showNextActions(): void {
-    const query = this.input.value.trim();
-    this.nextActions.replaceChildren();
-    if (!query) return;
-    const library = document.createElement("a");
-    library.className = "bn-button"; library.textContent = "Search in Library";
-    library.href = `/library?${new URLSearchParams({ q: query })}`;
-    this.nextActions.append(library);
-    if (document.documentElement.dataset.readOnly === "true") return;
-    const create = document.createElement("a");
-    create.className = "bn-button"; create.textContent = `Create “${query}”`;
-    create.href = `/new?${new URLSearchParams({ title: query })}`;
-    this.nextActions.prepend(create);
   }
 
   private keydown(event: KeyboardEvent): void {

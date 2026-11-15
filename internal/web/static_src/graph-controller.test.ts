@@ -4,6 +4,8 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { dispatchFiltersChange, syncExprParam } from "./filters";
 import {
+  chainPayload,
+  statusText,
   flush,
   graphRequests,
   resetGraphTest,
@@ -88,4 +90,19 @@ describe("graph filter propagation", () => {
     expect(published).toEqual(["graph", "graph"]);
     expect(graphRequests(fetchMock)[2]).toBe("/api/graph.json?q=daily&q_mode=focus");
   });
+});
+
+it.each([
+  ["/graph", "4 notes and 2 links."],
+  ["/graph?q=Alpha", 'Showing 4 notes and 2 links for "Alpha".'],
+  ["/graph?tag=work", "Showing 4 notes and 2 links for the active filters."],
+  ["/graph?q=Alpha&tag=work", 'Showing 4 notes and 2 links for "Alpha" with the active filters.'],
+  ["/graph?q=Alpha&q_mode=focus", 'Focusing 1 of 4 notes matching "Alpha".'],
+])("reports note and link counts with their scope for %s", async (url, message) => {
+  startGraph(url, {
+    ...chainPayload,
+    nodes: chainPayload.nodes.map(({ data }) => ({ data: { ...data, matchesQuery: data.id === "alpha" } })),
+  });
+  await flush();
+  expect(statusText()).toBe(message);
 });

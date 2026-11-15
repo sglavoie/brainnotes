@@ -38,7 +38,7 @@ describe("graph display controls", () => {
     expect(displayParam("g_isolate")).toBe("alpha");
     expect(clearButton.disabled).toBe(false);
     // The reduction is stated outright rather than left for the user to notice.
-    expect(statusText()).toContain('Showing 2 of 4 nodes — isolated 1 hop from "Alpha"');
+    expect(statusText()).toContain('Showing 2 of 4 notes — isolated 1 hop from "Alpha"');
     // The radius is not a knob, so isolating writes one display param and no
     // retired companion alongside it.
     expect(displayParam("g_hops")).toBeNull();
@@ -61,7 +61,7 @@ describe("graph display controls", () => {
     expect(control<HTMLButtonElement>("graph-isolate-clear-button").disabled).toBe(false);
     expect(control<HTMLAnchorElement>("graph-open-note").getAttribute("href")).toBe("/n/beta");
     expect(control<HTMLElement>("graph-hover-title").textContent).toBe("Beta");
-    expect(statusText()).toContain('Showing 3 of 4 nodes — isolated 1 hop from "Beta"');
+    expect(statusText()).toContain('Showing 3 of 4 notes — isolated 1 hop from "Beta"');
   });
 
   it("clears an isolate anchor the loaded graph does not contain, and says so", async () => {
@@ -91,7 +91,7 @@ describe("graph legacy g_hops URLs", () => {
       // view: gamma sat inside the old radius and is not mounted.
       expect(mountedNodeIDs()).toEqual(["alpha", "beta"]);
       expect(mountedEdgeIDs()).toEqual(["e1"]);
-      expect(statusText()).toContain('Showing 2 of 4 nodes — isolated 1 hop from "Alpha"');
+      expect(statusText()).toContain('Showing 2 of 4 notes — isolated 1 hop from "Alpha"');
       expect(graphRequests(fetchMock)).toEqual(["/api/graph.json"]);
     });
   }

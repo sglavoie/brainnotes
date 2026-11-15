@@ -120,12 +120,12 @@ describe("the save line", () => {
 describe("restoring a draft", () => {
   // setValue is not an edit, so nothing but the restore itself can say the
   // restored text is unsaved.
-  it("replaces Ready to edit with Unsaved changes", async () => {
+  it("reports Unsaved changes after a quiet entry", async () => {
     const storage = memoryDraftStorage();
     seedResume(storage, { draftID: "tab-earlier", content: `${EDITED}mine\n` });
     const harness = mountWithDrafts({ storage, draftID: "tab-earlier" });
     await harness.controller.load();
-    expect(harness.status()).toBe("Ready to edit.");
+    expect(harness.status()).toBe("");
 
     harness.elements.recoveryRestore?.click();
 

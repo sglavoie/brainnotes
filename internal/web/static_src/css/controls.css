@@ -152,3 +152,9 @@ details[open] > summary::before { transform: rotate(45deg); }
   button:disabled { color: GrayText; border-color: GrayText; opacity: 1; }
   [aria-selected="true"], [aria-current] { outline: 2px solid Highlight; outline-offset: 2px; }
 }
+
+
+.bn-button.bn-close {
+  display: inline-flex; align-items: center; justify-content: center;
+  flex: 0 0 auto; width: 2.75rem; min-height: 2.75rem; padding: 0;
+}

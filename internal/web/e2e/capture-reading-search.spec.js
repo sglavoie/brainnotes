@@ -56,7 +56,7 @@ test("removing search text keeps filters and expression on mobile", async ({ pag
   await removeText.press("Enter");
   await expect(page.locator("#search-input")).toHaveValue("");
   await expect(page.locator("[data-query-bar-input]")).toHaveValue("tag:absent");
-  await expect(page.locator("[data-overview-empty-help]")).toContainText("Searching with: filters, expression.");
+  await expect(page.locator("[data-overview-empty-help]")).toContainText("Try changing your filters and expression.");
   await expect(removeText).toHaveCount(0);
   expect(new URL(page.url()).search).toBe("?tag=absent&expr=tag%3Aabsent&sort=title&limit=2");
 });

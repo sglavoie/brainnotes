@@ -315,7 +315,7 @@ const runLoad = async (
       ctx.drafts.keep();
     });
     ctx.adopt(loaded.content, loaded.revision, false);
-    ctx.setStatus("Ready to edit.", "", true);
+    ctx.setStatus("", "", true);
     ctx.preview.flush(loaded.content);
     ctx.drafts.present(kept, { kind: "loaded", revision: loaded.revision, content: loaded.content });
   } catch (error: unknown) {
@@ -399,7 +399,7 @@ const restoreDraft = (
   ctx.refreshSaveButton();
   ctx.preview.flush(offer.draft.content);
   // setValue is not an edit, so nothing else will say the restored text is
-  // unsaved; "Ready to edit." would otherwise stay over a dirty editor.
+  // unsaved; the idle status would otherwise stay over a dirty editor.
   refreshEditStatus(elements, state, ctx.setStatus);
 };
 

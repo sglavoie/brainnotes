@@ -167,7 +167,7 @@ keyboard; include a real-device check when qualifying a mobile release. The mobi
 Save reachable while writing. Property forms and Library selection controls
 should appear when they are useful, with keyboard access to each disclosure.
 On phones, Format, Find, and Save share the first editor toolbar row when they
-fit; routine “Ready to edit” text does not consume a row, while save outcomes
+fit. The editor starts without a readiness message at every width; save outcomes
 and errors remain visible below those controls.
 
 ## Mobile and accessibility polish
