@@ -4,6 +4,52 @@ const unfocus = (page) => page.evaluate(() => document.activeElement?.blur());
 const sheet = (page) => page.getByRole("dialog", { name: "Keyboard shortcuts" });
 const chord = async (page, key) => { await page.keyboard.press("g"); await page.keyboard.press(key); };
 
+for (const shortcut of ["Control+k", "Meta+k"]) {
+  test(`switcher shortcut opens over a visible note preview with ${shortcut}`, async ({ page }) => {
+    await page.setViewportSize({ width: 1280, height: 800 });
+    await page.goto("/library?q=Alpha");
+    const link = page.locator(".overview-result-link").first();
+    const preview = page.locator("#note-peek");
+    const switcher = page.getByRole("dialog", { name: "Find your next thought" });
+    // Exercise both the first bundle load and reuse of the loaded tools.
+    for (let opening = 0; opening < 2; opening++) {
+      await unfocus(page);
+      await page.mouse.move(0, 0);
+      await link.hover();
+      await expect(preview).toBeVisible();
+      await page.keyboard.press("?");
+      await expect(sheet(page)).toBeHidden();
+      await page.keyboard.press(shortcut);
+      await expect(switcher).toBeVisible();
+      await expect(switcher).toHaveAttribute("open", "");
+      await expect(page.locator("#switcher-input")).toBeFocused();
+      await page.keyboard.press("Escape");
+      await expect(switcher).toBeHidden();
+    }
+  });
+}
+
+test("native modal dialogs keep switcher and shortcut sheet requests closed", async ({ page }) => {
+  await page.goto("/n/Alpha");
+  await page.keyboard.press("ControlOrMeta+k");
+  await expect(page.locator("#switcher-input")).toBeFocused();
+  await page.keyboard.press("Escape");
+  await page.keyboard.press("ControlOrMeta+Shift+Space");
+  const capture = page.locator(".capture-dialog");
+  await expect(capture).toBeVisible();
+  await page.keyboard.press("ControlOrMeta+k");
+  await page.keyboard.press("?");
+  // Also exercise the loaded bundle's guard independently of the loader.
+  for (const action of ["switcher", "sheet"]) {
+    await page.evaluate((action) => document.dispatchEvent(new CustomEvent("bn:keyboard-tools", {
+      detail: { action, origin: document.activeElement },
+    })), action);
+    await expect(page.locator("#switcher-input")).toBeHidden();
+    await expect(sheet(page)).toBeHidden();
+    await expect(capture).toBeVisible();
+  }
+});
+
 for (const width of [1280, 390]) {
   test(`keyboard navigation, list selection and editing at ${width}`, async ({ page }) => {
     await page.setViewportSize({ width, height: 844 });

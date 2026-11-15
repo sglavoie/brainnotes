@@ -1,4 +1,3 @@
-import { dialogSelector } from "./keyboard-guard";
 import { loadWorkspaceScript } from "./workspace-script";
 
 export type KeyboardToolRequest = { action: "sheet" | "switcher"; origin: HTMLElement | null };
@@ -13,14 +12,15 @@ const showFailure = (origin: HTMLElement | null): void => {
 };
 
 export const openKeyboardTools = async (action: KeyboardToolRequest["action"]): Promise<void> => {
-  if (pending || document.querySelector(dialogSelector)) return;
+  // Nonmodal previews own single keys, but must not block explicit tool requests.
+  if (pending || document.querySelector("dialog[open]")) return;
   const origin = document.activeElement instanceof HTMLElement ? document.activeElement : null;
   pending = true;
   notice?.remove();
   try {
     await loadWorkspaceScript("keyboard-tools");
     // A different dialog or a move into another field while loading owns focus.
-    if (document.querySelector(dialogSelector) || document.activeElement !== origin) return;
+    if (document.querySelector("dialog[open]") || document.activeElement !== origin) return;
     document.dispatchEvent(new CustomEvent<KeyboardToolRequest>("bn:keyboard-tools", { detail: { action, origin } }));
   } catch {
     showFailure(origin);

@@ -496,6 +496,9 @@ controls remain inert in hosted and read-only modes. List highlights are actual
 link focus; native buttons, checkboxes and disclosures retain their keyboard
 behavior.
 
+Ctrl/⌘ K remains available while a note preview is visible. Close any open modal
+dialog before opening Search or the shortcut sheet.
+
 Control Space requests suggestions in a query expression. With a selected reading
 passage focused, Alt Enter opens **Write a thought**.
 
