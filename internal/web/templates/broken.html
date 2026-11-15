@@ -23,6 +23,10 @@
           {{if not readOnly}}<button type="button" class="bn-button capture-launch" data-capture-launch title="Capture a thought (Ctrl/⌘ + Shift + Space)" aria-keyshortcuts="Control+Shift+Space Meta+Shift+Space" aria-label="Capture"><span class="capture-launch-label">Capture</span><span class="capture-launch-icon" aria-hidden="true">✎</span></button>{{end}}
           {{template "themeControl" .}}
           {{template "headerSearch" .}}
+          <details class="source-editor-workspace">
+            <summary>Workspace</summary>
+            <div class="source-editor-workspace-content">{{template "shortcutControls" .}}</div>
+          </details>
         </div>
       </header>
       {{template "siteNav" ""}}

@@ -3,11 +3,14 @@
 A thread keeps a question, collected passages, commentary, and a draft in one
 ordinary Markdown note. Open **Threads** in the workspace navigation, choose
 **Start a thread**, and give it a title and question. The default folder is
-`Threads`; you can change it before creation.
+`Threads`; you can change it before creation. The form stays folded until you
+choose **Start a thread**. With single-key shortcuts on, **g then t** opens
+Threads; **j** / **k** focus a row and **Enter** or **o** resumes it in the editor.
 
 While reading a note, select a passage and choose **Add to thread**. Choose a
 thread, a group (**Evidence**, **Counterexamples**, or **Still unclear**), and
-optionally explain why the passage matters. The note's **Actions → Add to
+optionally explain why the passage matters. The passage toolbar follows a mouse
+selection and stays docked at the bottom on touch devices. The note's **Actions → Add to
 thread** collects the whole note as a source without quoting a passage. Source
 notes are not changed. To start another thread while collecting, use the link
 that opens Threads in a new tab, then reopen the collection dialog.

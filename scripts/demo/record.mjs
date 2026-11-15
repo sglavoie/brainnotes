@@ -85,12 +85,14 @@ async function startServer(world) {
       detached: true,
     },
   );
-  const stop = () => {
+  const stopped = new Promise((resolve) => server.once("exit", resolve));
+  const stop = async () => {
     try {
       process.kill(-server.pid, "SIGTERM");
     } catch {
       // Already gone.
     }
+    await stopped;
   };
   const baseURL = `http://127.0.0.1:${port}`;
   let exited = false;
@@ -103,7 +105,7 @@ async function startServer(world) {
     }
     await new Promise((resolve) => setTimeout(resolve, 250));
   }
-  stop();
+  await stop();
   throw new Error("bn serve did not become ready");
 }
 
@@ -183,7 +185,14 @@ async function recordWeb(world) {
     await t.type(page.locator("[data-capture-input]"), "Re-read [[Deep Work]] chapter on boredom");
     await shot("Quick capture, straight into the inbox", 2200);
     await t.click(page.locator("[data-capture-submit]"));
+    await page.locator("[data-capture-status].is-success").waitFor();
     await shot("Captured, without choosing a file", 1800);
+
+    await page.locator(".source-editor-workspace > summary").click();
+    await page.getByRole("button", { name: "Keyboard shortcuts", exact: true }).click();
+    await shot("Keyboard help, with a single-key off switch in Workspace", 3000);
+    await page.keyboard.press("Escape");
+    await page.locator(".source-editor-workspace > summary").click();
 
     // 2. Library: full-text search.
     await t.click(page.getByRole("link", { name: "Library", exact: true }).first());
@@ -206,6 +215,8 @@ async function recordWeb(world) {
       const range = document.createRange(); range.selectNodeContents(paragraph);
       getSelection().removeAllRanges(); getSelection().addRange(range);
     });
+    await page.getByRole("button", { name: "Write a thought", exact: true }).waitFor();
+    await shot("Select a passage; its writing tools stay beside it", 2400);
     await t.click(page.getByRole("button", { name: "Write a thought", exact: true }));
     await t.type(page.getByLabel("Your thought", { exact: true }), "Protect attention by making distractions harder to reach.");
     await shot("A passage becomes a thought, with its source attached", 3000);
@@ -222,9 +233,13 @@ async function recordWeb(world) {
     await t.click(surface);
     await page.keyboard.press("ControlOrMeta+End");
     await page.keyboard.type("\n\n## Practice\n\nTwo 90-minute blocks every morning, phone in another room.", { delay: 10 });
-    await shot("Edit the Markdown source with a live preview", 3000);
+    await page.getByLabel("Writing layout").selectOption("split");
+    await page.locator("[data-source-preview]").filter({ hasText: "Two 90-minute blocks" }).waitFor();
+    await surface.press("ControlOrMeta+End");
+    await page.locator("[data-source-preview] p").filter({ hasText: "Two 90-minute blocks" }).scrollIntoViewIfNeeded();
+    await shot("Write with a live preview and Save close at hand", 3000);
     await t.click(page.locator("[data-source-save]"));
-    await page.locator("[data-source-status]").filter({ hasText: /Saved/ }).waitFor();
+    await page.locator("[data-source-save-state]").filter({ hasText: "Saved just now" }).waitFor();
     await shot("Saved to the vault as a plain .md file", 2000);
 
     // 5. The link graph, filtered down to one neighbourhood.
@@ -234,7 +249,7 @@ async function recordWeb(world) {
     await shot("The link graph of the whole vault", 2800);
     await t.type(page.locator("#graph-filter-input"), "notes");
     await t.pause(1200);
-    await shot("Filtered to one neighbourhood", 3200);
+    await shot("Filter notes and their links", 3200);
 
     await context.close();
     const output = join(ASSETS_DIR, "demo-web.svg");
@@ -248,7 +263,7 @@ async function recordWeb(world) {
     throw error;
   } finally {
     await browser.close();
-    stop();
+    await stop();
   }
 }
 

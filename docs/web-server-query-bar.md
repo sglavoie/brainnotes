@@ -21,7 +21,9 @@ expression field to request field and value suggestions.
 Press `/` outside an editable field to focus the header search. On a property's
 page `/` focuses that page's note search instead, and the header search shows no
 shortcut hint there. The shortcut
-leaves editors and open dialogs alone. Escape closes the suggestions and returns
+leaves editors, Graph controls, and open dialogs alone. **Single-key shortcuts**
+in Workspace turns it off together with the navigation keys; the
+[shortcut sheet](web-server.md#keyboard-shortcuts) lists the available keys. Escape closes the suggestions and returns
 focus to the control you came from without scrolling, provided it is still
 available. Leaving search normally clears that return target.
 Search suggestions are links: middle-click

@@ -9,7 +9,7 @@ Use it alongside an editor such as VS Code or Neovim, or run `bn serve` to
 browse and edit your notes in the browser. Your notes stay ordinary Markdown
 files with YAML frontmatter; there is no database to export from.
 
-![The bn serve browser workspace: Daily Brief, quick capture, Library search, a rendered note, the in-browser editor, and the link graph](docs/assets/demo-web.svg)
+![The bn serve browser workspace: Daily Brief, keyboard help, Library search, passage writing, the editor, and the link graph](docs/assets/demo-web.svg)
 
 <details>
 <summary>The same vault from the terminal</summary>
@@ -89,6 +89,14 @@ sentence. Keep or change its suggested title, then select **Create and write**.
 Open **Library** and search for a word from that sentence to find the
 note you just saved. Your note is a Markdown file in the vault; you can also edit
 it with your usual text editor.
+
+Press **?** or open **Workspace → Keyboard shortcuts** to find your way around.
+Use **g then l** for Library and **e** to edit a note; turn **Single-key shortcuts**
+off in Workspace if you prefer. While reading, select a passage to write a thought
+with its source attached. In the editor, save feedback stays beside **Save**;
+**Focus** hides the surrounding controls until you press Escape or tap the title.
+You can also [install the workspace in its own window](docs/web-server.md#install-as-an-app)
+while keeping `bn serve` running.
 
 Capture a thought from the terminal without choosing a filename:
 

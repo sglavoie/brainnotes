@@ -138,8 +138,7 @@
     <div class="source-editor-workspace-content">
       <div class="site-header-tools">
         {{template "themeControl" .}}
-        <label><input type="checkbox" data-shortcuts-toggle checked> Single-key shortcuts</label>
-        <button type="button" class="bn-button" data-shortcuts-open aria-keyshortcuts="Shift+?">Keyboard shortcuts</button>
+        {{template "shortcutControls" .}}
       <div class="workspace-memory">
         <p class="workspace-memory-hint">Reading places, recent notes, and your side reference are remembered in this browser.</p>
         <button type="button" class="bn-button" data-forget-workspace>Forget remembered places</button>
@@ -175,4 +174,9 @@
     });
   }
 </script>
+{{end}}
+
+{{define "shortcutControls"}}
+<label><input type="checkbox" data-shortcuts-toggle checked> Single-key shortcuts</label>
+<button type="button" class="bn-button" data-shortcuts-open aria-keyshortcuts="Shift+?">Keyboard shortcuts</button>
 {{end}}

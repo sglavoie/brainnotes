@@ -153,3 +153,30 @@ test("Pinned and Threads use their existing row links", async ({ page }) => {
   await page.keyboard.press("o");
   await expect(page).toHaveURL(/\/edit\?key=/);
 });
+
+for (const width of [1280, 390]) for (const path of ["/n/Alpha", "/edit?key=Alpha", "/broken"]) {
+  test(`shortcut controls remain available on ${path} at ${width}`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 844 });
+    await page.goto(path);
+    const workspace = page.locator(".source-editor-workspace > summary");
+    await workspace.click();
+    const toggle = page.getByLabel("Single-key shortcuts", { exact: true });
+    await toggle.uncheck();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: test.info().outputPath("shortcut-controls.png") });
+    await page.getByRole("button", { name: "Keyboard shortcuts", exact: true }).click();
+    await expect(sheet(page)).toContainText("Alt Enter writes a thought");
+    await expect(sheet(page)).toContainText("Control Space requests query-expression suggestions");
+    await page.keyboard.press("Escape");
+    await expect(workspace).toBeFocused();
+    await unfocus(page);
+    await chord(page, "l");
+    await expect(page).toHaveURL(new RegExp(path.replace("?", "\\?") + "$"));
+    await workspace.click();
+    await toggle.check();
+    await workspace.click();
+    await unfocus(page);
+    await chord(page, "l");
+    await expect(page).toHaveURL(/\/library$/);
+  });
+}

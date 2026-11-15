@@ -474,7 +474,8 @@ Open **Workspace → Keyboard shortcuts** or press **?** for the complete sheet.
 character shortcuts, including `/`, across pages and tabs in this browser
 (`bn.shortcuts` in local storage). Modifier shortcuts and native control keys
 remain available. If storage is unavailable, the toggle still applies to the
-current page. The sheet remains available through its button.
+current page. The sheet remains available through its button, including in the editor and on
+Broken links. Leave Focus view first to reach Workspace.
 
 | Keys | Action |
 | --- | --- |
@@ -494,6 +495,9 @@ keys. Navigation activates the existing links and buttons, so unavailable
 controls remain inert in hosted and read-only modes. List highlights are actual
 link focus; native buttons, checkboxes and disclosures retain their keyboard
 behavior.
+
+Control Space requests suggestions in a query expression. With a selected reading
+passage focused, Alt Enter opens **Write a thought**.
 
 In the switcher, ↑ / ↓ select, Enter opens, Alt Enter keeps beside, and Escape
 closes. On a previewable note link, Alt ↓ opens its preview; Escape closes it.

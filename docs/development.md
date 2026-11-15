@@ -118,6 +118,12 @@ them. Explicitly updating all selected snapshots also refreshes changes within
 the pixel tolerance, which would otherwise leave stale baselines. CI compares on macOS to
 avoid cross-platform font differences. A weekly and manually runnable
 qualification workflow exercises Chromium, Firefox, and WebKit at both widths.
+A full `npm run test:e2e` already includes `visual-chromium`; do not run the same
+visual gate again just to repeat that evidence. Record every baseline changed
+against the branch base in the session or pull-request report, with explicit
+review of each image. Graph rest/selection/list states, the shortcut sheet and
+Workspace off switch, empty recovery states, and passage placement belong in
+that review alongside the ordinary pages.
 
 Reading and editor baselines use `internal/web/e2e/fixtures/Survey.md`: varied
 paragraphs, quotations, lists, a table, code, and long property values. Brief
@@ -144,7 +150,10 @@ rendered by `scripts/demo/render_terminal_svg.py`, which needs
 `scripts/demo/record.mjs` and run against a throwaway copy of the vault under
 the system temporary directory, never against `$BNOTES_VAULT`. Re-record after
 a visible UI change, look at the result, and commit the SVGs. A tour step that
-cannot find its element fails the run and saves a screenshot.
+cannot find its element fails the run and saves a screenshot. The web tour shows
+the shortcut sheet, the selection toolbar before passage writing, and the saved
+state beside Save. Inspect those frames in the generated SVG, including captions;
+a successful recorder run alone does not establish visual approval.
 
 ## Before submitting a change
 
@@ -205,6 +214,13 @@ use fine pointers at 1280 px and touch/coarse pointers at 390 px. Behavioral
 checks cover above/below placement, scrolling, oversized selections, keyboard
 access when no free gutter exists, exact saved bytes, and title naming at
 activation with cancellation and reduced motion.
+
+`keyboard-flow.spec.js` covers navigation chords, row focus and selection,
+editable/Graph/dialog guards, persistence of the off switch, deferred tool loading
+and retry, focus restoration, and the editor/Broken links shortcut controls.
+Hosted and read-only specs check capability boundaries; `accessibility.spec.js`
+audits the sheet at desktop, 320 px and 200% zoom. `keyboard-visuals.js` records
+the sheet and Workspace preference in both themes at 1280 and 390 px.
 
 `header-empty-states.spec.js` covers the shared incoming badge across every page
 at 1280 and 390 px, its accessible review name, empty status geometry, and

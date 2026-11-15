@@ -48,7 +48,7 @@ const listAction = (doc: Document, key: string): boolean => {
 const activate = (doc: Document, action: string, openSheet: () => void): boolean => {
   if (action === "?") { openSheet(); return true; }
   if (["j", "k", "Enter", "o", "x"].includes(action)) return listAction(doc, action);
-  const selector = action === "e" ? "[data-source-editor-launch]" : `.desktop-workspace-nav a[href="${action}"]`;
+  const selector = action === "e" ? "[data-source-editor-launch]" : `:is(.desktop-workspace-nav, .site-nav) a[href="${action}"]`;
   const control = doc.querySelector<HTMLElement>(selector);
   if (!control) return false;
   control.click();
