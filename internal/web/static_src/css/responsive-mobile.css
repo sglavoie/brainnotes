@@ -1,6 +1,5 @@
 
 @media (max-width: 640px) {
-  .source-editor-main > .sync-line:not(:empty) { margin-bottom: 0.2rem; font-size: 0.78rem; }
   /* The numbered sections already provide mobile navigation. The jump row
      repeats them and pushes the required Prepare action below the fold. */
   .synthesize-navigation { display: none; }

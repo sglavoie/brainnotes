@@ -1,6 +1,5 @@
-import { queryElement } from "./dom";
 import { fetchSyncStatus, type FetchLike, type SyncOutcome } from "./sync-requests";
-import { syncLineSummary, syncNeedsPerson } from "./sync-status-view";
+import { syncLineSummary } from "./sync-status-view";
 import type { SyncStatusResult } from "./api";
 import { bindSyncRefresh } from "./sync-line-refresh";
 
@@ -21,57 +20,39 @@ export type SyncLineDeps = {
   fetch?: FetchLike;
 };
 
-// refusalCodes are the answers that mean "this server does not offer this",
+// Refusal codes are the answers that mean "this server does not offer this",
 // rather than "this server failed to answer". A mode whose guard refuses the route
 // leaves the line empty: there is nothing wrong, and a nav that said so on every
 // page would be reporting a decision as a fault.
-const refusalCodes = ["forbidden", "not_found"];
-
 const renderLine = (line: HTMLElement, status: SyncStatusResult, doc: Document): void => {
-  // Keep routine synchronization details on the Sync page. This shared line
-  // interrupts every reading and writing surface only when a person can act.
-  if (!syncNeedsPerson(status)) {
-    line.textContent = "";
-    line.classList.remove("is-attention");
-    return;
-  }
+  if (!status.needs_person) return;
   line.classList.add("is-attention");
-  const hasReview = status.review_path !== "" && status.peer.conflicts > 0;
-  if (status.headline === "conflict" && status.peer.conflicts > 0) {
-    const count = status.peer.conflicts;
-    const label = `Review ${count} incoming ${count === 1 ? "change" : "changes"}`;
-    line.classList.add("is-count");
-    line.setAttribute("aria-label", label);
-    line.title = label;
-    const badge = doc.createElement(hasReview ? "a" : "span");
-    badge.className = "sync-line-count";
-    badge.textContent = `${count} incoming`;
-    if (badge instanceof HTMLAnchorElement) {
-      badge.href = status.review_path;
-      badge.classList.add("sync-line-review");
-      badge.setAttribute("aria-label", label);
-    }
-    line.append(badge);
-    return;
-  }
-  line.textContent = `Sync: ${syncLineSummary(status)}`;
-  if (!hasReview) return;
-  const review = doc.createElement("a");
-  review.className = "sync-line-review";
-  review.href = status.review_path;
-  review.textContent = "Review incoming changes";
-  review.title = syncLineSummary(status);
-  line.append(" ", review);
+  const count = status.peer.conflicts;
+  const incoming = status.headline === "conflict" && count > 0;
+  const hasReview = status.review_path && count > 0;
+  if (!incoming) line.textContent = `Sync: ${syncLineSummary(status)}`;
+  if (!incoming && !hasReview) return;
+
+  renderReview(line, status, doc, incoming ? count : 0);
 };
 
-const renderFailure = (line: HTMLElement, outcome: { code: string; message: string }): void => {
-  line.classList.remove("is-attention");
-  if (refusalCodes.includes(outcome.code)) {
-    line.textContent = "";
-    return;
+const renderReview = (line: HTMLElement, status: SyncStatusResult, doc: Document, count: number): void => {
+  const review = doc.createElement(status.review_path ? "a" : "span");
+  if (status.review_path) {
+    review.className = "sync-line-review";
+    (review as HTMLAnchorElement).href = status.review_path;
   }
-  line.textContent = `Synchronization status is unavailable. ${outcome.message}`;
-  line.classList.add("is-attention");
+  review.textContent = count ? `${count} incoming` : "Review incoming changes";
+  if (count) {
+    const label = `Review ${count} incoming change${count === 1 ? "" : "s"}`;
+    line.classList.add("is-count");
+    line.ariaLabel = line.title = review.ariaLabel = label;
+    review.classList.add("sync-line-count");
+  } else {
+    review.title = syncLineSummary(status);
+    line.append(" ");
+  }
+  line.append(review);
 };
 
 /**
@@ -87,11 +68,14 @@ export const renderSyncLine = (
   doc: Document
 ): void => {
   const next = line.cloneNode(false) as HTMLElement;
-  next.classList.remove("is-count");
-  next.removeAttribute("aria-label");
+  next.className = "sync-line";
+  next.ariaLabel = null;
   next.removeAttribute("title");
   if (!outcome.ok) {
-    renderFailure(next, outcome);
+    if (!["forbidden", "not_found"].includes(outcome.code)) {
+      next.textContent = `Synchronization status is unavailable. ${outcome.message}`;
+      next.classList.add("is-attention");
+    }
   } else {
     renderLine(next, outcome.result, doc);
   }
@@ -99,12 +83,10 @@ export const renderSyncLine = (
     return;
   }
   line.className = next.className;
-  for (const attribute of ["aria-label", "title"]) {
-    const value = next.getAttribute(attribute);
-    if (value === null) line.removeAttribute(attribute);
-    else line.setAttribute(attribute, value);
-  }
-  line.replaceChildren(...Array.from(next.childNodes));
+  line.ariaLabel = next.ariaLabel;
+  if (next.title) line.title = next.title;
+  else line.removeAttribute("title");
+  line.replaceChildren(...next.childNodes);
 };
 
 const bindings = new WeakMap<Document, () => void>();
@@ -112,10 +94,10 @@ const bindings = new WeakMap<Document, () => void>();
 export const initSyncLine = (deps: SyncLineDeps = {}): void => {
   const doc = deps.doc ?? document;
   bindings.get(doc)?.();
-  const fetcher = deps.fetch ?? ((input, init) => window.fetch(input, init));
-  const line = queryElement(doc, "[data-sync-line]", HTMLElement);
-  const endpoint = line?.getAttribute("data-sync-status-endpoint") ?? "";
-  if (!line || endpoint === "") {
+  const fetcher = deps.fetch ?? fetch;
+  const line = doc.querySelector<HTMLElement>("[data-sync-line]");
+  const endpoint = line?.dataset.syncStatusEndpoint;
+  if (!line || !endpoint) {
     return;
   }
   bindings.set(doc, bindSyncRefresh({

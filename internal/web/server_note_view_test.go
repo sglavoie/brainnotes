@@ -223,26 +223,31 @@ func TestNotePropertySummarySkipsOnlyMatchingScalarTitle(t *testing.T) {
 			if err := tpl.ExecuteTemplate(&out, "note", notePageData{Title: tc.title, Frontmatter: tc.properties}); err != nil {
 				t.Fatal(err)
 			}
-			_, tail, ok := strings.Cut(out.String(), `class="property-summary"`)
-			if !ok {
-				t.Fatal("missing summary")
-			}
-			summary, _, _ := strings.Cut(tail, "</dl>")
-			if got := strings.Count(summary, "<dt>"); got != len(tc.want) {
-				t.Fatalf("summary entries = %d, want %d: %s", got, len(tc.want), summary)
-			}
-			for _, key := range tc.want {
-				if !strings.Contains(summary, "<dt>"+key+"</dt>") {
-					t.Errorf("missing %s: %s", key, summary)
-				}
-			}
-			if tc.omitTitle && strings.Contains(summary, "<dt>title</dt>") {
-				t.Error("summary repeats heading")
-			}
-			_, all, _ := strings.Cut(out.String(), `class="frontmatter-rows"`)
-			if !strings.Contains(all, "<dt>title</dt>") {
-				t.Error("All properties lost title")
-			}
+			assertNotePropertySummary(t, out.String(), tc.want, tc.omitTitle)
 		})
+	}
+}
+
+func assertNotePropertySummary(t *testing.T, body string, want []string, omitTitle bool) {
+	t.Helper()
+	_, tail, ok := strings.Cut(body, `class="property-summary"`)
+	if !ok {
+		t.Fatal("missing summary")
+	}
+	summary, _, _ := strings.Cut(tail, "</dl>")
+	if got := strings.Count(summary, "<dt>"); got != len(want) {
+		t.Fatalf("summary entries = %d, want %d: %s", got, len(want), summary)
+	}
+	for _, key := range want {
+		if !strings.Contains(summary, "<dt>"+key+"</dt>") {
+			t.Errorf("missing %s: %s", key, summary)
+		}
+	}
+	if omitTitle && strings.Contains(summary, "<dt>title</dt>") {
+		t.Error("summary repeats heading")
+	}
+	_, all, _ := strings.Cut(body, `class="frontmatter-rows"`)
+	if !strings.Contains(all, "<dt>title</dt>") {
+		t.Error("All properties lost title")
 	}
 }

@@ -382,7 +382,6 @@
 
 /* Search and the current note lead; layout tuning stays close at hand. */
 .graph-main > .site-header { width: 100%; }
-.graph-main > .sync-line { margin: 0; }
 .graph-main .graph-controls { width: 100%; grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
 .graph-controls > .graph-filter { grid-column: 1; }
 .graph-controls > .graph-search-mode { grid-column: 2; }

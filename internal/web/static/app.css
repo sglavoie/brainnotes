@@ -5798,7 +5798,6 @@ code {
 
 /* Search and the current note lead; layout tuning stays close at hand. */
 .graph-main > .site-header { width: 100%; }
-.graph-main > .sync-line { margin: 0; }
 .graph-main .graph-controls { width: 100%; grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
 .graph-controls > .graph-filter { grid-column: 1; }
 .graph-controls > .graph-search-mode { grid-column: 2; }
@@ -8020,21 +8019,20 @@ code {
   padding-left: 0.5rem;
 }
 .sync-line.is-count { flex: 0 0 auto; }
-.sync-line-count {
+.sync-line-review { color: var(--bn-link); text-underline-offset: 0.12em; }
+.sync-line .sync-line-count {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
   min-height: 2.75rem;
   padding: 0 0.65rem;
   border: 1px solid var(--bn-accent-subtle-border);
   border-radius: 999px;
   background: var(--bn-accent-subtle-bg);
   color: var(--bn-accent-subtle-text);
+  text-decoration: none;
   white-space: nowrap;
   box-sizing: border-box;
 }
-.sync-line-review { color: var(--bn-link); text-underline-offset: 0.12em; }
-.sync-line-count.sync-line-review { color: var(--bn-accent-subtle-text); text-decoration: none; }
 .sync-line-review:hover { text-decoration: underline; }
 .sync-line-review:focus-visible { outline: 2px solid var(--bn-focus); outline-offset: 2px; }
 
@@ -8969,26 +8967,25 @@ details[open] > summary::before { transform: rotate(45deg); }
 
 /* First visits and empty searches offer one sentence and a clear next step. */
 .workspace-empty { display: grid; justify-items: start; gap: 0.75rem; padding-block: 0.75rem; }
-.workspace-empty[hidden] { display: none; }
 .workspace-empty > p { margin: 0; color: var(--bn-text-subtle); }
 .workspace-empty > details { width: 100%; }
 .workspace-empty > details > summary { width: fit-content; }
 .workspace-empty > details[open] > summary { margin-bottom: 0.75rem; }
 .empty-state-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
-.empty-state-actions[hidden] { display: none; }
 .overview-results:has([data-overview-empty-help]:not([hidden])) :is(.library-results-tools, .library-sort) { display: none; }
 .overview-results:has([data-overview-empty-help]:not([hidden])) .library-results-overview { margin-bottom: 0.75rem; }
 .property-summary:not(:has(> div)) { display: none; }
 
 /* Count badges share the navigation row even on the longer workspace titles. */
 @media (min-width: 1100px) {
-  .focused-workspace-header:has(.sync-line.is-count) .focused-workspace-tools { gap: 0.5rem; }
-  .focused-workspace-header:has(.sync-line.is-count) :is(.capture-launch-label, .switcher-shortcut, .new-note-label) { display: none; }
-  .focused-workspace-header:has(.sync-line.is-count) .new-note-symbol { display: inline; }
-  .focused-workspace-header:has(.sync-line.is-count) .capture-launch-icon { display: inline; }
+  .focused-workspace-tools:has(.is-count) { gap: 0.5rem; }
+  .focused-workspace-tools:has(.is-count) :is(.capture-launch-label, .switcher-shortcut, .new-note-label) { display: none; }
+  .focused-workspace-tools:has(.is-count) :is(.new-note-symbol, .capture-launch-icon) { display: inline; }
 }
 @media (max-width: 700px) {
   .source-editor-main > .site-header:has(.sync-line:not(:empty)) { flex-wrap: wrap; }
+  :is(.site-header, .focused-workspace-tools):has(.is-count) { gap: 0.25rem; }
+  .site-header:has(.is-count) .source-editor-workspace > summary { padding-inline: 0.25rem; }
 }
 /* internal/web/static_src/css/reading-comfort.css */
 .reading-controls { display: flex; flex-wrap: wrap; gap: 0.4rem; order: 1; }
@@ -9266,7 +9263,6 @@ div.note-peek-anchor > .note-peek-trigger { position: absolute; right: 0; top: 0
   .note-main > .site-header { grid-column: 1; grid-row: 2; justify-content: flex-start; }
   .note-main > .note-actions { grid-column: 2; grid-row: 2; margin: 0; padding: 0; border: 0; align-items: center; }
   .note-main > .note-layout { margin-top: 1.5rem; }
-  .note-main > .sync-line { margin-block: 0.4rem 0; }
 }
 @media (max-width: 700px) {
   .note-page .note-actions { margin-block: 0.25rem 0.5rem; padding-bottom: 0.25rem; }
@@ -9642,7 +9638,6 @@ div.note-peek-anchor > .note-peek-trigger { position: absolute; right: 0; top: 0
 /* internal/web/static_src/css/responsive-mobile.css */
 
 @media (max-width: 640px) {
-  .source-editor-main > .sync-line:not(:empty) { margin-bottom: 0.2rem; font-size: 0.78rem; }
   /* The numbered sections already provide mobile navigation. The jump row
      repeats them and pushes the required Prepare action below the fold. */
   .synthesize-navigation { display: none; }

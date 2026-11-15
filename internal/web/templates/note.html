@@ -62,21 +62,21 @@
     <a class="note-skip-link" href="#bn:note-body">Skip to note</a>
     <main class="note-main">
       <a href="/library" data-note-back-results hidden>Back to results</a>
-      {{if .Breadcrumbs}}
+      {{- if .Breadcrumbs -}}
         <nav class="note-breadcrumbs" aria-label="Breadcrumb">
           <ol>
-            {{range .Breadcrumbs}}
+            {{- range .Breadcrumbs -}}
               <li>
-                {{if .Current}}
+                {{- if .Current -}}
                   <span aria-current="page">{{.Label}}</span>
-                {{else}}
+                {{- else -}}
                   <a href="{{.Path}}">{{.Label}}</a>
-                {{end}}
+                {{- end -}}
               </li>
-            {{end}}
+            {{- end -}}
           </ol>
         </nav>
-      {{end}}
+      {{- end -}}
 
       <header class="site-header focused-workspace-header">
         <a class="reading-home" href="/">Brain Notes</a>
@@ -84,11 +84,11 @@
       </header>
 
       <div class="note-actions">
-        {{if not readOnly}}
+        {{- if not readOnly -}}
           <div class="note-action-group">
             <a class="source-editor-launch bn-button bn-primary" href="{{.EditSourcePath}}" data-source-editor-launch>Edit</a>
           </div>
-        {{end}}
+        {{- end -}}
         <div class="note-action-group" data-pin-note data-pin-key="{{.Key}}" data-pin-csrf="{{.CSRFToken}}" data-pin-state="{{if .Pinned}}pinned{{else}}unpinned{{end}}">
           <button type="button" class="bn-button pin-button" data-pin-button aria-pressed="{{if .Pinned}}true{{else}}false{{end}}">{{if .Pinned}}Unpin{{else}}Pin{{end}}</button>
           <p class="pin-note-status" data-pin-status role="status" aria-live="polite"></p>
@@ -116,12 +116,12 @@
               <button type="button" class="bn-button open-editor-button" data-open-button>Open in external editor</button>
               <p class="open-editor-status" data-open-status role="status" aria-live="polite"></p>
             </div>
-            {{if not readOnly}}
+            {{- if not readOnly -}}
               <div class="note-action-group">
                 <a class="source-editor-launch bn-button" href="/history?path={{.Copy.VaultPath}}&amp;path_match=exact" data-note-history>History for this note</a>
               </div>
-            {{end}}
-            {{if .Copy.Wikilink}}
+            {{- end -}}
+            {{- if .Copy.Wikilink -}}
               <div class="note-action-group note-copy-actions" data-copy-controls>
                 <button type="button" class="bn-button copy-button" data-copy-note-url data-copy-text="" data-copy-label="Note URL" hidden>Copy note URL</button>
                 <button type="button" class="bn-button copy-button" data-copy-text="{{.Copy.Wikilink}}" data-copy-label="Wikilink">Copy wikilink</button>
@@ -132,8 +132,8 @@
                 </div>
                 <p class="copy-status" data-copy-status role="status" aria-live="polite"></p>
               </div>
-            {{end}}
-            {{if not readOnly}}
+            {{- end -}}
+            {{- if not readOnly -}}
               <div class="note-action-group">
                 <button type="button" class="bn-button" data-thread-collect="{{.Key}}">Add to thread</button>
                 <a class="bn-button synthesize-launch" href="{{.SynthesizePath}}" data-synthesize-launch>Synthesize from this note</a>
@@ -142,7 +142,7 @@
                 <button type="button" class="bn-button trash-note-button" data-trash-button aria-label="Move this note to Trash">Trash</button>
                 <p class="trash-note-status" data-trash-status role="status" aria-live="polite"></p>
               </div>
-            {{end}}
+            {{- end -}}
           </div>
         </details>
       </div>
@@ -157,58 +157,58 @@
 
           <section class="panel{{if not .Backlinks}} note-links-empty{{end}}">
             <h2>Referenced in {{len .Backlinks}} {{if eq (len .Backlinks) 1}}note{{else}}notes{{end}}</h2>
-            {{if .Backlinks}}
+            {{- if .Backlinks -}}
               <ul class="link-list" data-note-context-links>
-                {{range .Backlinks}}
+                {{- range .Backlinks -}}
                   <li class="backlink-item">
                     <div class="backlink-summary">
                       <a href="{{.Path}}">{{.Title}}</a>
                     </div>
-                    {{if .Occurrences}}
+                    {{- if .Occurrences -}}
                       <details class="backlink-more">
                         <summary>Read {{.Count}} {{if eq .Count 1}}passage{{else}}passages{{end}}</summary>
                         {{template "backlinkOccurrences" .Occurrences}}
                       </details>
-                    {{end}}
+                    {{- end -}}
                   </li>
-                {{end}}
+                {{- end -}}
               </ul>
-            {{else}}
+            {{- else -}}
               <p>None.</p>
-            {{end}}
+            {{- end -}}
           </section>
 
           <section class="panel{{if not .Outgoing}} note-links-empty{{end}}">
             <h2>Outgoing links</h2>
-            {{if .Outgoing}}
+            {{- if .Outgoing -}}
               <ul class="link-list" data-note-context-links>
-                {{range .Outgoing}}
+                {{- range .Outgoing -}}
                   <li><a href="{{.Path}}">{{.Title}}</a></li>
-                {{end}}
+                {{- end -}}
               </ul>
-            {{else}}
+            {{- else -}}
               <p>None.</p>
-            {{end}}
+            {{- end -}}
           </section>
             </div>
           </details>
         </aside>
 
-        {{if .TOC}}
+        {{- if .TOC -}}
           <aside class="note-toc-sidebar" aria-label="Table of contents">
             <details class="note-sidebar-details" data-note-sidebar-details open>
               <summary>Contents</summary>
             <section class="panel note-toc" aria-labelledby="note-toc-heading">
               <h2 id="note-toc-heading">Contents</h2>
               <ol class="note-toc-list">
-                {{range .TOC}}
+                {{- range .TOC -}}
                   <li class="toc-level-{{.Level}}"><a href="{{.Path}}">{{.Text}}</a></li>
-                {{end}}
+                {{- end -}}
               </ol>
             </section>
             </details>
           </aside>
-        {{end}}
+        {{- end -}}
 
         <div class="note-content">
           <section class="note-print-body" aria-label="Note content">
@@ -218,31 +218,31 @@
               <h2>Properties</h2>
               <p class="frontmatter-edit-status" data-frontmatter-status role="status" aria-live="polite"></p>
             </div>
-            {{if .Frontmatter}}
+            {{- if .Frontmatter -}}
               <dl class="property-summary" aria-label="Property summary">
-                {{$hasFirst := false}}
-                {{range $property := .Frontmatter}}
-                  {{if and (eq $property.Key "title") (eq $property.Value.Kind "scalar") (eq $property.Value.Text $.Title)}}{{continue}}{{end}}
+                {{- $hasFirst := false -}}
+                {{- range $property := .Frontmatter -}}
+                  {{- if and (eq $property.Key "title") (eq $property.Value.Kind "scalar") (eq $property.Value.Text $.Title)}}{{continue}}{{end -}}
                   <div><dt>{{$property.Key}}</dt><dd>{{template "frontmatterValue" $property.Value}}</dd></div>
-                  {{if $hasFirst}}{{break}}{{end}}
-                  {{$hasFirst = true}}
-                {{end}}
+                  {{- if $hasFirst}}{{break}}{{end -}}
+                  {{- $hasFirst = true -}}
+                {{- end -}}
               </dl>
-            {{end}}
+            {{- end -}}
             <details class="note-properties" data-note-properties>
               <summary>All properties ({{len .Frontmatter}})</summary>
-            {{if .Frontmatter}}
+            {{- if .Frontmatter -}}
               <dl class="frontmatter-rows">
-                {{range .Frontmatter}}
+                {{- range .Frontmatter -}}
                   <div class="frontmatter-row">
                     <dt>{{.Key}}</dt>
                     <dd>
                       {{template "frontmatterValue" .Value}}
-                      {{if not readOnly}}
+                      {{- if not readOnly -}}
                       <details class="frontmatter-editor" name="property-editor">
                         <summary aria-label="Edit {{.Key}}">Edit</summary>
                       <div class="frontmatter-controls">
-                        {{if .CanSet}}
+                        {{- if .CanSet -}}
                           <form class="frontmatter-inline-form" data-frontmatter-set data-frontmatter-property="{{.Key}}" data-frontmatter-op="=">
                             <label>
                               <span>Value</span>
@@ -250,7 +250,7 @@
                             </label>
                             <button type="submit" class="bn-button frontmatter-button">Update property</button>
                           </form>
-                          {{if .IsList}}
+                          {{- if .IsList -}}
                             <form class="frontmatter-inline-form" data-frontmatter-set data-frontmatter-property="{{.Key}}" data-frontmatter-op="+=">
                               <label>
                                 <span>Add</span>
@@ -265,29 +265,29 @@
                               </label>
                               <button type="submit" class="bn-button frontmatter-button">Remove</button>
                             </form>
-                          {{end}}
-                        {{end}}
+                          {{- end -}}
+                        {{- end -}}
                         <form class="frontmatter-inline-form" data-frontmatter-unset data-frontmatter-property="{{.Key}}">
                           <button type="submit" class="bn-button frontmatter-button frontmatter-unset-button">Remove property</button>
                         </form>
-                        {{if .Allowed}}
+                        {{- if .Allowed -}}
                           <datalist id="{{.InputID}}-allowed">
-                            {{range .Allowed}}
+                            {{- range .Allowed -}}
                               <option value="{{.}}"></option>
-                            {{end}}
+                            {{- end -}}
                           </datalist>
-                        {{end}}
+                        {{- end -}}
                       </div>
                       </details>
-                      {{end}}
+                      {{- end -}}
                     </dd>
                   </div>
-                {{end}}
+                {{- end -}}
               </dl>
-            {{else}}
+            {{- else -}}
               <p>No properties yet.</p>
-            {{end}}
-            {{if not readOnly}}
+            {{- end -}}
+            {{- if not readOnly -}}
             <details class="frontmatter-add" name="property-editor">
               <summary>Add property</summary>
             <form class="frontmatter-add-form" data-frontmatter-set data-frontmatter-op="=">
@@ -302,14 +302,14 @@
               <button type="submit" class="bn-button frontmatter-button">Add property</button>
             </form>
             </details>
-            {{end}}
-            {{if .FrontmatterChoices}}
+            {{- end -}}
+            {{- if .FrontmatterChoices -}}
               <datalist id="frontmatter-property-choices">
-                {{range .FrontmatterChoices}}
+                {{- range .FrontmatterChoices -}}
                   <option value="{{.}}"></option>
-                {{end}}
+                {{- end -}}
               </datalist>
-            {{end}}
+            {{- end -}}
             </details>
           </section>
             {{/* The colon cannot occur in Goldmark's generated heading IDs. */}}
@@ -317,18 +317,18 @@
             <section class="passage-thoughts" data-passage-thoughts {{if not .PassageThoughts}}hidden{{end}} aria-label="Thoughts from earlier passages">
               <h2>Thoughts from earlier passages</h2>
               <p class="passage-thoughts-hint">These quotations could not be placed uniquely in the current text. Your thoughts are still here.</p>
-              {{range .PassageThoughts}}
+              {{- range .PassageThoughts -}}
               <article data-passage-annotation data-quote="{{.Quote}}" class="passage-annotation">
                 <a href="{{.Path}}">{{.Title}}</a>
                 <p>{{.Thought}}</p>
                 <blockquote>{{.Quote}}</blockquote>
               </article>
-              {{end}}
+              {{- end -}}
             </section>
             {{if eq (len .PassageThoughts) 50}}<p class="passage-thoughts-hint">Showing up to 50 passage thoughts. All linked notes remain in References.</p>{{end}}
           </section>
 
-          {{if .InsightConfigured}}
+          {{- if .InsightConfigured -}}
           <section
             class="panel note-insight"
             data-note-insight
@@ -362,13 +362,13 @@
             </section>
           </section>
 
-          {{else}}
+          {{- else -}}
           <details class="note-optional-ai">
             <summary>Optional: Ask AI</summary>
             <p>{{.InsightStatusMsg}}</p>
             {{if processLaunch}}<a href="/settings">Set up AI in Settings</a>{{end}}
           </details>
-          {{end}}
+          {{- end -}}
           <section
             class="panel related-notes"
             data-related-notes
@@ -384,11 +384,11 @@
             <p data-related-status role="status" aria-live="polite">Related notes will load here.</p>
           </section>
 
-          {{if .Broken}}
+          {{- if .Broken -}}
             <section class="panel">
               <h2>Broken links</h2>
               <ul class="link-list broken-list">
-                {{range .Broken}}
+                {{- range .Broken -}}
                   <li>
                     <div class="broken-link-row">
                       <span class="broken-link-main">
@@ -401,10 +401,10 @@
                       </span>
                     </div>
                   </li>
-                {{end}}
+                {{- end -}}
               </ul>
             </section>
-          {{end}}
+          {{- end -}}
         </div>
       </div>
     </main>
@@ -412,15 +412,15 @@
     {{if .InsightConfigured}}<script src="/static/note-insight-page.js" defer></script>{{end}}
   </body>
 </html>
-{{end}}
+{{- end -}}
 
 {{define "backlinkOccurrences"}}
 <ul class="backlink-occurrences">
-  {{range .}}
+  {{- range . -}}
     <li>
       {{if .Location}}<details class="backlink-location"><summary>Source details</summary>{{.Location}}</details>{{end}}
       {{if .Snippet}}<span class="backlink-snippet">{{.Snippet}}</span>{{end}}
     </li>
-  {{end}}
+  {{- end -}}
 </ul>
-{{end}}
+{{- end -}}

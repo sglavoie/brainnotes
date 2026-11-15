@@ -34,21 +34,20 @@
   padding-left: 0.5rem;
 }
 .sync-line.is-count { flex: 0 0 auto; }
-.sync-line-count {
+.sync-line-review { color: var(--bn-link); text-underline-offset: 0.12em; }
+.sync-line .sync-line-count {
   display: inline-flex;
   align-items: center;
-  justify-content: center;
   min-height: 2.75rem;
   padding: 0 0.65rem;
   border: 1px solid var(--bn-accent-subtle-border);
   border-radius: 999px;
   background: var(--bn-accent-subtle-bg);
   color: var(--bn-accent-subtle-text);
+  text-decoration: none;
   white-space: nowrap;
   box-sizing: border-box;
 }
-.sync-line-review { color: var(--bn-link); text-underline-offset: 0.12em; }
-.sync-line-count.sync-line-review { color: var(--bn-accent-subtle-text); text-decoration: none; }
 .sync-line-review:hover { text-decoration: underline; }
 .sync-line-review:focus-visible { outline: 2px solid var(--bn-focus); outline-offset: 2px; }
 
