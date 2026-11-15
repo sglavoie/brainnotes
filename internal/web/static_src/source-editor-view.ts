@@ -109,8 +109,18 @@ export const createSourceSurfaceFactory = (
     });
 
     const disposePosition = bindSourcePosition(view, host);
+    // The document is immutable. Save state, preview and draft handlers often
+    // read it in the same update; flatten the long document only once per edit.
+    let valueDocument = view.state.doc;
+    let value = valueDocument.toString();
     return {
-      getValue: () => view.state.doc.toString(),
+      getValue: () => {
+        if (valueDocument !== view.state.doc) {
+          valueDocument = view.state.doc;
+          value = valueDocument.toString();
+        }
+        return value;
+      },
       setValue(value: string): void {
         view.dispatch({
           changes: { from: 0, to: view.state.doc.length, insert: value },

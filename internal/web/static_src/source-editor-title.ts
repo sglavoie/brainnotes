@@ -4,7 +4,8 @@ export const createEditorTitle = (doc: Document) => {
   let disposed = false;
   return {
     update(pending: boolean): void {
-      if (!disposed) doc.title = pending ? `• ${original}` : original;
+      const next = pending ? `• ${original}` : original;
+      if (!disposed && doc.title !== next) doc.title = next;
     },
     dispose(): void {
       if (disposed) return;

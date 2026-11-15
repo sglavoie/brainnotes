@@ -44,7 +44,15 @@ class FrontmatterControl {
   }
 
   update(update: ViewUpdate): void {
-    if (update.docChanged) this.range = headerRange(update.state);
+    if (update.docChanged) {
+      // Edits after a closed header cannot change its range. In particular,
+      // ordinary prose typing must not flatten the entire note to rescan it.
+      let headerChanged = this.range === null;
+      update.changes.iterChangedRanges((from) => {
+        if (this.range && from <= this.range.body) headerChanged = true;
+      });
+      if (headerChanged) this.range = headerRange(update.state);
+    }
     if (update.docChanged || foldedRanges(update.startState) !== foldedRanges(update.state)) this.sync();
   }
 

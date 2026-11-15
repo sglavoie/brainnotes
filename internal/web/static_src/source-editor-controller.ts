@@ -124,10 +124,10 @@ export const createSourceEditorController = (
   // and a button that disabled itself there would say "nothing unsaved" over an
   // attempt whose fate nobody knows, leaving Ctrl/⌘+S as the only way to settle it.
   const refreshSaveButton = (): void => {
-    title.update(dirty() || state.pendingSave !== null);
-    if (elements.save) {
-      elements.save.disabled = state.saving || (!dirty() && state.pendingSave === null);
-    }
+    const pending = dirty() || state.pendingSave !== null;
+    title.update(pending);
+    const disabled = state.saving || !pending;
+    if (elements.save && elements.save.disabled !== disabled) elements.save.disabled = disabled;
   };
 
   const drafts = createKeeper(deps, state, {
