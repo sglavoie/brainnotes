@@ -8977,6 +8977,7 @@ details[open] > summary::before { transform: rotate(45deg); }
 .workspace-empty > details > summary { width: fit-content; }
 .workspace-empty > details[open] > summary { margin-bottom: 0.75rem; }
 .empty-state-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.empty-closest-titles { flex-basis: 100%; margin: 0; }
 .overview-results:has([data-overview-empty-help]:not([hidden])) :is(.library-results-tools, .library-sort) { display: none; }
 .overview-results:has([data-overview-empty-help]:not([hidden])) .library-results-overview { margin-bottom: 0.75rem; }
 .property-summary:not(:has(> div)) { display: none; }

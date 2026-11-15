@@ -1,3 +1,4 @@
+import { normalizeSearchResults, searchResultPath } from "./api-search";
 import { hasActiveSharedFilters, readExprParam, readPageQuery, sharedFilterParamKeys } from "./filters";
 
 // Ordinary links let each destination hydrate all search controls from its URL,
@@ -27,6 +28,34 @@ export const renderOverviewEmptyHelp = (root: HTMLElement): void => {
   if (expression) addLink(help, params, ["expr"], "Remove expression");
   addCreateLink(help);
   help.hidden = false;
+  void addClosestTitles(help);
+};
+
+// A search that found nothing is most often a misspelling, so the closest
+// titles are offered ahead of the ways to loosen the search. They are links to
+// the notes themselves: the search text stays as typed and nothing is selected.
+const addClosestTitles = async (help: HTMLElement): Promise<void> => {
+  const query = readPageQuery();
+  if (!query) return;
+  try {
+    const response = await fetch(`/api/search/suggest?${new URLSearchParams({ q: query })}`);
+    if (!response.ok) return;
+    const notes = normalizeSearchResults(await response.json());
+    if (!notes.length || help.hidden || readPageQuery() !== query || help.querySelector("[data-empty-closest]")) return;
+    const line = document.createElement("p");
+    line.className = "empty-closest-titles";
+    line.dataset.emptyClosest = "";
+    line.append("Did you mean ");
+    notes.forEach((note, index) => {
+      const link = document.createElement("a");
+      link.href = searchResultPath(note);
+      link.textContent = note.title || note.key;
+      if (note.folder) link.title = note.folder;
+      line.append(index ? (index === notes.length - 1 ? " or " : ", ") : "", link);
+    });
+    line.append("?");
+    help.prepend(line);
+  } catch { /* Suggestions are optional; the empty state stands without them. */ }
 };
 
 const addCreateLink = (help: HTMLElement): void => {

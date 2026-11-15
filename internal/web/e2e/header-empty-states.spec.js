@@ -70,7 +70,8 @@ test("empty Library groups reset, constraint recovery and creation", async ({ pa
   await page.goto("/library?q=absent&tag=absent&expr=status:absent");
   const help = page.locator("[data-overview-empty-help]");
   await expect(help.locator(".bn-primary")).toHaveText("Reset search");
-  await expect(help.getByRole("link")).toHaveCount(5);
+  // Reset, three removals and create; the closest-title suggestions are counted apart.
+  await expect(help.locator("a:not([data-empty-closest] a)")).toHaveCount(5);
   await expect(page.getByRole("link", { name: "Reset search", exact: true })).toBeVisible();
   await expect(page.locator("[data-overview-search-status]")).toHaveText('No notes match "absent"; try changing your search text, filters, and expression.');
   await help.getByRole("link", { name: "Reset search", exact: true }).click();

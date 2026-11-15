@@ -95,3 +95,34 @@ it("offers a reviewable title with a return search, and hides creation on replic
   const replica = await setup("?q=missing");
   expect(replica.help.querySelector("[data-empty-create-note]")).toBeNull();
 });
+
+it("offers the closest titles ahead of the ways to loosen a search that found nothing", async () => {
+  const suggest = vi.fn().mockResolvedValue(new Response(JSON.stringify([
+    { key: "concepts/deliberate practice", path: "/n/concepts/deliberate%20practice", title: "Deliberate Practice", folder: "Concepts" },
+    { key: "practice log", path: "/n/practice%20log", title: "Practice Log", folder: "" },
+  ])));
+  vi.stubGlobal("fetch", suggest);
+  try {
+    const { help } = await setup("?q=delibrate");
+    await vi.waitFor(() => expect(help.querySelector("[data-empty-closest]")).not.toBeNull());
+    const line = help.querySelector<HTMLElement>("[data-empty-closest]")!;
+    expect(help.firstElementChild).toBe(line);
+    expect(line.textContent).toBe("Did you mean Deliberate Practice or Practice Log?");
+    expect(Array.from(line.querySelectorAll("a")).map((link) => link.getAttribute("href"))).toEqual(["/n/concepts/deliberate%20practice", "/n/practice%20log"]);
+    expect(String(suggest.mock.calls[0][0])).toBe("/api/search/suggest?q=delibrate");
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
+
+it("asks for no suggestions when the empty result is a filter's doing", async () => {
+  const suggest = vi.fn();
+  vi.stubGlobal("fetch", suggest);
+  try {
+    const { help } = await setup("?tag=missing");
+    expect(help.querySelector("[data-empty-closest]")).toBeNull();
+    expect(suggest).not.toHaveBeenCalled();
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});

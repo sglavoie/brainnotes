@@ -80,7 +80,7 @@ func validateExternalState(root, stateDir string) error {
 func replicaReadPath(path string) bool {
 	switch path {
 	case "/", "/library", "/pinned", "/properties", "/health", "/broken", "/graph",
-		"/api/ready", "/api/facets", "/api/search", "/api/query/validate", "/api/query/completions",
+		"/api/ready", "/api/facets", "/api/search", searchSuggestAPIRoutePath, "/api/query/validate", "/api/query/completions",
 		"/api/graph.json", "/api/properties", "/api/properties/detail", "/api/views",
 		"/api/related", "/api/note/peek", "/api/cockpit", "/api/config/status",
 		// The status route and not the rest of the synchronization surface. On a

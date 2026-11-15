@@ -38,6 +38,7 @@ func TestJSONRoutesReportSnapshotFailuresAsManagementErrors(t *testing.T) {
 
 	for _, route := range []string{
 		"/api/search?q=alpha",
+		searchSuggestAPIRoutePath + "?q=alpah",
 		"/api/facets",
 		"/api/graph.json",
 		queryValidateAPIRoutePath + "?expr=tag:a",

@@ -21,6 +21,7 @@ func (srv *Server) routes(staticRoot fs.FS) http.Handler {
 	mux.HandleFunc(queryValidateAPIRoutePath, srv.handleQueryValidate)
 	mux.HandleFunc(queryCompletionsAPIRoutePath, srv.handleQueryCompletions)
 	mux.HandleFunc(searchAPIRoutePath, srv.handleSearch)
+	mux.HandleFunc(searchSuggestAPIRoutePath, srv.handleSearchSuggest)
 	mux.HandleFunc(openAPIRoutePath, srv.handleOpen)
 	mux.HandleFunc(configOpenAPIRoutePath, srv.handleConfigOpen)
 	mux.HandleFunc(briefViewAPIRoutePath, srv.handleBriefView)

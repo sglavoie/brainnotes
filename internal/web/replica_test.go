@@ -95,7 +95,7 @@ func TestReplicaBrowsingAndWriteBarrier(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = os.Chmod(root, 0755) })
 	srv := replicaFixture(t, root, state)
-	for _, route := range []string{"/", "/library", "/n/A", "/pinned", "/properties", "/health", "/broken", "/graph", "/api/ready", "/api/search?q=Alpha", "/api/graph.json", "/api/facets", "/api/views", "/api/properties", "/media/file.txt"} {
+	for _, route := range []string{"/", "/library", "/n/A", "/pinned", "/properties", "/health", "/broken", "/graph", "/api/ready", "/api/search?q=Alpha", "/api/search/suggest?q=Alpah", "/api/graph.json", "/api/facets", "/api/views", "/api/properties", "/media/file.txt"} {
 		rec := httptest.NewRecorder()
 		srv.Handler().ServeHTTP(rec, httptest.NewRequest("GET", route, nil))
 		if rec.Code != 200 {
