@@ -126,8 +126,8 @@ for (const motion of ["reduce", "no-preference"]) test(`Graph Focus preserves no
   await expect(page.locator("#graph-open-note")).toHaveAttribute("aria-disabled", "false");
   await expect.poll(() => page.locator("#graph-canvas").evaluate((node) => {
     const cy = node._cyreg.cy;
-    return Math.abs(cy.nodes(".is-selected").renderedPosition().x - cy.width() / 2);
-  })).toBeLessThan(1);
+    return !cy.animated() && Math.abs(cy.nodes(".is-selected").renderedPosition().x - cy.width() / 2) < 1;
+  })).toBe(true);
   const state = await page.locator("#graph-canvas").evaluate((node) => {
     const cy = node._cyreg.cy;
     const selected = cy.nodes(".is-selected");

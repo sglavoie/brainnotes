@@ -164,6 +164,9 @@ describe("normalizeGraphPayload", () => {
     });
   });
 
+});
+
+describe("normalizeGraphPayload query and links", () => {
   it("carries matchesQuery through normalization and Cytoscape data", () => {
     const graph = normalizeGraphPayload({
       nodes: [
@@ -290,6 +293,29 @@ describe("readGraphPalette", () => {
 });
 
 describe("buildGraphStyleRules", () => {
+  it("quiets resting links and labels while retaining interaction emphasis", () => {
+    const rules = buildGraphStyleRules();
+    const node = ruleFor(rules, "node").style;
+    expect(node["font-weight"]).toBe(400);
+    expect(node["text-outline-width"]).toBe(1);
+    for (const state of ["neighbor", "hovered", "selected"]) {
+      expect(ruleFor(rules, `node.is-${state}`).style["font-weight"]).toBe(600);
+    }
+    expect(ruleFor(rules, "node.is-search-match").style["font-weight"]).toBeUndefined();
+    expect(ruleFor(rules, "edge").style).toMatchObject({
+      width: 1, opacity: 0.45, "arrow-scale": 0.65, "target-arrow-shape": "triangle",
+    });
+    expect(ruleFor(rules, "edge.is-highlighted-edge").style).toMatchObject({
+      width: 3, opacity: 1, "arrow-scale": 1,
+    });
+    const indexOf = (selector: string): number => rules.findIndex((rule) => rule.selector === selector);
+    expect(indexOf("edge[?mutual]")).toBeGreaterThan(indexOf("edge"));
+    expect(indexOf("edge[?mutual]")).toBeLessThan(indexOf("edge.is-highlighted-edge"));
+  });
+
+});
+
+describe("buildGraphStyleRules palette and precedence", () => {
   it("keeps data-driven node fills while theming the rest from the palette", () => {
     const palette: GraphPalette = {
       nodeLabel: "#101010",

@@ -66,6 +66,19 @@ for (const width of [390, 1280]) test(`Graph keyboard navigation and layout cont
   await page.keyboard.press("Home");
   await page.keyboard.press("ArrowDown");
   await expect(page.locator("#graph-open-note")).toHaveAttribute("aria-disabled", "false");
+  await expect(page.locator("#graph-folder-legend")).toContainText("Vault root");
+  await expect(page.locator("#graph-folder-legend")).toContainText("Notes");
+  const selectionColours = await list.evaluate((node) => {
+    const selected = getComputedStyle(node.selectedOptions[0]);
+    const probe = document.createElement("span");
+    probe.style.cssText = "color:var(--bn-accent-subtle-text);background:var(--bn-accent-subtle-bg)";
+    node.after(probe);
+    const tokens = getComputedStyle(probe);
+    const result = [selected.webkitTextFillColor, selected.backgroundImage, tokens.color, `linear-gradient(${tokens.backgroundColor}, ${tokens.backgroundColor})`];
+    probe.remove();
+    return result;
+  });
+  expect(selectionColours.slice(0, 2)).toEqual(selectionColours.slice(2));
   const selected = await list.inputValue();
   const canvas = page.locator("#graph-canvas");
   await canvas.focus();
@@ -82,6 +95,7 @@ for (const width of [390, 1280]) test(`Graph keyboard navigation and layout cont
   await expect(page.locator(".graph-refine-options > summary")).toContainText("active");
   const folder = list.locator('option').filter({ hasText: "Expand folder: Notes" });
   await expect(folder).toHaveCount(1);
+  await expect(page.locator("#graph-folder-legend").getByText("Notes", { exact: false })).toHaveCount(1);
   await list.selectOption({ label: "Expand folder: Notes" });
   await expect(folder).toHaveCount(0);
   await expect(page.locator("#graph-open-note")).toHaveAttribute("aria-disabled", "true");

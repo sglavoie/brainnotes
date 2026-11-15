@@ -24,19 +24,26 @@ export function graphVisuals(snapshot) {
     await page.route("**/api/graph.json**", (route) => route.fulfill({ json: {
       nodes: ["alpha", "beta", "field", "writing"].map((id) => ({ data: {
         id, title: { alpha: "Alpha", beta: "Beta", field: "Field journal", writing: "Writing" }[id],
-        folder: "", matchesQuery: false,
+        folder: id === "field" ? "Notes" : "", matchesQuery: false,
       } })),
       edges: [["alpha", "beta"], ["alpha", "field"], ["field", "writing"]].map(([source, target], index) => ({ data: { id: `edge-${index}`, source, target } })),
     } }));
     await page.goto("/graph");
     await expect(page.locator("#graph-status")).toContainText("4 notes");
     await expect(page.locator("[data-sync-line]")).toHaveText("5 incoming");
+    await expect(page.locator("#graph-folder-legend")).toContainText("Vault root");
+    await expect(page.locator("#graph-folder-legend")).toContainText("Notes");
+    await snapshot(page, "graph-rest");
     const list = page.getByLabel("Notes and folders in this view");
     await list.selectOption("field");
     await page.locator("#graph-canvas").focus();
     await page.keyboard.press("Home");
     await page.locator("h1").click();
     await snapshot(page, "graph");
+    await list.scrollIntoViewIfNeeded();
+    await list.focus();
+    await snapshot(page, "graph-list");
+    await page.locator("h1").scrollIntoViewIfNeeded();
     await page.locator(".graph-refine-options > summary").click();
     await page.getByText("Graph layout", { exact: true }).click();
     await snapshot(page, "graph-layout");

@@ -16,6 +16,31 @@ The controller is one page's worth of behavior split across `graph-controller*.t
 - **Every `graph*.ts` change ships as a regenerated bundle**: `static_src/` is the source, `internal/web/static/graph-page.js` is the committed artifact, and a change to one without the other is a broken commit — the page loads the bundle, so unbuilt TypeScript is a change no browser ever runs. `just web-build` regenerates it, `just web-check` regenerates it on the way through typecheck and Vitest, and `just ci` hashes the on-disk bundle, rebuilds, and byte-compares, so drift fails the gate rather than shipping. Note that the bundle legitimately still contains the string `g_hops` — it is the compiled `legacyHopsParamKey` constant — so "the retirement is done" is not something a grep over `app.js` can assert.
 - **Verification**: `just ci` covers the display pipeline, mounted-element boundaries, keyboard selection, aggregate semantics, label geometry, asset ordering, and layout fallback. The browser suite adds actual keyboard/list navigation, filtering, opening notes, and light/dark desktop/mobile visual comparisons. Visual fixtures fix node positions, so force-layout quality, fallback packing, and whether a spread sweep thrashes still need a browser review with a representative vault.
 
+## Visual hierarchy and folder legend
+
+Resting edges use width 1, opacity 0.45 and arrow scale 0.65; highlighted links
+retain width 3, full opacity and full-size arrows. Keep that explicit arrow-scale
+override so reducing resting arrows cannot weaken selection. Labels rest at weight
+400 and use 600 for hovered, selected and neighbour nodes. The contrasting outline,
+label geometry, visibility policy and both stylesheet ordering invariants above
+remain unchanged.
+
+Node fills encode folders, not note types or link direction. The legend beside the
+canvas names every folder in the displayed view (including collapsed groups), with
+“Vault root” for an empty folder. It uses the nodes' existing colours and refreshes
+with the native note list when displayed elements change. Folder hashes share six
+colours, so the legend retains colliding entries and explicitly says colours may
+repeat. Folder names are text, never markup.
+
+The side list stays a native select. Its checked option uses accent-subtle text
+and background tokens in both themes; the same-colour gradient keeps native
+selection paint from substituting a grey background. Text fill also follows the
+token because Chromium and Firefox override the focused option's ordinary colour.
+These overrides apply only outside forced-colour mode. WebKit on macOS still
+paints the native list's system selection over option styles; preserve that native
+control and focus handling. At phone widths, the selected excerpt and connection span
+both sidebar grid columns so neither is squeezed beside the other.
+
 
 ## Workspace and keyboard navigation
 

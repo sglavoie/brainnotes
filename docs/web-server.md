@@ -551,7 +551,11 @@ health, pinned notes and recently modified notes. Reading uses a distinct title
 aligned with the prose, compact property presentation, and the existing Quiet
 reading and Book type preferences. Interaction motion respects reduced motion.
 
-Graph uses muted folder colors and wraps labels at word boundaries. Selecting a
+Graph uses muted folder colors, named in the legend beside the canvas; different
+folders may share a color. Quiet links and regular labels keep notes prominent
+until you hover or select them. The selected list row uses theme colors where
+the browser supports option styling; Safari keeps its system highlight.
+Labels wrap at word boundaries. Selecting a
 note in **Focus** mode gently centers it without changing zoom or rearranging
 nodes; ordinary Filter mode preserves the viewport. Reduced motion makes these
 viewport changes immediate. Reading-to-writing title transitions are enabled

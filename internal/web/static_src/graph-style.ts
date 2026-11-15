@@ -86,7 +86,7 @@ const baseNodeRules = (palette: GraphPalette): GraphStyleRule[] => [
       "background-color": "data(color)",
       color: palette.nodeLabel,
       "font-size": "10px",
-      "font-weight": 600,
+      "font-weight": 400,
       "text-valign": "bottom",
       "text-halign": "center",
       "text-margin-y": 6,
@@ -154,6 +154,7 @@ const nodeStateRules = (palette: GraphPalette): GraphStyleRule[] => [
   {
     selector: "node.is-neighbor",
     style: {
+      "font-weight": 600,
       "border-width": 2,
       "border-color": palette.neighbor,
       "z-index": 8,
@@ -170,6 +171,7 @@ const nodeStateRules = (palette: GraphPalette): GraphStyleRule[] => [
   {
     selector: "node.is-hovered",
     style: {
+      "font-weight": 600,
       "border-width": 3,
       "border-color": palette.hovered,
       "font-size": "11px",
@@ -179,6 +181,7 @@ const nodeStateRules = (palette: GraphPalette): GraphStyleRule[] => [
   {
     selector: "node.is-selected",
     style: {
+      "font-weight": 600,
       "border-width": 4,
       "border-color": palette.selected,
       color: palette.selectedText,
@@ -214,12 +217,13 @@ const edgeRules = (palette: GraphPalette): GraphStyleRule[] => [
   {
     selector: "edge",
     style: {
-      width: 1.5,
+      width: 1,
+      "arrow-scale": 0.65,
       "line-color": palette.edge,
       "target-arrow-color": palette.edge,
       "target-arrow-shape": "triangle",
       "curve-style": "bezier",
-      opacity: 0.72,
+      opacity: 0.45,
       "z-index": 0,
     },
   },
@@ -235,6 +239,7 @@ const edgeRules = (palette: GraphPalette): GraphStyleRule[] => [
     selector: "edge.is-highlighted-edge",
     style: {
       width: 3,
+      "arrow-scale": 1,
       "line-color": palette.neighbor,
       "target-arrow-color": palette.neighbor,
       "source-arrow-color": palette.neighbor,

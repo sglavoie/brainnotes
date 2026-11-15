@@ -1,5 +1,6 @@
 import type { GraphRuntime } from "./graph-controller-runtime";
 import type { GraphNodeModel } from "./graph";
+import { renderGraphLegend } from "./graph-legend";
 
 const ordered = new WeakMap<GraphNodeModel[], GraphNodeModel[]>();
 const rendered = new WeakMap<HTMLSelectElement, GraphNodeModel[]>();
@@ -24,6 +25,7 @@ export const renderGraphNoteList = (runtime: GraphRuntime): void => {
       node.isAggregate ? `Expand folder: ${node.folder}` : `${node.title}${node.folder ? ` — ${node.folder}` : ""}`, node.id
     ));
     list.replaceChildren(...options);
+    renderGraphLegend(nodes);
     rendered.set(list, nodes);
   }
   list.disabled = nodes.length === 0;
