@@ -58,7 +58,7 @@ test("a note typed in the browser is saved by Ctrl/⌘ + S and lands in the fixt
   await expect(page.locator("[data-source-preview] h2")).toContainText(phrase);
 
   await page.keyboard.press("ControlOrMeta+s");
-  await expect(page.locator("[data-source-status]")).toHaveClass(/is-success/);
+  await expect(page.locator("[data-source-save-state]")).toHaveText("Saved just now");
   // Saved text is clean text: the button going back to disabled is the editor
   // re-pinning to the revision the server answered with.
   await expect(page.locator("[data-source-save]")).toBeDisabled();
@@ -100,7 +100,7 @@ test("a toolbar command edits the document and the Save button writes it", async
   await expect(page.locator(SURFACE)).toContainText(`**${phrase}**`);
 
   await page.locator("[data-source-save]").click();
-  await expect(page.locator("[data-source-status]")).toHaveClass(/is-success/);
+  await expect(page.locator("[data-source-save-state]")).toHaveText("Saved just now");
 
   expect(readFileSync(notePath, "utf8")).toContain(`**${phrase}**`);
   expect(gitStatus(manifest.localVault), "the note was written but never snapshotted").toBe("");
@@ -356,7 +356,7 @@ test("unsaved text survives Search navigation and a reload and is offered back r
   expect(readFileSync(notePath, "utf8"), "putting the text back wrote it to the vault").toBe(before);
 
   await page.locator("[data-source-save]").click();
-  await expect(page.locator("[data-source-status]")).toHaveClass(/is-success/);
+  await expect(page.locator("[data-source-save-state]")).toHaveText("Saved just now");
   expect(readFileSync(notePath, "utf8")).toContain(phrase);
   // The vault holds it now, so the browser's copy is finished.
   await expect.poll(() => keptDrafts(page)).toHaveLength(0);

@@ -108,19 +108,11 @@ export const createSourceSurfaceFactory = (
       }), host.closest("[data-source-editor]")?.querySelector("[data-source-note-return]")?.textContent || ""),
     });
 
+    // Keep the scroll region reachable even while Format covers its editable child.
+    view.scrollDOM.tabIndex = 0;
     const disposePosition = bindSourcePosition(view, host);
-    // The document is immutable. Save state, preview and draft handlers often
-    // read it in the same update; flatten the long document only once per edit.
-    let valueDocument = view.state.doc;
-    let value = valueDocument.toString();
     return {
-      getValue: () => {
-        if (valueDocument !== view.state.doc) {
-          valueDocument = view.state.doc;
-          value = valueDocument.toString();
-        }
-        return value;
-      },
+      getValue: sourceValue(view),
       setValue(value: string): void {
         view.dispatch({
           changes: { from: 0, to: view.state.doc.length, insert: value },
@@ -145,6 +137,17 @@ export const createSourceSurfaceFactory = (
       },
       destroy: () => { disposePosition(); view.destroy(); },
     };
+  };
+};
+
+// The immutable document is flattened only once per edit, even when Save,
+// preview and draft handlers all read it in the same update.
+const sourceValue = (view: EditorView): (() => string) => {
+  let doc = view.state.doc;
+  let value = doc.toString();
+  return () => {
+    if (doc !== view.state.doc) { doc = view.state.doc; value = doc.toString(); }
+    return value;
   };
 };
 

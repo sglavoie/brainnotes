@@ -31,7 +31,7 @@ test.describe("touch layouts", () => {
   test("short editor puts prose near the top and keeps Save reachable", async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 568 });
     await page.goto("/edit?key=Writing");
-    await expect(page.getByRole("heading", { level: 1 })).toHaveText("Editing Writing");
+    await expect(page.getByRole("heading", { level: 1 })).toHaveAccessibleName("Editing Writing");
     const line = page.locator(".cm-line").filter({ hasText: "Field journal" });
     await expect(line).toBeVisible();
     // The toolbar may use two touch-sized rows; prose should still appear
@@ -50,9 +50,8 @@ test.describe("touch layouts", () => {
   test("editor toolbar and open Format menu fit after a save on a phone", async ({ page }) => {
     await page.goto("/edit?key=Writing");
     await expect(page.locator(".cm-content")).toBeVisible();
-    await page.locator("[data-source-status]").evaluate((status) => {
-      status.textContent = "Saved to vault.";
-      status.classList.add("is-success");
+    await page.locator("[data-source-save-state]").evaluate((status) => {
+      status.textContent = "Saved just now";
     });
     await page.addStyleTag({ content: ".source-editor-toolbar :is(summary, button, p) { font-size: 1.3em !important; }" });
     await page.locator(".source-editor-format > summary").click();

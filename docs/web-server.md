@@ -170,8 +170,9 @@ is unavailable, keep the form open until creation is confirmed.
 On a note, choose **Edit**, or **Open in external editor** on local
 servers. The source editor opens with the writing surface visible on a narrow
 screen. Its toolbar keeps **Save** nearby while scrolling; **Format** reveals formatting
-commands and Escape closes them. Frontmatter starts collapsed; **Show
-frontmatter** expands it and **Hide frontmatter** folds it again without changing
+commands, Spellcheck, and frontmatter controls; Escape closes the menu.
+Frontmatter starts collapsed; **Show frontmatter** expands it and **Hide
+frontmatter** folds it again without changing
 the source or marking the note as edited. Find still searches the full source.
 On desktop, **View** chooses **Write**, **Split**, **Preview**, or **Source**; **Type** offers
 Book, Sans, or Monospace, with code always in monospace. Book and Sans follow the
@@ -182,12 +183,18 @@ Markdown. An inactive leading heading that repeats the page title is folded in
 writing mode. Moving the cursor into it or finding it reveals the exact source;
 **Source** shows the original heading and syntax. On phones the View choice lives
 inside Format alongside Type. Write centers the same reading measure and keeps Save in the
-toolbar. Narrow screens retain Edit/Preview tabs, with the type choice inside Format.
+toolbar. Narrow screens keep Edit/Preview tabs above the title, with the type choice inside Format.
 
-**Focus**, in the View menu, centers your writing and hides the workspace header
-and closed management sections. Save, draft recovery, conflicts, and sync notices
-remain available. Choose Write (or another view) to bring the surrounding tools
-back; the view is remembered in this browser.
+**Focus**, in the View menu, shows the title, prose, save state and Save. Press
+Escape or tap the title to restore the surrounding controls; the view is
+remembered in this browser. Draft recovery, conflicts, upload problems, and actionable sync notices
+remain available in Focus.
+
+Beside Save, a quiet state shows **Unsaved changes**, **Saving…**, or **Saved**.
+After a confirmed save, the relative time updates without repeated announcements.
+Typing while a save finishes leaves **Unsaved changes** visible. An unanswered
+request shows **Save unconfirmed** alongside the existing retry message; errors
+and conflicts keep their detailed messages and recovery actions.
 
 **Format** also offers numbered lists, task lists, quotes, and heading levels 2
 and 3. List commands convert existing list markers and preserve indentation;
@@ -196,8 +203,8 @@ continues Markdown lists and quotes; Enter on an empty item ends the list.
 
 Below the editor, a word count updates after you pause typing and shows a separate
 count for selected text. It counts words in Markdown source, including links and
-code, excluding frontmatter and standalone punctuation. **Spellcheck** enables
-your browser's spelling support and remembers your choice here. Available
+code, excluding frontmatter and standalone punctuation. **Spellcheck**, inside
+Format, enables your browser's spelling support and remembers your choice here. Available
 languages and spelling suggestions depend on your browser settings.
 
 Below the writing surface, **This note and this vault** contains History and
@@ -304,7 +311,9 @@ Capture offers **Check / retry capture**: retrying checks its recorded receipt
 before appending anything, so a lost response cannot duplicate the thought.
 Unanswered capture IDs survive reloads in the same tab when browser storage is
 available. The editor's capture control uses the same receipt protection.
-**Draft kept in this browser** describes a local copy; **Saved to vault** confirms a save.
+**Draft kept in this browser** describes a local copy; **Saved** beside Save confirms the vault state.
+The **Attach files…** hint appears on focus or hover; images can also be pasted
+and files dropped onto the editor. Save adds the staged attachments to the note.
 **Save not confirmed** keeps Save available for a safe retry. Other uncertain
 changes point to the applicable outcome check or current values before retrying.
 

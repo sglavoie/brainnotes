@@ -79,6 +79,7 @@ export type Harness = {
   client: ClientMocks;
   navigate: ReturnType<typeof vi.fn>;
   status(): string;
+  saveState(): string;
   draftStatus(): string;
   recovery(): HTMLElement;
   recoveryKind(): string;
@@ -165,6 +166,7 @@ export const mount = (options: MountOptions = {}): Harness => {
       return surface;
     },
     status: () => elements.status?.textContent ?? "",
+    saveState: () => elements.panel.querySelector("[data-source-save-state]")?.textContent ?? "",
     draftStatus: () => elements.draftStatus?.textContent ?? "",
     recovery: () => {
       if (!elements.recovery) {

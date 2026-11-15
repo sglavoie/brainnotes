@@ -181,6 +181,6 @@ for (const width of [1280, 390]) {
     await expect(page.locator("[data-source-status]")).toHaveText("");
     await editor.press("End");
     await editor.press("Enter");
-    await expect(page.locator("[data-source-status]")).toHaveText("Unsaved changes.");
+    await expect(page.locator("[data-save-label]")).toHaveText("Unsaved changes");
   });
 }

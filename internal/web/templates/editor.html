@@ -66,7 +66,7 @@
       data-source-undo-endpoint="{{ .UndoPath }}"
       aria-labelledby="source-editor-heading"
     >
-      <h1 id="source-editor-heading"><span class="visually-hidden">Editing </span><a href="{{ .NoteRoute }}" data-source-note-return>{{ .NoteTitle }}</a></h1>
+      <h1 id="source-editor-heading"><span class="visually-hidden">Editing </span><a href="{{ .NoteRoute }}" data-source-note-return>{{ .NoteTitle }}</a><button type="button" class="source-focus-title" data-writing-exit hidden aria-label="Leave Focus view: {{ .NoteTitle }}" title="Leave Focus view (Escape)">{{ .NoteTitle }}</button></h1>
 
       <!--
         The gate. It is hidden until an action is asked for over unsaved text,
@@ -87,6 +87,9 @@
         <details class="source-editor-format">
           <summary>Format</summary>
           <div class="source-editor-commands">
+            <button type="button" class="bn-button" data-source-frontmatter hidden>Show frontmatter</button>
+            <label class="source-spellcheck"><input type="checkbox" data-writing-spellcheck checked> Spellcheck</label>
+            <p class="source-focus-hint">In Focus, tap the title or press Escape to return.</p>
             <button type="button" class="bn-button source-editor-command" data-source-command="bold" title="Bold (Ctrl/⌘ + B)" aria-keyshortcuts="Control+B Meta+B">Bold</button>
             <button type="button" class="bn-button source-editor-command" data-source-command="italic" title="Italic (Ctrl/⌘ + I)" aria-keyshortcuts="Control+I Meta+I">Italic</button>
             <button type="button" class="bn-button source-editor-command" data-source-command="code" title="Inline code (Ctrl/⌘ + E)" aria-keyshortcuts="Control+E Meta+E">Code</button>
@@ -108,8 +111,16 @@
         <div class="source-editor-actions">
           <p class="source-editor-status" data-source-status role="status" aria-live="polite">Loading…</p>
           <button type="button" class="bn-button source-editor-command" data-source-find disabled title="Find and replace (Ctrl/⌘ + F in the editor)" aria-keyshortcuts="Control+F Meta+F">Find</button>
-          <button type="button" class="bn-button source-editor-save" data-source-save disabled aria-keyshortcuts="Control+S Meta+S">Save</button>
+          <div class="source-save-controls">
+            <span id="source-save-state" data-source-save-state><span role="status" aria-live="polite" data-save-label></span><span data-save-age aria-live="off"></span></span>
+            <button type="button" class="bn-button source-editor-save" data-source-save disabled aria-describedby="source-save-state" aria-keyshortcuts="Control+S Meta+S">Save</button>
+          </div>
         </div>
+      </div>
+
+      <div class="source-editor-tabs" role="tablist" aria-label="Editor and preview">
+        <button type="button" role="tab" id="source-editor-tab-edit" class="bn-button source-editor-tab" data-source-tab="edit" aria-selected="true" aria-controls="source-editor-pane-edit">Edit</button>
+        <button type="button" role="tab" id="source-editor-tab-preview" class="bn-button source-editor-tab" data-source-tab="preview" aria-selected="false" aria-controls="source-editor-pane-preview" tabindex="-1">Preview</button>
       </div>
 
       <!--
@@ -140,11 +151,6 @@
 
       {{if .Thread}}<div class="thread-writing-layout">{{end}}
       <div class="source-editor-panes" data-source-panes>
-        <div class="source-editor-tabs" role="tablist" aria-label="Editor and preview">
-          <button type="button" role="tab" id="source-editor-tab-edit" class="bn-button source-editor-tab" data-source-tab="edit" aria-selected="true" aria-controls="source-editor-pane-edit">Edit</button>
-          <button type="button" role="tab" id="source-editor-tab-preview" class="bn-button source-editor-tab" data-source-tab="preview" aria-selected="false" aria-controls="source-editor-pane-preview" tabindex="-1">Preview</button>
-        </div>
-
         <div class="source-editor-pane source-editor-pane-edit" id="source-editor-pane-edit" role="tabpanel" tabindex="0" aria-labelledby="source-editor-tab-edit" data-source-pane="edit">
           <div class="source-editor-surface" data-source-surface></div>
         </div>
@@ -159,7 +165,6 @@
       {{if .Thread}}<aside class="thread-material" data-thread-material aria-label="Collected material"><h2>Collected material</h2><p>Loading passages…</p></aside></div>{{end}}
       <div class="source-writing-footer">
         <span data-writing-count title="Word count of Markdown source, excluding frontmatter. Links and code are included."></span>
-        <label><input type="checkbox" data-writing-spellcheck checked> Spellcheck</label>
       </div>
 
       <section class="source-editor-conflict" data-source-conflict hidden aria-labelledby="source-editor-conflict-heading">
@@ -181,8 +186,8 @@
       -->
       <div class="source-editor-attach">
         <input type="file" class="source-editor-attachment-input" data-source-attachment-input multiple hidden aria-hidden="true" tabindex="-1">
-        <button type="button" class="source-editor-attachment-choose" data-source-attachment-choose>Attach files…</button>
-        <p class="source-editor-attach-hint">You can also paste an image or drop files onto the editor. Attachments are added to the note when you save.</p>
+        <button type="button" class="source-editor-attachment-choose" data-source-attachment-choose aria-describedby="source-attach-hint">Attach files…</button>
+        <p id="source-attach-hint" class="source-editor-attach-hint">Paste images or drop files here, then Save to add them to the note.</p>
         <p class="source-editor-attach-status" data-source-attachment-status role="status" aria-live="polite"></p>
       </div>
 

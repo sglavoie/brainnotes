@@ -32,7 +32,7 @@ describe("a browser that will not keep a copy", () => {
     await tick();
     await harness.controller.save();
 
-    expect(harness.status()).toContain("Saved to vault.");
+    expect(harness.saveState()).toBe("Saved just now");
     expect(harness.client.save).toHaveBeenCalledTimes(1);
     // And it is still said afterwards. Nothing in a load or a save makes this
     // browser start keeping copies, so the line that says so may not be cleared

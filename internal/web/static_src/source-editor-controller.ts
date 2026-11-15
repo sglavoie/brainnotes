@@ -1,3 +1,4 @@
+import { updateSaveButton, createSaveState } from "./source-save-state";
 import { initWritingPreferences } from "./source-writing";
 import { wireEditor } from "./source-editor-bindings";
 import { setSourceStatus } from "./source-status";
@@ -89,6 +90,7 @@ export type EditorState = {
   // server answered clears the pair, because the next save is a new attempt.
   pendingSave: { id: string; content: string } | null;
   saving: boolean;
+  savedAt?: number;
 };
 
 export const createSourceEditorController = (
@@ -100,12 +102,10 @@ export const createSourceEditorController = (
   const panes = initSourcePanes(elements);
   initWritingPreferences(elements.panel, panes);
   const state: EditorState = {
-    surface: null,
-    baseRevision: "",
-    savedContent: "",
-    pendingSave: null,
-    saving: false,
+    surface: null, baseRevision: "", savedContent: "", pendingSave: null, saving: false,
   };
+
+  const saveState = createSaveState(elements.panel, state);
 
   const setStatus = (message: string, kind: StatusKind = "", idle = false): void => {
     setSourceStatus(elements.status, message, kind, idle);
@@ -126,8 +126,8 @@ export const createSourceEditorController = (
   const refreshSaveButton = (): void => {
     const pending = dirty() || state.pendingSave !== null;
     title.update(pending);
-    const disabled = state.saving || !pending;
-    if (elements.save && elements.save.disabled !== disabled) elements.save.disabled = disabled;
+    saveState.refresh();
+    updateSaveButton(elements.save, state.saving || !pending);
   };
 
   const drafts = createKeeper(deps, state, {
@@ -146,6 +146,7 @@ export const createSourceEditorController = (
   // answering for the person, and after a reload that record is precisely the
   // text the page exists to hand back.
   const adopt = (content: string, revision: string, settled = true): void => {
+    state.savedAt = undefined;
     state.savedContent = content;
     state.baseRevision = revision;
     state.pendingSave = null;
@@ -184,6 +185,7 @@ export const createSourceEditorController = (
       state.surface = null;
       unbind?.();
       title.dispose();
+      saveState.dispose();
     },
   };
 
@@ -420,11 +422,7 @@ export const refreshEditStatus = (
 ): void => {
   renderConflictComparison(elements, state.surface?.getValue() ?? "");
   if (statusHeld(elements, state)) return;
-  if (state.surface?.getValue() === state.savedContent) {
-    setStatus("No unsaved changes.", "", true);
-  } else {
-    setStatus("Unsaved changes.");
-  }
+  setStatus("", "", true);
 };
 
 // Collection edits use the same surface transaction as typing, preserving undo.

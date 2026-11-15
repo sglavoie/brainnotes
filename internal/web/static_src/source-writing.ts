@@ -1,3 +1,4 @@
+import { applyFocusView } from "./source-writing-focus";
 import type { SourcePanes } from "./source-editor-panes";
 
 // Desktop presentation is independent of the narrow-screen Edit/Preview tabs.
@@ -25,12 +26,13 @@ export const initWritingPreferences = (panel: HTMLElement, panes: SourcePanes): 
   };
   const apply = (): void => {
     container.dataset.writingLayout = ["source", "focus"].includes(layout.value) ? "write" : layout.value;
-    panel.closest<HTMLElement>(".source-editor-main")?.classList.toggle("is-writing-focus", layout.value === "focus");
     panel.dataset.writingFont = font.value;
     panel.dataset.writingSource = String(layout.value === "source" || font.value === "mono");
     panel.dispatchEvent(new Event("bn:writing-presentation"));
     if (font.value !== "mono") document.documentElement.dataset.readingType = font.value === "prose" ? "book" : "";
     panes.select(layout.value === "preview" ? "preview" : "edit");
+    applyFocusView(panel, layout.value === "focus");
+
   };
   for (const control of [layout, font]) control.addEventListener("change", () => {
     apply();

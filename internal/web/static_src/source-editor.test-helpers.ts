@@ -43,7 +43,7 @@ export const editorMarkup = (): string => `
   <div class="source-editor-toolbar">
     <button type="button" data-source-command="bold">Bold</button>
     <button type="button" data-source-command="wikilink">Wikilink</button>
-    <button type="button" data-source-save disabled>Save</button>
+    <span id="source-save-state" data-source-save-state><span role="status" data-save-label></span><span data-save-age aria-live="off"></span></span><button type="button" data-source-save disabled aria-describedby="source-save-state">Save</button>
     <button type="button" data-source-find disabled>Find</button>
   </div>
   <p data-source-status></p>

@@ -153,7 +153,7 @@ test("hosted browsing, keyboard save, and IME composition form one complete work
   releaseSearch();
 
   await page.keyboard.press("ControlOrMeta+s");
-  await expect(page.locator("[data-source-status]")).toHaveClass(/is-success/);
+  await expect(page.locator("[data-source-save-state]")).toHaveText("Saved just now");
   await expect(page.locator("[data-source-save]")).toBeDisabled();
 
   const after = readFileSync(NOTE_PATH, "utf8");

@@ -89,7 +89,7 @@ test("long note editing remains responsive", async ({ page, context }, testInfo)
   }
   const saveStart = Date.now();
   await page.locator("[data-source-save]").click();
-  await waitForStatus(page, "[data-source-status]", "Saved to vault");
+  await waitForStatus(page, "[data-save-label]", "Saved");
   const saveConfirmationMilliseconds = Date.now() - saveStart;
   await report(page, testInfo, { typingMilliseconds: samples, coldNavigationMilliseconds, saveConfirmationMilliseconds });
   expect(coldNavigationMilliseconds).toBeLessThan(8000);

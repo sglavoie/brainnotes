@@ -53,7 +53,7 @@ for (const width of [1280, 390]) {
     await caretToEnd(page);
     await page.keyboard.type("A paragraph that should follow me to another device.");
     await page.locator("[data-source-save]").click();
-    await expect(page.locator("[data-source-status]")).toHaveClass(/is-success/);
+    await expect(page.locator("[data-source-save-state]")).toHaveText("Saved just now");
     await expect(page.locator("[data-source-save]")).toBeDisabled();
     const savedURL = page.url();
     // Close the original page and resume in a separate browser context: no

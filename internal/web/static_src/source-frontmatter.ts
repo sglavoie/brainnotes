@@ -1,4 +1,4 @@
-import { codeFolding, foldEffect, foldedRanges } from "@codemirror/language";
+import { codeFolding, foldEffect, foldedRanges, unfoldEffect } from "@codemirror/language";
 import { EditorState } from "@codemirror/state";
 import { EditorView, ViewPlugin, type ViewUpdate } from "@codemirror/view";
 import { repeatedTitle } from "./source-presentation";
@@ -16,30 +16,29 @@ export const initialSourceState = (state: EditorState, title = ""): EditorState 
   return state.update({ effects: range ? foldEffect.of(range) : [], selection: { anchor: heading?.next ?? range?.body ?? 0 } }).state;
 };
 
-const frontmatterPlaceholder = (_view: EditorView, unfold: (event: Event) => void): HTMLElement => {
-  const button = document.createElement("button");
-  button.type = "button";
-  button.className = "bn-button source-editor-frontmatter";
-  button.textContent = "Show frontmatter";
-  button.setAttribute("aria-label", "Show frontmatter in source editor");
-  button.setAttribute("aria-expanded", "false");
-  button.addEventListener("click", unfold);
-  return button;
+const frontmatterPlaceholder = (): HTMLElement => {
+  const placeholder = document.createElement("span");
+  placeholder.className = "source-frontmatter-placeholder";
+  placeholder.setAttribute("aria-hidden", "true");
+  return placeholder;
 };
 
 class FrontmatterControl {
-  private readonly button = document.createElement("button");
+  private readonly button: HTMLButtonElement | null;
   private range: ReturnType<typeof headerRange>;
+  private folded = false;
+  private readonly toggle = (): void => {
+    if (!this.range) return;
+    const selection = this.view.state.selection.main;
+    this.view.dispatch({ effects: (this.folded ? unfoldEffect : foldEffect).of(this.range),
+      ...(!this.folded && selection.from < this.range.to ? { selection: { anchor: this.range.body } } : {}) });
+    this.button?.focus({ preventScroll: true });
+  };
 
   constructor(private readonly view: EditorView) {
     this.range = headerRange(view.state);
-    this.button.type = "button";
-    this.button.className = "bn-button source-editor-frontmatter source-frontmatter-hide";
-    this.button.textContent = "Hide frontmatter";
-    this.button.setAttribute("aria-label", "Hide frontmatter in source editor");
-    this.button.setAttribute("aria-expanded", "true");
-    this.button.addEventListener("click", () => this.fold());
-    view.dom.prepend(this.button);
+    this.button = view.dom.closest("[data-source-editor]")?.querySelector("[data-source-frontmatter]") ?? null;
+    this.button?.addEventListener("click", this.toggle);
     this.sync();
   }
 
@@ -56,20 +55,16 @@ class FrontmatterControl {
     if (update.docChanged || foldedRanges(update.startState) !== foldedRanges(update.state)) this.sync();
   }
 
-  destroy(): void { this.button.remove(); }
+  destroy(): void { this.button?.removeEventListener("click", this.toggle); }
 
   private sync(): void {
-    let folded = false;
-    if (this.range) foldedRanges(this.view.state).between(0, this.range.to, (from) => { if (from === 0) folded = true; });
-    this.button.hidden = !this.range || folded;
-  }
-
-  private fold(): void {
-    if (!this.range) return;
-    const selection = this.view.state.selection.main;
-    this.view.dispatch({ effects: foldEffect.of(this.range),
-      ...(selection.from < this.range.to ? { selection: { anchor: this.range.body } } : {}) });
-    this.view.dom.querySelector<HTMLButtonElement>(".cm-content .source-editor-frontmatter")?.focus({ preventScroll: true });
+    this.folded = false;
+    if (this.range) foldedRanges(this.view.state).between(0, this.range.to, (from) => { if (from === 0) this.folded = true; });
+    if (!this.button) return;
+    this.button.hidden = !this.range;
+    this.button.textContent = `${this.folded ? "Show" : "Hide"} frontmatter`;
+    this.button.setAttribute("aria-label", `${this.button.textContent} in source editor`);
+    this.button.setAttribute("aria-expanded", String(!this.folded));
   }
 }
 

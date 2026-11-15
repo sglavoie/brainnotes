@@ -168,7 +168,10 @@ Save reachable while writing. Property forms and Library selection controls
 should appear when they are useful, with keyboard access to each disclosure.
 On phones, Format, Find, and Save share the first editor toolbar row when they
 fit. The editor starts without a readiness message at every width; save outcomes
-and errors remain visible below those controls.
+appear beside Save; errors and recovery messages remain visible below those controls.
+Frontmatter and Spellcheck live inside Format. Focus hides ordinary chrome;
+Escape or tapping the title restores it while actionable sync/save messages
+remain available.
 
 ## Mobile and accessibility polish
 

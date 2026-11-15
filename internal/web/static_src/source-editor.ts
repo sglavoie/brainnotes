@@ -28,7 +28,7 @@ import {
   createAttachmentTracker,
   type AttachmentTracker,
 } from "./source-attachments";
-import { closeDisclosureOnEscape } from "./disclosure-popover";
+import { closeDisclosureOnEscape, closeDisclosureOnOutsidePointer, closeDisclosureOnFocusOut } from "./disclosure-popover";
 import { initAttachmentPanel, renderAttachmentList } from "./source-attachment-panel";
 import { initSourceManage } from "./source-editor-manage";
 import { createSourceClient, randomID, type AttachmentClaims } from "./source-save";
@@ -205,4 +205,6 @@ const initFormatDisclosure = (panel: HTMLElement): void => {
     if (event.target instanceof Element && event.target.closest("[data-source-command]")) details.open = false;
   });
   closeDisclosureOnEscape(details);
+  closeDisclosureOnOutsidePointer(details);
+  closeDisclosureOnFocusOut(details);
 };

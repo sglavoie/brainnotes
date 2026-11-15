@@ -15,7 +15,8 @@ export const ROWS = "[data-source-attachment-list] > li";
 export const MARKER = manifest.fixtureRoot.split("/").pop();
 
 export async function openCreatedEditor(page, title) {
-  await openEditor(page, `/n/${encodeURIComponent(title)}`, "Show frontmatter");
+  await openEditor(page, `/n/${encodeURIComponent(title)}`, "");
+  await page.locator(".source-editor-format > summary").click();
   await page.getByRole("button", { name: "Show frontmatter in source editor" }).click();
   await expect(page.locator(SURFACE)).toContainText(`title: ${title}`);
 }

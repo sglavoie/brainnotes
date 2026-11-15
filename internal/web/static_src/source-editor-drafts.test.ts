@@ -64,7 +64,7 @@ describe("keeping unsaved text", () => {
 
     expect(harness.drafts()).toEqual([]);
     expect(harness.draftStatus()).toBe("");
-    expect(harness.status()).toContain("Saved to vault.");
+    expect(harness.saveState()).toBe("Saved just now");
   });
 
   // The interruption this feature is most often answering: the request is in
@@ -109,7 +109,7 @@ describe("keeping unsaved text", () => {
     expect(harness.draftStatus()).toContain("Save to write it to the vault");
     expect(harness.draftStatus()).not.toMatch(/\bsaved\b/i);
     // Local draft custody and unsaved edits are distinct from a vault save.
-    expect(harness.status()).toBe("Unsaved changes.");
+    expect(harness.saveState()).toBe("Unsaved changes");
     expect(harness.elements.draftStatus).not.toBe(harness.elements.status);
   });
 });

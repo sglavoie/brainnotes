@@ -157,6 +157,7 @@ for (const [width, height] of [[320, 568], [390, 640]]) {
     await page.goto("/edit?key=Survey");
     await expect(page.locator(".cm-line").filter({ hasText: /^The water has fallen/ }).first()).toBeInViewport();
     await expect(page.locator("[data-source-save]")).toBeInViewport({ ratio: 1 });
+    await page.locator(".source-editor-format > summary").click();
     const unfold = page.getByRole("button", { name: "Show frontmatter in source editor" });
     await unfold.click();
     await expect(page.locator(".cm-content")).toContainText("location: North bank");

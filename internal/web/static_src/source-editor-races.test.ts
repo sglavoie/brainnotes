@@ -79,11 +79,11 @@ describe("the save line", () => {
     expect(harness.elements.status?.dataset.idle).toBe("true");
 
     harness.surface().type(`${LOADED}more\n`);
-    expect(harness.status()).toBe("Unsaved changes.");
-    expect(harness.elements.status?.dataset.idle).toBe("false");
+    expect(harness.saveState()).toBe("Unsaved changes");
+    expect(harness.status()).toBe("");
 
     harness.surface().type(LOADED);
-    expect(harness.status()).toBe("No unsaved changes.");
+    expect(harness.saveState()).toBe("Saved");
     expect(harness.elements.status?.dataset.idle).toBe("true");
   });
 
@@ -102,7 +102,7 @@ describe("the save line", () => {
     expect(harness.elements.status?.classList.contains("is-error")).toBe(true);
 
     harness.surface().type("fixed\n");
-    expect(harness.status()).toBe("Unsaved changes.");
+    expect(harness.saveState()).toBe("Unsaved changes");
   });
 
   it("clears the conflict's error once its version is taken", async () => {
@@ -113,7 +113,7 @@ describe("the save line", () => {
 
     expect(harness.elements.status?.classList.contains("is-error")).toBe(false);
     harness.surface().type("after the discard\n");
-    expect(harness.status()).toBe("Unsaved changes.");
+    expect(harness.saveState()).toBe("Unsaved changes");
   });
 });
 
@@ -129,8 +129,8 @@ describe("restoring a draft", () => {
 
     harness.elements.recoveryRestore?.click();
 
-    expect(harness.status()).toBe("Unsaved changes.");
-    expect(harness.elements.status?.dataset.idle).toBe("false");
+    expect(harness.saveState()).toBe("Unsaved changes");
+    expect(harness.status()).toBe("");
   });
 });
 
@@ -148,7 +148,7 @@ describe("edits typed during a save", () => {
     answer.resolve(draftSaveSuccess({ revision: "r2" }));
     await saving;
 
-    expect(harness.status()).toBe("Saved to vault. Newer edits are still unsaved.");
+    expect(harness.saveState()).toBe("Unsaved changes");
     expect(harness.drafts()).toEqual([
       expect.objectContaining({ content: `${EDITED}more\n`, baseRevision: "r2" }),
     ]);

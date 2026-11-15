@@ -65,7 +65,7 @@ test("a file chosen in the browser is staged, linked, and enters the vault with 
   await expect(page.locator("[data-source-save]")).toBeEnabled();
 
   await page.keyboard.press("ControlOrMeta+s");
-  await expect(page.locator("[data-source-status]")).toHaveClass(/is-success/);
+  await expect(page.locator("[data-source-save-state]")).toHaveText("Saved just now");
 
   expect(readFileSync(filed, "utf8"), "the committed bytes are not the sent bytes").toBe(
     file.buffer.toString(),
@@ -112,7 +112,7 @@ test("a file dropped on the editor and one pasted into it are staged the same wa
   }
 
   await page.keyboard.press("ControlOrMeta+s");
-  await expect(page.locator("[data-source-status]")).toHaveClass(/is-success/);
+  await expect(page.locator("[data-source-save-state]")).toHaveText("Saved just now");
   await expect(page.locator("[data-source-attachments]")).toBeHidden();
 
   const note = readFileSync(vaultPath(NOTE), "utf8");
@@ -153,7 +153,7 @@ test("a staged file removed before the save never reaches the vault", async ({ p
   await expect(page.locator(SURFACE)).toContainText(linkFor(file.name));
 
   await page.keyboard.press("ControlOrMeta+s");
-  await expect(page.locator("[data-source-status]")).toHaveClass(/is-success/);
+  await expect(page.locator("[data-source-save-state]")).toHaveText("Saved just now");
   expect(existsSync(filed), "a removed file reached the vault on the next save").toBe(false);
   expect(readFileSync(vaultPath(NOTE), "utf8")).toContain(linkFor(file.name));
   expect(gitStatus(manifest.localVault)).toBe("");
@@ -236,6 +236,7 @@ test("a note created from the editor survives a property, a pin, a move, a trash
   await page.locator("[data-source-property-set]").click();
   // A property rewrites the note behind the editor's back, so a clean editor
   // re-reads it with frontmatter folded. Reopen it to inspect the vault's answer.
+  await page.locator(".source-editor-format > summary").click();
   await page.getByRole("button", { name: "Show frontmatter in source editor" }).click();
   await expect(page.locator(SURFACE)).toContainText("status: journeyed");
 
@@ -302,9 +303,11 @@ test("a property removed, a pin lifted, and a line captured over unsaved text", 
   await page.locator("[data-source-property-name]").fill("status");
   await page.locator("[data-source-property-value]").fill("temporary");
   await page.locator("[data-source-property-set]").click();
+  await page.locator(".source-editor-format > summary").click();
   await page.getByRole("button", { name: "Show frontmatter in source editor" }).click();
   await expect(page.locator(SURFACE)).toContainText("status: temporary");
   await page.locator("[data-source-property-unset]").click();
+  await page.locator(".source-editor-format > summary").click();
   await page.getByRole("button", { name: "Show frontmatter in source editor" }).click();
   await expect(page.locator(SURFACE)).not.toContainText("status: temporary");
 

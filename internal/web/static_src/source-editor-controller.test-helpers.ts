@@ -28,6 +28,7 @@ export type Harness = {
     search: ReturnType<typeof vi.fn>;
   };
   status(): string;
+  saveState(): string;
   saveButton(): HTMLButtonElement;
   conflict(): HTMLElement;
 };
@@ -94,6 +95,7 @@ export const mount = (
       return surface;
     },
     status: () => elements.status?.textContent ?? "",
+    saveState: () => elements.panel.querySelector("[data-source-save-state]")?.textContent ?? "",
     saveButton: () => {
       if (!elements.save) {
         throw new Error("fixture is missing the save button");

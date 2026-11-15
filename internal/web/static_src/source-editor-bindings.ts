@@ -1,3 +1,4 @@
+import { bindFocusExit } from "./source-writing-focus";
 import type { EditorState, SaveContext, SourceEditorController } from "./source-editor-controller";
 import type { SourceEditorElements } from "./source-editor-elements";
 import type { SourceFormatCommand } from "./source-format";
@@ -21,7 +22,9 @@ export const wireEditor = (
       ctx.preview.flush(state.surface?.getValue() ?? "");
     }
   });
-  return bindGlobalKeys(ownerDocument, controller);
+  const unbindKeys = bindGlobalKeys(ownerDocument, controller);
+  const unbindFocus = bindFocusExit(elements.panel);
+  return () => { unbindKeys(); unbindFocus(); };
 };
 
 // The save shortcut is bound on the document rather than only in the editor's

@@ -110,11 +110,11 @@ describe("saving", () => {
     await harness.controller.save();
     expect(harness.client.save.mock.calls[0][0]).toMatchObject({ content: "edited\n", revision: "r1" });
     expect(harness.controller.dirty()).toBe(false);
-    expect(harness.status()).toBe("Saved to vault.");
+    expect(harness.saveState()).toBe("Saved just now");
     expect(document.title).toBe("Edit Alpha - bn serve");
 
     harness.surface().type("edited twice\n");
-    expect(harness.status()).toBe("Unsaved changes.");
+    expect(harness.saveState()).toBe("Unsaved changes");
     await harness.controller.save();
     expect(harness.client.save.mock.calls[1][0]).toMatchObject({ revision: "r2" });
   });
@@ -242,7 +242,7 @@ it("keeps the tab marked when typing continues during a save", async () => {
   answer.resolve(saveSuccess());
   await saving;
   expect(document.title).toBe("• Edit Alpha - bn serve");
-  expect(harness.status()).toBe("Saved to vault. Newer edits are still unsaved.");
+  expect(harness.saveState()).toBe("Unsaved changes");
   await harness.controller.save();
   expect(document.title).toBe("Edit Alpha - bn serve");
 });

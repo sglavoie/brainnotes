@@ -89,5 +89,5 @@ async function replaceSource(page, text) {
   await page.keyboard.insertText(text);
   await page.locator('[data-source-save]').click();
   await expect(page.locator('[data-source-save]')).toBeDisabled();
-  await expect(page.locator('[data-source-status]')).toHaveClass(/is-success/);
+  await expect(page.locator('[data-source-save-state]')).toHaveText('Saved just now');
 }

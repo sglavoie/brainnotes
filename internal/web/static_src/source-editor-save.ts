@@ -42,7 +42,7 @@ export const runSave = async (
   const base = state.baseRevision;
   state.pendingSave = { id: resumableSaveID(state.pendingSave, content), content };
   ctx.refreshSaveButton();
-  ctx.setStatus("Saving…", "is-loading");
+  ctx.setStatus("", "", true);
   const waiting = window.setTimeout(() =>
     ctx.setStatus("Still saving… Your text is still in the editor.", "is-loading"), 500);
   try {
@@ -100,13 +100,13 @@ const applyOutcome = (
   switch (outcome.kind) {
     case "saved":
       ctx.adopt(submitted, outcome.revision);
+      state.savedAt = Date.now();
       hideConflict(elements);
       // The other tabs on this origin are told, and told only. Each of them is
       // holding its own unsaved text against its own pinned revision, so this is
       // a notice that the note has moved — never an instruction to adopt it.
       ctx.drafts.announce(outcome.revision);
-      ctx.setStatus(state.surface?.getValue() === submitted
-        ? "Saved to vault." : "Saved to vault. Newer edits are still unsaved.", "is-success");
+      ctx.setStatus("", "", true);
       return;
     case "landed":
       // The bytes are on disk and the content history does not cover them. The

@@ -23,6 +23,7 @@ test("a fresh editor starts with prose and reversible frontmatter folding, respe
   await expect(page.locator("[data-source-pane=preview]")).toBeHidden();
   await expect(editor).toContainText("Alpha body");
   await expect(editor).not.toContainText("title: Alpha");
+  await page.locator(".source-editor-format > summary").click();
   const show = page.getByRole("button", { name: "Show frontmatter in source editor" });
   await show.focus();
   await show.press("Enter");

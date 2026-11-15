@@ -15,6 +15,7 @@ for (const [width, height] of [[390, 640], [320, 568]]) {
     await expect(page.locator("[data-source-rename-title]")).toBeHidden();
     await expect(page.locator("[data-note-history]")).toBeHidden();
     await expect(page.locator("[data-source-save]")).toBeDisabled();
+    await page.locator(".source-editor-format > summary").click();
     const unfold = page.getByRole("button", { name: "Show frontmatter in source editor" });
     await unfold.focus();
     await unfold.press("Enter");
@@ -92,6 +93,6 @@ test("uncertain save keeps the draft and offers safe retry with distinct success
   await expect(page.locator("[data-source-save]")).toBeEnabled();
   await page.unroute("**/api/source/save");
   await page.locator("[data-source-save]").click();
-  await expect(page.locator("[data-source-status]")).toHaveText("Saved to vault.");
+  await expect(page.locator("[data-source-save-state]")).toHaveText("Saved just now");
   await expect(page.locator("[data-source-draft-status]")).toBeEmpty();
 });
