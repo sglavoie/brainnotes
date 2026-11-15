@@ -11,7 +11,7 @@ already directly linked. Each tab starts with two suggestions; Show more expands
 to five, then in groups of five to a
 hard cap of twenty. Cards lead with the title, relationship, a bounded prose-first
 excerpt, an optional bridge, and the strongest human reason. The path and up to
-three reasons remain available under **Why this connection?**. Common filler words are omitted from
+three reasons remain available under **Why, and more actions**. Common filler words are omitted from
 text-match explanations. Preview a candidate before opening it with the eye
 button, or hover over its title. Numeric scores and
 ranking weights are intentionally not sent to or rendered by the browser.
@@ -21,7 +21,8 @@ including the requested number of results after **Show more**. Existing results
 stay visible while retrying. Switching tabs keeps each mode's recovery separate.
 
 **Explore connection** opens both notes and their passages together. **Useful**
-remains beside it; **More actions** contains Dismiss, Later and Open in editor.
+remains beside it; **Why, and more actions** is the card's one disclosure, holding
+the reasons followed by Dismiss, Later and Open in editor.
 The connection preview itself writes nothing.
 
 Feedback is directed from the note being viewed to the candidate. **Useful**

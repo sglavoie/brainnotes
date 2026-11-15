@@ -5274,78 +5274,17 @@ code {
 
 .frontmatter-row dd > .frontmatter-list { display: flex; flex-wrap: wrap; gap: 0.15rem 0.6rem; list-style: none; padding-left: 0; }
 /* internal/web/static_src/css/backlinks.css */
-.backlink-item + .backlink-item {
-  margin-top: 0.85rem;
-}
-
-.backlink-summary {
-  display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-  align-items: baseline;
-  min-width: 0;
-}
-
-.backlink-summary a {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.backlink-count,
-.backlink-location {
-  color: var(--bn-muted);
-  font-size: 0.85rem;
-}
-
-.backlink-count {
-  flex: 0 0 auto;
-}
-
-.backlink-occurrences {
-  display: grid;
-  gap: 0.35rem;
-  margin: 0.35rem 0 0;
-  padding-left: 0;
-  color: var(--bn-text-subtle);
-  font-size: 0.9rem;
-  list-style: none;
-}
-
-.backlink-occurrences li {
-  min-width: 0;
-  border-left: 2px solid var(--bn-border);
-  padding-left: 0.55rem;
-}
-
-.backlink-location {
-  display: block;
-  margin-right: 0;
-  white-space: normal;
-  overflow-wrap: anywhere;
-}
-
-.backlink-snippet {
-  overflow-wrap: anywhere;
-}
-
-.backlink-more {
-  margin-top: 0.35rem;
-  font-size: 0.9rem;
-}
-
-.backlink-more summary {
-  color: var(--bn-muted);
-  cursor: pointer;
-}
-
+.backlink-item + .backlink-item { margin-top: 0.85rem; }
+.backlink-summary { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: baseline; min-width: 0; }
+.backlink-summary a { min-width: 0; overflow-wrap: anywhere; }
+.backlink-occurrences { display: grid; gap: 0.35rem; margin: 0.35rem 0 0; padding-left: 0; color: var(--bn-text-subtle); font-size: 0.9rem; list-style: none; }
+.backlink-occurrences li { display: flex; flex-direction: column; min-width: 0; border-left: 2px solid var(--bn-border); padding-left: 0.55rem; }
+.backlink-location { display: block; margin: 0.15rem 0 0; color: var(--bn-muted); font-size: 0.75rem; overflow-wrap: anywhere; }
+.backlink-snippet { order: -1; line-height: 1.65; overflow-wrap: anywhere; }
+.backlink-more { margin-top: 0.35rem; font-size: 0.78rem; }
+.backlink-more > summary { width: fit-content; padding-block: 0.35rem; color: var(--bn-muted); cursor: pointer; }
 .note-meta-sidebar .panel h2 { font-size: 0.85rem; font-weight: 500; color: var(--bn-muted); }
 .note-meta-sidebar .link-list { list-style: none; padding-left: 0; }
-.backlink-more { font-size: 0.78rem; }
-.backlink-more > summary { width: fit-content; padding-block: 0.35rem; }
-.backlink-location { margin-top: 0.35rem; font-size: 0.75rem; }
-.backlink-location > summary { cursor: pointer; }
-.backlink-occurrences li { display: flex; flex-direction: column; }
-.backlink-snippet { order: -1; line-height: 1.65; }
 /* internal/web/static_src/css/broken.css */
 .broken-list {
   color: var(--bn-danger);
@@ -9073,8 +9012,7 @@ div.note-peek-anchor > .note-peek-trigger { position: absolute; right: 0; top: 0
   .note-peek-trigger { width: 2rem; height: 2rem; }
   div.note-peek-anchor { padding-right: 2.25rem; }
 }
-.related-card-why { font-size: 0.85rem; color: var(--bn-muted); }
-.related-card-why summary { cursor: pointer; padding-block: 0.3rem; }
+.related-card-why { color: var(--bn-muted); }
 .related-card-bridge { color: var(--bn-text-subtle); }
 .related-card-bridge a, .brief-connection-source a { text-decoration: underline; text-underline-offset: 0.15em; }
 .related-card-path { font-size: 0.8rem; }
@@ -10023,6 +9961,8 @@ div.note-peek-anchor > .note-peek-trigger { position: absolute; right: 0; top: 0
   .note-main:has(.sync-line:not(:empty)) > .site-header { grid-column: 1 / -1; }
   .note-main:has(.sync-line:not(:empty)) > .note-actions { grid-column: 1 / -1; grid-row: 3; }
   .note-page .note-actions .bn-button { padding-inline: 0.45rem; }
+  /* Without its desktop minimum, Pin leaves room for Actions on the same row. */
+  .note-page .note-actions .pin-button { min-width: 0; }
   .note-page .focused-workspace-tools { gap: 0.2rem; }
   .note-page .source-editor-workspace > summary { padding-inline: 0.25rem; }
 }

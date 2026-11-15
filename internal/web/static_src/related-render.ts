@@ -214,6 +214,28 @@ const appendRelatedInsight = (doc: Document, card: HTMLElement, result: RelatedR
   card.appendChild(insight);
 };
 
+// One disclosure per card: the full reasons sit with the lesser actions.
+const relatedCardActions = (doc: Document, source: string, result: RelatedResult, serverDate: string, why: HTMLElement): HTMLElement => {
+  const actions = doc.createElement("div");
+  actions.className = "related-card-actions";
+  const useful = actionButton(doc, "Useful", "useful", result.candidate.key);
+  useful.setAttribute("aria-pressed", result.useful ? "true" : "false");
+  const secondary = doc.createElement("details");
+  secondary.className = "related-secondary-actions";
+  const summary = doc.createElement("summary");
+  summary.textContent = result.reasons.length > 0 ? "Why, and more actions" : "More actions";
+  const options = doc.createElement("div");
+  options.className = "related-secondary-options";
+  options.append(
+    actionButton(doc, "Dismiss", "dismissed", result.candidate.key),
+    renderLaterControl(doc, result, serverDate),
+    actionButton(doc, "Open in editor", "open_editor", result.candidate.key)
+  );
+  secondary.append(summary, ...(why.childElementCount ? [why] : []), options);
+  actions.append(connectionButton({ source, candidate: result.candidate.key, bridge: result.bridge?.key, relationship: relatedRelationshipLabel(result.relationship) }), useful, secondary);
+  return actions;
+};
+
 const renderRelatedCard = (doc: Document, result: RelatedResult, serverDate: string, source: string): HTMLElement => {
   const card = doc.createElement("article");
   card.className = "related-card";
@@ -253,6 +275,11 @@ const renderRelatedCard = (doc: Document, result: RelatedResult, serverDate: str
     excerpt.textContent = readableExcerpt(result.excerpt);
     card.appendChild(excerpt);
   }
+  // One disclosure per card: the full reasons sit with the lesser actions,
+  // because the card already states its relationship and shared terms in the
+  // open, and two arrows under every card was more to decide than to read.
+  const why = doc.createElement("div");
+  why.className = "related-card-why";
   if (result.reasons.length > 0) {
     const reasons = doc.createElement("ul");
     reasons.className = "related-card-reasons";
@@ -265,32 +292,10 @@ const renderRelatedCard = (doc: Document, result: RelatedResult, serverDate: str
       item.append(label, detail);
       reasons.appendChild(item);
     }
-    const why = doc.createElement("details");
-    why.className = "related-card-why";
-    const summary = doc.createElement("summary");
-    summary.textContent = "Why this connection?";
-    why.append(summary, path, reasons);
-    card.appendChild(why);
+    why.append(path, reasons);
   }
 
-  const actions = doc.createElement("div");
-  actions.className = "related-card-actions";
-  const useful = actionButton(doc, "Useful", "useful", result.candidate.key);
-  useful.setAttribute("aria-pressed", result.useful ? "true" : "false");
-  const secondary = doc.createElement("details");
-  secondary.className = "related-secondary-actions";
-  const summary = doc.createElement("summary");
-  summary.textContent = "More actions";
-  const options = doc.createElement("div");
-  options.className = "related-secondary-options";
-  options.append(
-    actionButton(doc, "Dismiss", "dismissed", result.candidate.key),
-    renderLaterControl(doc, result, serverDate),
-    actionButton(doc, "Open in editor", "open_editor", result.candidate.key)
-  );
-  secondary.append(summary, options);
-  actions.append(connectionButton({ source, candidate: result.candidate.key, bridge: result.bridge?.key, relationship: relatedRelationshipLabel(result.relationship) }), useful, secondary);
-  card.appendChild(actions);
+  card.appendChild(relatedCardActions(doc, source, result, serverDate, why));
   return card;
 };
 

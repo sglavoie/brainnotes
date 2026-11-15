@@ -165,10 +165,13 @@
                       <a href="{{.Path}}">{{.Title}}</a>
                     </div>
                     {{- if .Occurrences -}}
-                      <details class="backlink-more">
-                        <summary>Read {{.Count}} {{if eq .Count 1}}passage{{else}}passages{{end}}</summary>
-                        {{template "backlinkOccurrences" .Occurrences}}
-                      </details>
+                      {{template "backlinkOccurrences" .PreviewOccurrences}}
+                      {{- with .RemainingOccurrences -}}
+                        <details class="backlink-more">
+                          <summary>{{len .}} more {{if eq (len .) 1}}passage{{else}}passages{{end}}</summary>
+                          {{template "backlinkOccurrences" .}}
+                        </details>
+                      {{- end -}}
                     {{- end -}}
                   </li>
                 {{- end -}}
@@ -418,7 +421,7 @@
 <ul class="backlink-occurrences">
   {{- range . -}}
     <li>
-      {{if .Location}}<details class="backlink-location"><summary>Source details</summary>{{.Location}}</details>{{end}}
+      {{if .Location}}<span class="backlink-location">{{.Location}}</span>{{end}}
       {{if .Snippet}}<span class="backlink-snippet">{{.Snippet}}</span>{{end}}
     </li>
   {{- end -}}

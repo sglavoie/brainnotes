@@ -1,72 +1,11 @@
-.backlink-item + .backlink-item {
-  margin-top: 0.85rem;
-}
-
-.backlink-summary {
-  display: flex;
-  gap: 0.5rem;
-  flex-wrap: wrap;
-  align-items: baseline;
-  min-width: 0;
-}
-
-.backlink-summary a {
-  min-width: 0;
-  overflow-wrap: anywhere;
-}
-
-.backlink-count,
-.backlink-location {
-  color: var(--bn-muted);
-  font-size: 0.85rem;
-}
-
-.backlink-count {
-  flex: 0 0 auto;
-}
-
-.backlink-occurrences {
-  display: grid;
-  gap: 0.35rem;
-  margin: 0.35rem 0 0;
-  padding-left: 0;
-  color: var(--bn-text-subtle);
-  font-size: 0.9rem;
-  list-style: none;
-}
-
-.backlink-occurrences li {
-  min-width: 0;
-  border-left: 2px solid var(--bn-border);
-  padding-left: 0.55rem;
-}
-
-.backlink-location {
-  display: block;
-  margin-right: 0;
-  white-space: normal;
-  overflow-wrap: anywhere;
-}
-
-.backlink-snippet {
-  overflow-wrap: anywhere;
-}
-
-.backlink-more {
-  margin-top: 0.35rem;
-  font-size: 0.9rem;
-}
-
-.backlink-more summary {
-  color: var(--bn-muted);
-  cursor: pointer;
-}
-
+.backlink-item + .backlink-item { margin-top: 0.85rem; }
+.backlink-summary { display: flex; gap: 0.5rem; flex-wrap: wrap; align-items: baseline; min-width: 0; }
+.backlink-summary a { min-width: 0; overflow-wrap: anywhere; }
+.backlink-occurrences { display: grid; gap: 0.35rem; margin: 0.35rem 0 0; padding-left: 0; color: var(--bn-text-subtle); font-size: 0.9rem; list-style: none; }
+.backlink-occurrences li { display: flex; flex-direction: column; min-width: 0; border-left: 2px solid var(--bn-border); padding-left: 0.55rem; }
+.backlink-location { display: block; margin: 0.15rem 0 0; color: var(--bn-muted); font-size: 0.75rem; overflow-wrap: anywhere; }
+.backlink-snippet { order: -1; line-height: 1.65; overflow-wrap: anywhere; }
+.backlink-more { margin-top: 0.35rem; font-size: 0.78rem; }
+.backlink-more > summary { width: fit-content; padding-block: 0.35rem; color: var(--bn-muted); cursor: pointer; }
 .note-meta-sidebar .panel h2 { font-size: 0.85rem; font-weight: 500; color: var(--bn-muted); }
 .note-meta-sidebar .link-list { list-style: none; padding-left: 0; }
-.backlink-more { font-size: 0.78rem; }
-.backlink-more > summary { width: fit-content; padding-block: 0.35rem; }
-.backlink-location { margin-top: 0.35rem; font-size: 0.75rem; }
-.backlink-location > summary { cursor: pointer; }
-.backlink-occurrences li { display: flex; flex-direction: column; }
-.backlink-snippet { order: -1; line-height: 1.65; }

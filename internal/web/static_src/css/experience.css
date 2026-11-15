@@ -47,8 +47,7 @@ div.note-peek-anchor > .note-peek-trigger { position: absolute; right: 0; top: 0
   .note-peek-trigger { width: 2rem; height: 2rem; }
   div.note-peek-anchor { padding-right: 2.25rem; }
 }
-.related-card-why { font-size: 0.85rem; color: var(--bn-muted); }
-.related-card-why summary { cursor: pointer; padding-block: 0.3rem; }
+.related-card-why { color: var(--bn-muted); }
 .related-card-bridge { color: var(--bn-text-subtle); }
 .related-card-bridge a, .brief-connection-source a { text-decoration: underline; text-underline-offset: 0.15em; }
 .related-card-path { font-size: 0.8rem; }

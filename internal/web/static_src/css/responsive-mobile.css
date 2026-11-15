@@ -377,6 +377,8 @@
   .note-main:has(.sync-line:not(:empty)) > .site-header { grid-column: 1 / -1; }
   .note-main:has(.sync-line:not(:empty)) > .note-actions { grid-column: 1 / -1; grid-row: 3; }
   .note-page .note-actions .bn-button { padding-inline: 0.45rem; }
+  /* Without its desktop minimum, Pin leaves room for Actions on the same row. */
+  .note-page .note-actions .pin-button { min-width: 0; }
   .note-page .focused-workspace-tools { gap: 0.2rem; }
   .note-page .source-editor-workspace > summary { padding-inline: 0.25rem; }
 }

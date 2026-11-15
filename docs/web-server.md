@@ -53,6 +53,11 @@ Library shows one results list as you type; Enter moves focus to its heading.
 The matching count and result actions sit together above the list.
 An active search uses a compact phone layout with two-line excerpts to leave more
 room for results.
+When a text search finds nothing, Library asks **Did you mean** with the closest
+note titles as links; search itself stays exact, so results, selections and
+saved views contain only notes that really match.
+An address that leads to no note answers with a page offering the closest
+titles, a Library search for the name, and creating it.
 **Filters** opens the filter picker and the optional **Query expression** disclosure;
 active constraints remain visible when it is closed. Expressions from a saved view
 or URL open both disclosures so the active query stays visible. **Search actions**
@@ -442,8 +447,8 @@ the dialog, restores focus, and offers an inbox link. Failed or unconfirmed
 captures retain the text and the existing safe retry behavior. On the Brief, the
 dialog uses the same live form as the inline capture area.
 
-Related notes lead with the connection and excerpt. **Why this connection?**
-contains the supporting details; common filler words are omitted from textual
+Related notes lead with the connection and excerpt. **Why, and more actions**
+contains the supporting details and the lesser actions; common filler words are omitted from textual
 match explanations. Unconfigured AI appears as an optional setup disclosure.
 Short confirmation and card transitions respect reduced-motion preferences.
 
@@ -506,7 +511,12 @@ Control Space requests suggestions in a query expression. With a selected readin
 passage focused, Alt Enter opens **Write a thought**.
 
 In the switcher, ↑ / ↓ select, Enter opens, Alt Enter keeps beside, and Escape
-closes. On a previewable note link, Alt ↓ opens its preview; Escape closes it.
+closes. Besides notes and saved views it lists every destination and the
+actions the current page offers — on a note: edit, pin or unpin, quiet reading,
+copy its wikilink or URL, open it externally, and its history. Start with `>`
+to list actions only; nothing is searched and nothing is offered for creation.
+When a search finds no note, the switcher shows the closest titles instead,
+marked **Close match**, so a misspelled or half-remembered title still opens. On a previewable note link, Alt ↓ opens its preview; Escape closes it.
 Escape also closes a side reference while focus is inside it. Graph's canvas uses
 arrows to browse, Home / End for first / last, Enter / Space for neighbour labels,
 and Escape to clear selection. The Graph list uses native selection keys and

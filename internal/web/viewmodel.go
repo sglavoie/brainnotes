@@ -17,12 +17,16 @@ type noteLinkView struct {
 	Occurrences []backlinkOccurrence
 }
 
+// PreviewOccurrences is the passage shown beside a backlink without asking: the
+// sentence that links here is the reason to look at a backlink at all.
 func (link noteLinkView) PreviewOccurrences() []backlinkOccurrence {
-	return link.Occurrences[:min(2, len(link.Occurrences))]
+	return link.Occurrences[:min(1, len(link.Occurrences))]
 }
 
+// RemainingOccurrences are the passages after the preview, which stay folded so
+// a note that is mentioned many times does not push the other backlinks away.
 func (link noteLinkView) RemainingOccurrences() []backlinkOccurrence {
-	return link.Occurrences[min(2, len(link.Occurrences)):]
+	return link.Occurrences[min(1, len(link.Occurrences)):]
 }
 
 type breadcrumbItem struct {

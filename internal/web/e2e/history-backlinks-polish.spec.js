@@ -7,10 +7,14 @@ for (const width of [1280, 390]) {
     if (width < 960) await page.locator("#note-metadata-sidebar > details > summary").click();
     const backlink = page.locator(".backlink-item", { hasText: "Gamma" });
     await expect(backlink.locator(".backlink-occurrences > li")).toHaveCount(4);
-    const hidden = backlink.locator("details li");
+    // The first passage is the reason to look at a backlink, so it is shown;
+    // the rest stay folded.
+    await expect(backlink.locator(".backlink-occurrences > li").first()).toBeVisible();
+    const hidden = backlink.locator(".backlink-more li");
+    await expect(hidden).toHaveCount(3);
     await expect(hidden.first()).toBeHidden();
     const summary = backlink.locator(".backlink-more > summary");
-    await expect(summary).toHaveText("Read 4 passages");
+    await expect(summary).toHaveText("3 more passages");
     await summary.focus();
     await page.keyboard.press("Enter");
     await expect(hidden.first()).toBeVisible();
