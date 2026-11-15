@@ -80,7 +80,14 @@ for (const width of [1280, 390]) {
     const audit = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
     expect(audit.violations).toEqual([]);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-    await page.evaluate(() => { document.documentElement.dataset.theme = "dark"; localStorage.setItem("bn.theme", "dark"); });
+    await page.evaluate(async () => {
+      document.documentElement.dataset.theme = "dark";
+      localStorage.setItem("bn.theme", "dark");
+      // Audit the presented theme after button colors finish interpolating.
+      await Promise.all(document.getAnimations()
+        .filter((animation) => animation instanceof CSSTransition)
+        .map((animation) => animation.finished));
+    });
     await page.screenshot({ path: test.info().outputPath(`threads-editor-dark-${width}.png`), fullPage: true });
     const darkAudit = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21aa"]).analyze();
     expect(darkAudit.violations).toEqual([]);
