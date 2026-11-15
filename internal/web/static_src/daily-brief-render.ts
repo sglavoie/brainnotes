@@ -256,7 +256,9 @@ const discloseCardReasons = (card: HTMLElement): void => {
   summary.textContent = "Why this note?";
   details.append(summary);
   details.append(...card.querySelectorAll(".brief-card-path, .brief-card-explanation, .brief-card-meta, .brief-card-reasons"));
-  card.querySelector(".brief-ai")?.before(details);
+  // Beside the actions rather than on a row of its own: the card ends at its
+  // buttons, and the reasons open underneath them.
+  card.querySelector(".brief-card-actions")?.append(details);
 };
 
 const appendCardHeading = (doc: Document, cardEl: HTMLElement, slot: BriefSlotKind, card: BriefCard): void => {

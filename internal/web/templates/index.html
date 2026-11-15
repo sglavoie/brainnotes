@@ -155,7 +155,6 @@
                 data-brief-slot="{{.Continue.Slot}}"
                 {{if not .Continue.Card.AnotherEnabled}}disabled{{end}}
               >Another</button>
-            </div>
             <details class="brief-card-why">
               <summary>Why this note?</summary>
               <p class="brief-card-path"><code>{{.Continue.Card.SourceRelPath}}</code></p>
@@ -168,6 +167,7 @@
                 </ul>
               {{end}}
             </details>
+            </div>
             <details class="brief-ai" {{if not .InsightConfigured}}hidden{{end}}>
               <summary>Ask AI</summary>
               <div class="brief-insight-prompt-field">
@@ -241,7 +241,6 @@
                   data-brief-slot="{{.Rediscover.Slot}}"
                   {{if not .Rediscover.Card.AnotherEnabled}}disabled{{end}}
                 >Another</button>
-              </div>
               <details class="brief-card-why">
                 <summary>Why this note?</summary>
                 <p class="brief-card-path"><code>{{.Rediscover.Card.SourceRelPath}}</code></p>
@@ -254,6 +253,7 @@
                   </ul>
                 {{end}}
               </details>
+              </div>
               <details class="brief-ai" {{if not .InsightConfigured}}hidden{{end}}>
                 <summary>Ask AI</summary>
                 <div class="brief-insight-prompt-field">
@@ -331,7 +331,6 @@
                   data-brief-slot="{{.Connect.Slot}}"
                   {{if not .Connect.Card.AnotherEnabled}}disabled{{end}}
                 >Another</button>
-              </div>
               <details class="brief-card-why">
                 <summary>Why this note?</summary>
                 {{if .Connect.Card.CandidateRelPath}}
@@ -350,6 +349,7 @@
                   </ul>
                 {{end}}
               </details>
+              </div>
               <details class="brief-ai" {{if not .InsightConfigured}}hidden{{end}}>
                 <summary>Ask AI</summary>
                 <div class="brief-insight-prompt-field">

@@ -1388,7 +1388,9 @@ code {
 .brief-slot .panel-header h3 { margin: 0 0 0.6rem; font-size: 0.9rem; color: var(--bn-muted); }
 .brief-card { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .brief-card > * { grid-column: 1 / -1; }
-.brief-card > .brief-card-why, .brief-card > .brief-ai { grid-column: auto; }
+.brief-card > .brief-ai { grid-column: auto; }
+.brief-card-actions > .brief-card-why { margin-left: 0.4rem; }
+.brief-card-actions > .brief-card-why[open] { flex-basis: 100%; margin-left: 0; }
 .brief-card > details[open] { grid-column: 1 / -1; }
 .brief-card-title { font-size: 1.1rem; }
 .brief-card-excerpt { border-left: 0; padding: 0; }
@@ -9652,6 +9654,7 @@ div.note-peek-anchor > .note-peek-trigger { position: absolute; right: 0; top: 0
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+  .brief-card-actions > .brief-card-why { grid-column: 1 / -1; margin: 0; }
 
   .brief-insight-prompt-controls {
     grid-template-columns: 1fr;

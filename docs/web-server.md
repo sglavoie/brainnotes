@@ -394,6 +394,8 @@ unconfirmed captures keep the draft and recovery instructions visible.
 
 Recommended notes follow capture; maintenance stays farther down the page.
 Each card shows its title, a short reason, excerpt, and **Another** action.
+**Why this note?** sits beside those actions and opens the path and full reasons
+underneath them; on a phone it keeps a row of its own.
 Continue also shows the note's edit date when available. **Continue** offers
 **Resume writing** in the browser on writable servers, or **Read note** on a
 replica. **Rediscover** offers **Revisit note**; **Connect** names both notes and

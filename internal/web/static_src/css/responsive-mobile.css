@@ -68,6 +68,7 @@
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+  .brief-card-actions > .brief-card-why { grid-column: 1 / -1; margin: 0; }
 
   .brief-insight-prompt-controls {
     grid-template-columns: 1fr;
