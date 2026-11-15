@@ -1,5 +1,6 @@
 import { test, expect } from "./fixture.js";
 import { SURFACE } from "./editor-helpers.js";
+import { availableParallelism, loadavg } from "node:os";
 
 // CPU throttling multiplies the host's own speed, so one rate is not one device.
 // The budgets below were calibrated at 4x on a recent Mac, where steady typing
@@ -25,7 +26,11 @@ async function throttle(page, context) {
 
 async function report(page, testInfo, measurements) {
   const longTasks = await page.evaluate(() => window.performanceTasks);
-  const result = { noteCount: testInfo.project.metadata.noteCount, ...measurements, longTasks };
+  const result = {
+    noteCount: testInfo.project.metadata.noteCount, ...measurements, longTasks,
+    cpuThrottlingRate: CPU_THROTTLING_RATE,
+    host: { cpuCount: availableParallelism(), loadAverage: loadavg() },
+  };
   console.log(JSON.stringify(result));
   await testInfo.attach("vault-performance", { body: JSON.stringify(result, null, 2), contentType: "application/json" });
   expect(Math.max(0, ...longTasks)).toBeLessThan(250);

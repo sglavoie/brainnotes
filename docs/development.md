@@ -282,8 +282,11 @@ must also become visible within 5,000 ms. These ceilings leave room for CI
 variation while catching a blank first screen that a transfer-size check misses.
 Timed search, filter, and save checks observe the browser DOM on animation
 frames so assertion retry intervals do not inflate the measured response time.
-Each test attaches JSON measurements with corpus size and long
-tasks. Inspect those artifacts when a budget fails; do not raise a ceiling
-merely to pass a slower run.
+Each test attaches JSON measurements with corpus size, long tasks, CPU throttle,
+and the host's available CPU count and load averages sampled after measurement.
+Inspect those artifacts and the retained trace when a budget fails. Host load
+is diagnostic context, not proof of contention or an exemption from a bound;
+use a focused reproduction/profile before changing production code. Do not raise
+a ceiling merely to pass a slower run.
 
 [Back to the README](../README.md)

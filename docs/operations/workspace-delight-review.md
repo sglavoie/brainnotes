@@ -75,6 +75,29 @@ subsequently retained them in checkpoint `c18132e`. The repair is committed befo
 handoff so this check can run on a clean tree. Final full-suite verification
 remains with the runner.
 
+The second runner attempt passed 438 browser cases, including the repaired
+keyboard and passage checks. Its only failure was the 10,000-note typing bound:
+620 ms for the first sample, then 452/498/432/452 ms. Cold navigation and Save
+passed, and the sole recorded long task was 101 ms. The retained trace places
+most of the first sample in keyboard dispatch rather than the frame wait.
+
+Diagnosis found another project's browser tests running on the 24-CPU host,
+with initial load averages of 12.01/12.67/14.36. Subsequent samples showed
+53–70% idle CPU and no swapping, so contention remains plausible rather than
+proven. A disposable-fixture CDP profile of the same workload passed at
+426/332/284/267/266 ms, with no long tasks. The sampled JavaScript work was
+primarily CodeMirror parsing and transactions; it did not establish a new
+production defect. No unrelated process was stopped.
+
+Performance reports now include CPU throttle, available CPU count, and host
+load averages after measurement to aid future diagnosis. Every threshold,
+assertion, sample, throttle rate, and application asset remains unchanged.
+Three sequential focused repetitions of the standard 10,000-note gate passed:
+maximum typing times were 322, 408, and 362 ms; navigation stayed below 7 s,
+Save below 2.9 s, and the largest long task was 67 ms. Browser-test lint passed.
+These bounded repetitions assess variability after profiling; they do not
+replace the runner's final full-suite check.
+
 ## Visual and manual evidence
 
 Every one of the 177 changed PNG baselines listed below was inspected in 23
