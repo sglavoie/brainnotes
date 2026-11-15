@@ -18,37 +18,39 @@
  * themselves.
  */
 
-/* The navigation line. It is empty in a mode whose guard refuses the status
-   route, so every bit of its box — margin included — is conditional on there
-   being text: an empty <p> reserving a row would push the nav down on a page that
-   has nothing to say. */
+/* Empty live regions reserve no space in the header. Problems retain their
+   full sentence; only an ordinary incoming count becomes a compact pill. */
 .sync-line {
   margin: 0;
-  color: var(--bn-muted);
-  font-size: 0.85rem;
+  min-width: 0;
+  max-width: 28rem;
+  color: var(--bn-warning);
+  font-size: 0.8rem;
   overflow-wrap: anywhere;
 }
-
-.sync-line:not(:empty) {
-  margin: 0 0 0.25rem;
+.sync-line:empty { display: none; }
+.sync-line:not(:empty):not(.is-count) {
+  border-left: 2px solid var(--bn-warning-border);
+  padding-left: 0.5rem;
 }
-
-.sync-line.is-attention {
-  color: var(--bn-warning);
+.sync-line.is-count { flex: 0 0 auto; }
+.sync-line-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.75rem;
+  padding: 0 0.65rem;
+  border: 1px solid var(--bn-accent-subtle-border);
+  border-radius: 999px;
+  background: var(--bn-accent-subtle-bg);
+  color: var(--bn-accent-subtle-text);
+  white-space: nowrap;
+  box-sizing: border-box;
 }
-
-.sync-line-review {
-  display: inline-block;
-  padding-block: 0.25rem;
-  margin-block: -0.25rem;
-  color: var(--bn-link);
-  text-decoration: underline;
-  text-underline-offset: 0.12em;
-}
-
-.sync-line.is-attention:has(.sync-line-review) {
-  line-height: 1.2;
-}
+.sync-line-review { color: var(--bn-link); text-underline-offset: 0.12em; }
+.sync-line-count.sync-line-review { color: var(--bn-accent-subtle-text); text-decoration: none; }
+.sync-line-review:hover { text-decoration: underline; }
+.sync-line-review:focus-visible { outline: 2px solid var(--bn-focus); outline-offset: 2px; }
 
 .write-outcome-check {
   margin-inline-start: 0.35rem;

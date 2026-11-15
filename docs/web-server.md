@@ -14,6 +14,13 @@ navigation, search, and theme controls without leaving your draft.
 Every workspace has **Skip to content**; note pages have **Skip to note**.
 These links and the navigation disclosures work without JavaScript.
 
+Pinned with no pins, Library with no matches, and Threads before its first thread
+use a short invitation and one primary next step. **Find a note to pin** opens
+Library; **Start a thread** reveals its creation form. Library groups **Reset
+search**, links to remove individual constraints, and title-based note creation
+together, preserving unrelated filters when removing one constraint. Replicas
+keep recovery links without offering note creation.
+
 ## Find a note
 
 Use Library to combine text search, filters, and an optional **Query expression**.
@@ -306,9 +313,11 @@ transport details start collapsed; pending work or problems open them automatica
 Expand **Synchronization details** for the exact check time and the separate saved,
 packaged, acknowledged, and applied facts.
 
-The shared sync line links directly to review when incoming changes need decisions,
-using the count as its link text. Other problems and an unreadable status show a
-short explanation. Routine status stays on the Sync page. The status
+The shared header badge shows an incoming count (for example, **5 incoming**)
+beside navigation, with the full review sentence available to assistive technology
+and on hover. It links to review only when the server supplies that destination.
+An empty status takes no space; stale copies and other problems retain their
+explanations and a distinct warning treatment. Routine status stays on the Sync page. The status
 refreshes after confirmed writes and polls pending work for up to one minute. It
 stops while the page is hidden and ignores superseded replies.
 
@@ -384,7 +393,8 @@ the original card remains usable.
 Turning it off selects Sans in reading and writing. Both preferences persist in this browser.
 **Quiet reading** and **Book type** live under **Actions**.
 The compact property summary sits beneath the title, with **All properties**
-expanding the full editor there. Empty backlink and outgoing-link sections stay hidden.
+expanding the full editor there. A frontmatter title matching the heading stays
+in All properties and is omitted from the two-property summary. Empty backlink and outgoing-link sections stay hidden.
 A leading heading that repeats the page title is visually suppressed without
 editing the Markdown. Printing retains a single title and the note body.
 

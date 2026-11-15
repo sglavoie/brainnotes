@@ -370,10 +370,13 @@
 /* Reading keeps the workspace and note actions together; creation remains in
    Workspace and the command switcher. Touch targets retain their full size. */
 @media (min-width: 361px) and (max-width: 700px) {
-  .note-page .note-main { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0.3rem; }
+  .note-page .note-main { display: grid; grid-template-columns: minmax(0, auto) minmax(min-content, 1fr); gap: 0.3rem; }
   .note-main > * { grid-column: 1 / -1; }
-  .note-main > .site-header { grid-column: 1; grid-row: 3; margin: 0; }
-  .note-main > .note-actions { grid-column: 2; grid-row: 3; margin: 0; padding: 0; border: 0; justify-content: flex-end; gap: 0.2rem; }
+  .note-main > .site-header { grid-column: 1; grid-row: 2; margin: 0; }
+  .note-main > .note-actions { grid-column: 2; grid-row: 2; margin: 0; padding: 0; border: 0; justify-content: flex-end; gap: 0.2rem; }
+  /* The badge needs the full navigation row; keep note actions together below it. */
+  .note-main:has(.sync-line:not(:empty)) > .site-header { grid-column: 1 / -1; }
+  .note-main:has(.sync-line:not(:empty)) > .note-actions { grid-column: 1 / -1; grid-row: 3; }
   .note-page .note-actions .bn-button { padding-inline: 0.45rem; }
   .note-page .focused-workspace-tools { gap: 0.2rem; }
   .note-page .source-editor-workspace > summary { padding-inline: 0.25rem; }

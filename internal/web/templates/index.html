@@ -17,7 +17,6 @@
       <h1>{{ .Heading }}</h1>
       {{template "workspaceMenu" "brief"}}
     </header>
-    {{template "siteSync" .}}
     {{if not readOnly}}
       <div data-trash-undo-host data-trash-undo-csrf="{{.CSRFToken}}"></div>
     {{end}}

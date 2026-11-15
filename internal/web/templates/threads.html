@@ -5,14 +5,13 @@
 {{template "themeBoot" .}}<link rel="stylesheet" href="/static/app.css">
 </head><body>{{template "workspaceSkip" .}}<main class="index-main">
 <header class="site-header focused-workspace-header"><h1>Threads</h1>{{template "workspaceMenu" "threads"}}</header>
-{{template "siteSync" .}}
 <p class="page-subtitle">Keep a question, collected passages, and your writing together.</p>
 <section id="workspace-content" tabindex="-1" class="panel" aria-labelledby="thread-list-title">
 <h2 id="thread-list-title">Pick up your thinking</h2>
-{{if .Items}}<ul>{{range .Items}}<li><a href="/edit?key={{.Key}}">{{.Title}}</a> · <a href="{{.Path}}">Read</a></li>{{end}}</ul>
-{{else}}<p>Start with a question. As you read, add notes or selected passages to your thread.</p>{{end}}
-</section>
-<details class="panel" {{if not .Items}}open{{end}}><summary>Start a thread</summary>
+{{if .Items}}<ul>{{range .Items}}<li><a href="/edit?key={{.Key}}">{{.Title}}</a> · <a href="{{.Path}}">Read</a></li>{{end}}</ul></section>
+{{else}}<div class="workspace-empty"><p>Give a question a place to grow as you read.</p>{{end}}
+{{if not readOnly}}
+<details{{if .Items}} class="panel"{{end}}><summary{{if not .Items}} class="bn-button bn-primary"{{end}}>Start a thread</summary>
 <form class="new-note" data-new-note data-new-note-vault="{{.VaultID}}" data-new-note-context="title=thread" data-new-note-prefix="{{.Prefix}}" data-new-note-suffix="{{.Suffix}}" data-new-note-submit-label="Create thread" data-create-endpoint="/api/notes/new" data-editor-path="/edit" data-csrf="{{.CSRFToken}}">
 <label for="thread-title">Thread title</label><input id="thread-title" name="title" required maxlength="200" placeholder="Habits under stress" autocomplete="off">
 <label for="thread-question">Question</label><textarea id="thread-question" name="body" rows="3" maxlength="8000" required placeholder="What are you trying to understand?"></textarea>
@@ -20,7 +19,7 @@
 <p data-new-note-destination></p><button type="submit" class="bn-button bn-primary">Create thread</button>
 <p data-new-note-draft-status role="status"></p><p data-new-note-status role="status"></p>
 <noscript>Enable JavaScript to create threads. Existing threads are readable as Markdown notes.</noscript>
-</form></details></main><script src="/static/app.js" defer></script><script src="/static/workspace-actions.js" defer></script></body></html>
+</form></details>{{end}}{{if not .Items}}</div></section>{{end}}</main><script src="/static/app.js" defer></script><script src="/static/workspace-actions.js" defer></script></body></html>
 {{end}}
 
 {{define "briefThreads"}}

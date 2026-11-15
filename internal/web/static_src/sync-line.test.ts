@@ -45,12 +45,14 @@ it("writes the server's own sentence and links to where the decision is made", (
     document
   );
 
-  expect(line.textContent).toBe("Review 2 incoming changes");
+  expect(line.textContent).toBe("2 incoming");
   expect(line.classList.contains("is-attention")).toBe(true);
   const review = line.querySelector<HTMLAnchorElement>("a.sync-line-review");
   expect(review?.getAttribute("href")).toBe("/sync");
-  expect(review?.textContent).toBe("Review 2 incoming changes");
-  expect(review?.title).toBe("2 changes need review.");
+  expect(review?.textContent).toBe("2 incoming");
+  expect(line.title).toBe("Review 2 incoming changes");
+  expect(line.getAttribute("aria-label")).toBe("Review 2 incoming changes");
+  expect(review?.getAttribute("aria-label")).toBe("Review 2 incoming changes");
 });
 
 it("keeps a more urgent problem visible when conflicts also need review", () => {
@@ -75,6 +77,35 @@ it("offers no review link when the server names no review path", () => {
   expect(line.querySelector("a.sync-line-review")).toBeNull();
   expect(line.classList.contains("is-attention")).toBe(false);
   expect(line.textContent).toBe("");
+});
+
+it("keeps incoming counts unlinked without a capability-provided review path", () => {
+  const line = lineElement();
+  renderSyncLine(line, { ok: true, result: syncStatus({
+    headline: "conflict", needs_person: true, review_path: "", peer: { conflicts: 1 },
+  }) }, document);
+  expect(line.textContent).toBe("1 incoming");
+  expect(line.title).toBe("Review 1 incoming change");
+  expect(line.querySelector("a")).toBeNull();
+});
+
+it("clears count labels when the state becomes stale, unavailable or quiet", () => {
+  const line = lineElement();
+  const count = { ok: true as const, result: syncStatus({
+    headline: "conflict", needs_person: true, review_path: "/sync", peer: { conflicts: 5 },
+  }) };
+  for (const outcome of [
+    { ok: true as const, result: syncStatus({ headline: "stale", needs_person: true, summary: "This copy is over 15 minutes old." }) },
+    { ok: false as const, code: "internal", message: "Unavailable" },
+    { ok: true as const, result: syncStatus() },
+  ]) {
+    renderSyncLine(line, count, document);
+    renderSyncLine(line, outcome, document);
+    expect(line.classList.contains("is-count")).toBe(false);
+    expect(line.hasAttribute("aria-label")).toBe(false);
+    expect(line.hasAttribute("title")).toBe(false);
+    expect(line.textContent).not.toContain("incoming");
+  }
 });
 
 it("leaves the line empty on a mode that refuses the route", () => {

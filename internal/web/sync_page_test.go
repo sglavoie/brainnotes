@@ -54,8 +54,9 @@ func TestSyncPage_NamesEveryAttributeTheReviewSurfaceReads(t *testing.T) {
 			t.Fatalf("sync page is missing %q", want)
 		}
 	}
-	if namesAttribute(body, "data-sync-line") {
-		t.Fatal("the Sync page duplicates its summary in the global sync line")
+	header, _, _ := strings.Cut(body, "</header>")
+	if !namesAttribute(header, "data-sync-line") {
+		t.Fatal("the Sync page is missing the shared header badge")
 	}
 }
 

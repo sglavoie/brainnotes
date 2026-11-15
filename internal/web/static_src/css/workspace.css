@@ -156,3 +156,27 @@
 /* Before a search, offer a starting point without result-only controls. */
 .library-search:not([data-searching="true"]) + .overview-results :is(.library-sort, .library-results-tools) { display: none; }
 .library-activity[data-searching="false"] { margin-top: 0.5rem; }
+
+/* First visits and empty searches offer one sentence and a clear next step. */
+.workspace-empty { display: grid; justify-items: start; gap: 0.75rem; padding-block: 0.75rem; }
+.workspace-empty[hidden] { display: none; }
+.workspace-empty > p { margin: 0; color: var(--bn-text-subtle); }
+.workspace-empty > details { width: 100%; }
+.workspace-empty > details > summary { width: fit-content; }
+.workspace-empty > details[open] > summary { margin-bottom: 0.75rem; }
+.empty-state-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.empty-state-actions[hidden] { display: none; }
+.overview-results:has([data-overview-empty-help]:not([hidden])) :is(.library-results-tools, .library-sort) { display: none; }
+.overview-results:has([data-overview-empty-help]:not([hidden])) .library-results-overview { margin-bottom: 0.75rem; }
+.property-summary:not(:has(> div)) { display: none; }
+
+/* Count badges share the navigation row even on the longer workspace titles. */
+@media (min-width: 1100px) {
+  .focused-workspace-header:has(.sync-line.is-count) .focused-workspace-tools { gap: 0.5rem; }
+  .focused-workspace-header:has(.sync-line.is-count) :is(.capture-launch-label, .switcher-shortcut, .new-note-label) { display: none; }
+  .focused-workspace-header:has(.sync-line.is-count) .new-note-symbol { display: inline; }
+  .focused-workspace-header:has(.sync-line.is-count) .capture-launch-icon { display: inline; }
+}
+@media (max-width: 700px) {
+  .source-editor-main > .site-header:has(.sync-line:not(:empty)) { flex-wrap: wrap; }
+}

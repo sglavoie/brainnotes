@@ -40,7 +40,7 @@ test("Health loads real tasks and recovers a failed read with one error", async 
   await expect(page.locator("[data-fixes-panel]")).toHaveAttribute("aria-busy", "false");
   await expect(page.locator("[data-fixes-error]")).toBeHidden();
   await expect(page.locator("[data-fixes-task]").first()).toBeVisible();
-  await expect(page.locator("[data-sync-line]")).toContainText("Review 5 incoming changes");
+  await expect(page.locator("[data-sync-line]")).toHaveText("5 incoming");
   const review = page.locator("[data-sync-line] a");
   await expect(review).toHaveAttribute("href", "/sync");
   expect((await review.boundingBox()).height).toBeGreaterThanOrEqual(24);

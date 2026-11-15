@@ -198,6 +198,11 @@ idempotent recovery after a lost reply and reload, accessibility of the composer
 returning to the selection, and confirmed capture feedback. The visual matrix
 also covers selected passages, writing, and completed thoughts.
 
+`header-empty-states.spec.js` covers the shared incoming badge across every page
+at 1280 and 390 px, its accessible review name, empty status geometry, and
+keyboard access to first-thread creation and Library recovery. The visual matrix
+includes all three empty states in light/dark at both widths.
+
 `screen-polish.spec.js` checks usable mobile Properties filters, actual properties
 on entry, reading content near the top, Library action placement, Health's real
 queue and read-error recovery, and exact MiB settings through save/reload. Normal

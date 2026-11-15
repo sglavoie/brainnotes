@@ -30,7 +30,7 @@ export function graphVisuals(snapshot) {
     } }));
     await page.goto("/graph");
     await expect(page.locator("#graph-status")).toContainText("4 notes");
-    await expect(page.locator("[data-sync-line]")).toContainText("Review 5 incoming changes");
+    await expect(page.locator("[data-sync-line]")).toHaveText("5 incoming");
     const list = page.getByLabel("Notes and folders in this view");
     await list.selectOption("field");
     await page.locator("#graph-canvas").focus();

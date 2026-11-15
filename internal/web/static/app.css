@@ -8004,37 +8004,39 @@ code {
  * themselves.
  */
 
-/* The navigation line. It is empty in a mode whose guard refuses the status
-   route, so every bit of its box — margin included — is conditional on there
-   being text: an empty <p> reserving a row would push the nav down on a page that
-   has nothing to say. */
+/* Empty live regions reserve no space in the header. Problems retain their
+   full sentence; only an ordinary incoming count becomes a compact pill. */
 .sync-line {
   margin: 0;
-  color: var(--bn-muted);
-  font-size: 0.85rem;
+  min-width: 0;
+  max-width: 28rem;
+  color: var(--bn-warning);
+  font-size: 0.8rem;
   overflow-wrap: anywhere;
 }
-
-.sync-line:not(:empty) {
-  margin: 0 0 0.25rem;
+.sync-line:empty { display: none; }
+.sync-line:not(:empty):not(.is-count) {
+  border-left: 2px solid var(--bn-warning-border);
+  padding-left: 0.5rem;
 }
-
-.sync-line.is-attention {
-  color: var(--bn-warning);
+.sync-line.is-count { flex: 0 0 auto; }
+.sync-line-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.75rem;
+  padding: 0 0.65rem;
+  border: 1px solid var(--bn-accent-subtle-border);
+  border-radius: 999px;
+  background: var(--bn-accent-subtle-bg);
+  color: var(--bn-accent-subtle-text);
+  white-space: nowrap;
+  box-sizing: border-box;
 }
-
-.sync-line-review {
-  display: inline-block;
-  padding-block: 0.25rem;
-  margin-block: -0.25rem;
-  color: var(--bn-link);
-  text-decoration: underline;
-  text-underline-offset: 0.12em;
-}
-
-.sync-line.is-attention:has(.sync-line-review) {
-  line-height: 1.2;
-}
+.sync-line-review { color: var(--bn-link); text-underline-offset: 0.12em; }
+.sync-line-count.sync-line-review { color: var(--bn-accent-subtle-text); text-decoration: none; }
+.sync-line-review:hover { text-decoration: underline; }
+.sync-line-review:focus-visible { outline: 2px solid var(--bn-focus); outline-offset: 2px; }
 
 .write-outcome-check {
   margin-inline-start: 0.35rem;
@@ -8964,6 +8966,30 @@ details[open] > summary::before { transform: rotate(45deg); }
 /* Before a search, offer a starting point without result-only controls. */
 .library-search:not([data-searching="true"]) + .overview-results :is(.library-sort, .library-results-tools) { display: none; }
 .library-activity[data-searching="false"] { margin-top: 0.5rem; }
+
+/* First visits and empty searches offer one sentence and a clear next step. */
+.workspace-empty { display: grid; justify-items: start; gap: 0.75rem; padding-block: 0.75rem; }
+.workspace-empty[hidden] { display: none; }
+.workspace-empty > p { margin: 0; color: var(--bn-text-subtle); }
+.workspace-empty > details { width: 100%; }
+.workspace-empty > details > summary { width: fit-content; }
+.workspace-empty > details[open] > summary { margin-bottom: 0.75rem; }
+.empty-state-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.empty-state-actions[hidden] { display: none; }
+.overview-results:has([data-overview-empty-help]:not([hidden])) :is(.library-results-tools, .library-sort) { display: none; }
+.overview-results:has([data-overview-empty-help]:not([hidden])) .library-results-overview { margin-bottom: 0.75rem; }
+.property-summary:not(:has(> div)) { display: none; }
+
+/* Count badges share the navigation row even on the longer workspace titles. */
+@media (min-width: 1100px) {
+  .focused-workspace-header:has(.sync-line.is-count) .focused-workspace-tools { gap: 0.5rem; }
+  .focused-workspace-header:has(.sync-line.is-count) :is(.capture-launch-label, .switcher-shortcut, .new-note-label) { display: none; }
+  .focused-workspace-header:has(.sync-line.is-count) .new-note-symbol { display: inline; }
+  .focused-workspace-header:has(.sync-line.is-count) .capture-launch-icon { display: inline; }
+}
+@media (max-width: 700px) {
+  .source-editor-main > .site-header:has(.sync-line:not(:empty)) { flex-wrap: wrap; }
+}
 /* internal/web/static_src/css/reading-comfort.css */
 .reading-controls { display: flex; flex-wrap: wrap; gap: 0.4rem; order: 1; }
 .reading-controls .bn-button { border: 1px solid var(--bn-border); background: transparent; color: var(--bn-text-subtle); cursor: pointer; }
@@ -9986,10 +10012,13 @@ div.note-peek-anchor > .note-peek-trigger { position: absolute; right: 0; top: 0
 /* Reading keeps the workspace and note actions together; creation remains in
    Workspace and the command switcher. Touch targets retain their full size. */
 @media (min-width: 361px) and (max-width: 700px) {
-  .note-page .note-main { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0.3rem; }
+  .note-page .note-main { display: grid; grid-template-columns: minmax(0, auto) minmax(min-content, 1fr); gap: 0.3rem; }
   .note-main > * { grid-column: 1 / -1; }
-  .note-main > .site-header { grid-column: 1; grid-row: 3; margin: 0; }
-  .note-main > .note-actions { grid-column: 2; grid-row: 3; margin: 0; padding: 0; border: 0; justify-content: flex-end; gap: 0.2rem; }
+  .note-main > .site-header { grid-column: 1; grid-row: 2; margin: 0; }
+  .note-main > .note-actions { grid-column: 2; grid-row: 2; margin: 0; padding: 0; border: 0; justify-content: flex-end; gap: 0.2rem; }
+  /* The badge needs the full navigation row; keep note actions together below it. */
+  .note-main:has(.sync-line:not(:empty)) > .site-header { grid-column: 1 / -1; }
+  .note-main:has(.sync-line:not(:empty)) > .note-actions { grid-column: 1 / -1; grid-row: 3; }
   .note-page .note-actions .bn-button { padding-inline: 0.45rem; }
   .note-page .focused-workspace-tools { gap: 0.2rem; }
   .note-page .source-editor-workspace > summary { padding-inline: 0.25rem; }

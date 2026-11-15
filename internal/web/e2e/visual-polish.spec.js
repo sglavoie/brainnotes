@@ -24,11 +24,11 @@ for (const [theme, width] of [["light", 1280], ["dark", 390], ["light", 390], ["
     };
     reviewVisuals(snapshot);
     graphVisuals(snapshot);
-    for (const [name, path] of [["new-note", "/new"], ["pinned", "/pinned"], ["synthesis", "/synthesize?source=Alpha"]]) {
+    for (const [name, path] of [["new-note", "/new"], ["pinned", "/pinned"], ["threads-empty", "/threads"], ["synthesis", "/synthesize?source=Alpha"]]) {
       test(`${name} focused workspace`, async ({ page }) => {
         await page.goto(path);
         await expect(page.locator(".focused-workspace-header")).toBeVisible();
-        await expect(page.locator("[data-sync-line]")).toContainText("Review 5 incoming changes");
+        await expect(page.locator("[data-sync-line]")).toHaveText("5 incoming");
         await snapshot(page, name);
       });
     }
@@ -39,9 +39,10 @@ for (const [theme, width] of [["light", 1280], ["dark", 390], ["light", 390], ["
       await expect(page.locator(".recent-note-title").first()).toBeVisible();
       await fixedRecentNotes(page);
       await expect(page.locator("[data-history-panel]")).toHaveAttribute("aria-busy", "false");
-      await expect(page.locator("[data-sync-line]")).toContainText("Review 5 incoming changes");
+      await expect(page.locator("[data-sync-line]")).toHaveText("5 incoming");
       await snapshot(page, "library-start");
     });
+    emptyStateVisuals(snapshot);
     test("Library dense results and a long title", async ({ page }) => {
       await page.goto("/library?q=field&status=reference&sort=title");
       await expect(page.locator(".overview-result-link").first()).toBeVisible();
@@ -63,7 +64,7 @@ for (const [theme, width] of [["light", 1280], ["dark", 390], ["light", 390], ["
       await expect(page.locator(".frontmatter-panel h2")).toHaveText("Properties");
       await expect(page.locator(".frontmatter-panel form:visible")).toHaveCount(0);
       await expect(page.locator("[data-note-body] p").first()).toBeInViewport();
-      await expect(page.locator("[data-sync-line]")).toContainText("Review 5 incoming changes");
+      await expect(page.locator("[data-sync-line]")).toHaveText("5 incoming");
       await snapshot(page, "reading-entry");
       await page.locator("#measurements-and-uncertainties").evaluate((heading) => heading.scrollIntoView());
       await snapshot(page, "reading");
@@ -148,7 +149,7 @@ function experienceVisuals(snapshot) {
     await page.keyboard.press("Escape");
     await page.goto("/library?q=field&status=reference&sort=title");
     // The async sync line shifts the anchor; open the preview after it settles.
-    await expect(page.locator("[data-sync-line]")).toContainText("Review 5 incoming changes");
+    await expect(page.locator("[data-sync-line]")).toHaveText("5 incoming");
     const preview = page.locator(".note-peek-trigger").first();
     await preview.focus();
     await preview.press("Enter");
@@ -234,4 +235,12 @@ async function fixedBrief(page) {
       });
     }
   });
+}
+
+function emptyStateVisuals(snapshot) {
+    test("Library empty recovery block", async ({ page }) => {
+      await page.goto("/library?q=no-such-visual-result&tag=absent&expr=status:absent");
+      await expect(page.locator("[data-overview-empty-help]")).toBeVisible();
+      await snapshot(page, "library-empty-recovery");
+    });
 }

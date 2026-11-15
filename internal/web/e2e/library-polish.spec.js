@@ -4,7 +4,7 @@ test("empty-result links loosen one constraint with keyboard navigation on mobil
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/library?q=Reading&tag=absent&expr=tag:absent&sort=title&limit=2");
   const help = page.locator("[data-overview-empty-help]");
-  await expect(help).toContainText("Try changing your search text, filters, and expression.");
+  await expect(help.locator(".bn-primary")).toHaveText("Reset search");
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   const removeFilters = help.getByRole("link", { name: "Remove filters", exact: true });
   await removeFilters.focus();
@@ -12,7 +12,7 @@ test("empty-result links loosen one constraint with keyboard navigation on mobil
   await expect(page.locator("#search-input")).toHaveValue("Reading");
   await expect(page.locator("[data-query-bar-input]")).toHaveValue("tag:absent");
   await expect(page.locator("[data-facet-chips]")).toBeHidden();
-  await expect(help).toContainText("Try changing your search text and expression.");
+  await expect(help.locator(".bn-primary")).toHaveText("Reset search");
   await expect(help.getByRole("link", { name: "Remove filters", exact: true })).toHaveCount(0);
   await help.getByRole("link", { name: "Remove expression", exact: true }).click();
   await expect(help).toBeHidden();

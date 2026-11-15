@@ -37,23 +37,31 @@ const renderLine = (line: HTMLElement, status: SyncStatusResult, doc: Document):
   }
   line.classList.add("is-attention");
   const hasReview = status.review_path !== "" && status.peer.conflicts > 0;
-  if (!hasReview || status.headline !== "conflict") {
-    line.textContent = `Sync: ${syncLineSummary(status)}`;
+  if (status.headline === "conflict" && status.peer.conflicts > 0) {
+    const count = status.peer.conflicts;
+    const label = `Review ${count} incoming ${count === 1 ? "change" : "changes"}`;
+    line.classList.add("is-count");
+    line.setAttribute("aria-label", label);
+    line.title = label;
+    const badge = doc.createElement(hasReview ? "a" : "span");
+    badge.className = "sync-line-count";
+    badge.textContent = `${count} incoming`;
+    if (badge instanceof HTMLAnchorElement) {
+      badge.href = status.review_path;
+      badge.classList.add("sync-line-review");
+      badge.setAttribute("aria-label", label);
+    }
+    line.append(badge);
+    return;
   }
+  line.textContent = `Sync: ${syncLineSummary(status)}`;
   if (!hasReview) return;
   const review = doc.createElement("a");
   review.className = "sync-line-review";
   review.href = status.review_path;
-  const count = status.peer.conflicts;
-  review.textContent = status.headline === "conflict"
-    ? `Review ${count} incoming ${count === 1 ? "change" : "changes"}`
-    : "Review incoming changes";
+  review.textContent = "Review incoming changes";
   review.title = syncLineSummary(status);
-  if (status.headline === "conflict") {
-    line.append(review);
-  } else {
-    line.append(" ", review);
-  }
+  line.append(" ", review);
 };
 
 const renderFailure = (line: HTMLElement, outcome: { code: string; message: string }): void => {
@@ -79,15 +87,23 @@ export const renderSyncLine = (
   doc: Document
 ): void => {
   const next = line.cloneNode(false) as HTMLElement;
+  next.classList.remove("is-count");
+  next.removeAttribute("aria-label");
+  next.removeAttribute("title");
   if (!outcome.ok) {
     renderFailure(next, outcome);
   } else {
     renderLine(next, outcome.result, doc);
   }
-  if (next.innerHTML === line.innerHTML && next.className === line.className) {
+  if (next.isEqualNode(line)) {
     return;
   }
   line.className = next.className;
+  for (const attribute of ["aria-label", "title"]) {
+    const value = next.getAttribute(attribute);
+    if (value === null) line.removeAttribute(attribute);
+    else line.setAttribute(attribute, value);
+  }
   line.replaceChildren(...Array.from(next.childNodes));
 };
 

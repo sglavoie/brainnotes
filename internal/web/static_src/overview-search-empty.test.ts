@@ -28,8 +28,9 @@ it("explains active constraints and removes only the chosen kind, preserving rep
   params.set("folder", "Projects");
   const { help } = await setup(`?${params}`);
   expect(help.hidden).toBe(false);
-  expect(help.textContent).toContain("Try changing your search text, filters, and expression.");
-  const links = Array.from(help.querySelectorAll<HTMLAnchorElement>("a:not([data-empty-create-note])"));
+  expect(document.querySelector("[data-overview-search-status]")?.textContent).toBe('No notes match "雪 & rain"; try changing your search text, filters, and expression.');
+  expect(help.querySelector(".bn-primary")?.textContent).toBe("Reset search");
+  const links = Array.from(help.querySelectorAll<HTMLAnchorElement>("a:not([data-empty-create-note], [data-empty-reset])"));
   expect(links.map((link) => link.textContent)).toEqual(["Remove search text", "Remove filters", "Remove expression"]);
   const withoutText = new URLSearchParams(params);
   withoutText.delete("q");
@@ -48,18 +49,18 @@ it.each([
   ["?q=missing", "search text", ["Remove search text"]],
   ["?tag=missing", "filters", ["Remove filters"]],
   ["?expr=status:missing", "expression", ["Remove expression"]],
-] as const)("offers only applicable actions for %s", async (query, summary, labels) => {
+] as const)("offers only applicable actions for %s", async (query, _summary, labels) => {
   const { help } = await setup(query);
   expect(help.hidden).toBe(false);
-  expect(help.textContent).toContain(`Try changing your ${summary}.`);
-  expect(Array.from(help.querySelectorAll("a:not([data-empty-create-note])"), (link) => link.textContent)).toEqual(labels);
+  expect(help.querySelectorAll(".bn-primary")).toHaveLength(1);
+  expect(Array.from(help.querySelectorAll("a:not([data-empty-create-note], [data-empty-reset])"), (link) => link.textContent)).toEqual(labels);
   if (labels.length) expect(help.querySelector("a")?.getAttribute("href")).toBe("/library");
 });
 
 it("does not offer to remove whitespace-only search text", async () => {
   const { help } = await setup("?q=%20%20&tag=missing");
-  expect(help.textContent).toContain("Try changing your filters.");
-  expect(Array.from(help.querySelectorAll("a:not([data-empty-create-note])"), (link) => link.textContent)).toEqual(["Remove filters"]);
+  expect(help.querySelector(".bn-primary")?.getAttribute("href")).toBe("/library");
+  expect(Array.from(help.querySelectorAll("a:not([data-empty-create-note], [data-empty-reset])"), (link) => link.textContent)).toEqual(["Remove filters"]);
 });
 
 it.each(["blank", "error", "matches"])("does not offer empty-result help for %s", async (state) => {

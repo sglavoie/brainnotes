@@ -82,7 +82,6 @@
         <a class="reading-home" href="/">Brain Notes</a>
         {{template "workspaceMenu" "note"}}
       </header>
-      {{template "siteSync" .}}
 
       <div class="note-actions">
         {{if not readOnly}}
@@ -221,9 +220,13 @@
             </div>
             {{if .Frontmatter}}
               <dl class="property-summary" aria-label="Property summary">
-                {{range $index, $property := .Frontmatter}}{{if lt $index 2}}
+                {{$hasFirst := false}}
+                {{range $property := .Frontmatter}}
+                  {{if and (eq $property.Key "title") (eq $property.Value.Kind "scalar") (eq $property.Value.Text $.Title)}}{{continue}}{{end}}
                   <div><dt>{{$property.Key}}</dt><dd>{{template "frontmatterValue" $property.Value}}</dd></div>
-                {{end}}{{end}}
+                  {{if $hasFirst}}{{break}}{{end}}
+                  {{$hasFirst = true}}
+                {{end}}
               </dl>
             {{end}}
             <details class="note-properties" data-note-properties>

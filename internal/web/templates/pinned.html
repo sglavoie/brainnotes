@@ -16,7 +16,6 @@
       <h1>Pinned</h1>
       {{template "workspaceMenu" "pinned"}}
     </header>
-    {{template "siteSync" .}}
     <p class="page-subtitle">The notes you chose to keep at hand, in the order you put them.</p>
 
 
@@ -56,7 +55,10 @@
           {{end}}
         </ol>
       {{end}}
-      <p class="pinned-empty" data-pinned-empty {{if .Pinned}}hidden{{end}}>No pinned notes yet. Pin one from a note page or a <a href="{{ .LibraryPath }}">Library</a> search result.</p>
+      <div class="pinned-empty workspace-empty" data-pinned-empty {{if .Pinned}}hidden{{end}}>
+        <p>Pin a note to keep it close for next time.</p>
+        <a class="bn-button bn-primary" href="{{ .LibraryPath }}">Find a note to pin</a>
+      </div>
       <p id="pinned-status" class="pinned-status" data-pinned-status role="status" aria-live="polite"></p>
     </section>
   </main>

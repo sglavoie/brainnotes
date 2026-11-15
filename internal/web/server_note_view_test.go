@@ -1,6 +1,8 @@
 package web
 
 import (
+	"bytes"
+	"html/template"
 	"net/http"
 	"strings"
 	"testing"
@@ -180,5 +182,67 @@ func TestServer_NoteViewFrontmatterWikilinkAnchors(t *testing.T) {
 	}
 	if !strings.Contains(body, `href="/broken?q=missing"`) {
 		t.Fatalf("missing broken-link affordance for frontmatter link, got %q", body)
+	}
+}
+
+func TestNotePropertySummarySkipsOnlyMatchingScalarTitle(t *testing.T) {
+	tpl, err := template.New("").Funcs(template.FuncMap{
+		"readOnly": func() bool { return true }, "processLaunch": func() bool { return false },
+		"browserOpen": func() bool { return true }, "serveMode": func() string { return "read-only" },
+		"vaultID": func() string { return "test" }, "captureContext": func() rootPageData { return rootPageData{} },
+	}).ParseFS(embeddedFiles, "templates/*.html")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name, title string
+		properties  []frontmatterEntry
+		want        []string
+		omitTitle   bool
+	}{
+		{"matching first", "Heading", []frontmatterEntry{
+			{Key: "title", Value: frontmatterValue{Kind: "scalar", Text: "Heading"}},
+			{Key: "type", Value: frontmatterValue{Kind: "scalar", Text: "note"}},
+			{Key: "year", Value: frontmatterValue{Kind: "scalar", Text: "2026"}},
+			{Key: "zone", Value: frontmatterValue{Kind: "scalar", Text: "north"}},
+		}, []string{"type", "year"}, true},
+		{"matching second", "Heading", []frontmatterEntry{
+			{Key: "status", Value: frontmatterValue{Kind: "scalar", Text: "draft"}},
+			{Key: "title", Value: frontmatterValue{Kind: "scalar", Text: "Heading"}},
+			{Key: "year", Value: frontmatterValue{Kind: "scalar", Text: "2026"}},
+		}, []string{"status", "year"}, true},
+		{"different title", "Heading", []frontmatterEntry{
+			{Key: "title", Value: frontmatterValue{Kind: "scalar", Text: "Different"}},
+		}, []string{"title"}, false},
+		{"title only", "Heading", []frontmatterEntry{
+			{Key: "title", Value: frontmatterValue{Kind: "scalar", Text: "Heading"}},
+		}, nil, true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			var out bytes.Buffer
+			if err := tpl.ExecuteTemplate(&out, "note", notePageData{Title: tc.title, Frontmatter: tc.properties}); err != nil {
+				t.Fatal(err)
+			}
+			_, tail, ok := strings.Cut(out.String(), `class="property-summary"`)
+			if !ok {
+				t.Fatal("missing summary")
+			}
+			summary, _, _ := strings.Cut(tail, "</dl>")
+			if got := strings.Count(summary, "<dt>"); got != len(tc.want) {
+				t.Fatalf("summary entries = %d, want %d: %s", got, len(tc.want), summary)
+			}
+			for _, key := range tc.want {
+				if !strings.Contains(summary, "<dt>"+key+"</dt>") {
+					t.Errorf("missing %s: %s", key, summary)
+				}
+			}
+			if tc.omitTitle && strings.Contains(summary, "<dt>title</dt>") {
+				t.Error("summary repeats heading")
+			}
+			_, all, _ := strings.Cut(out.String(), `class="frontmatter-rows"`)
+			if !strings.Contains(all, "<dt>title</dt>") {
+				t.Error("All properties lost title")
+			}
+		})
 	}
 }
