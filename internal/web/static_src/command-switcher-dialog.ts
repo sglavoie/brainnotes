@@ -1,7 +1,13 @@
 import { prepareTitleNavigation } from "./title-navigation";
 import { closeButton } from "./close-button";
 import { highlightedText } from "./text-highlight";
-import { queryEntries, recentEntries, savedViewEntries, searchEntries, workspaceEntries, type SwitcherEntry } from "./switcher-data";
+import { closestEntries, queryEntries, recentEntries, savedViewEntries, searchEntries, workspaceEntries, type SwitcherEntry } from "./switcher-data";
+
+const activate = (selector: string, reveal: boolean): void => {
+  const control = document.querySelector<HTMLElement>(selector);
+  if (reveal) control?.closest("details")?.setAttribute("open", "");
+  control?.click();
+};
 
 export class CommandSwitcher {
   private readonly dialog = document.createElement("dialog");
@@ -50,7 +56,7 @@ export class CommandSwitcher {
     const footer = document.createElement("footer");
     const keys = document.createElement("p");
     keys.className = "switcher-keys";
-    keys.innerHTML = "<kbd>Enter</kbd> to open · <kbd>Alt Enter</kbd> to keep beside · <kbd>Escape</kbd> to close";
+    keys.innerHTML = "<kbd>&gt;</kbd> for actions only · <kbd>Enter</kbd> to open · <kbd>Alt Enter</kbd> to keep beside · <kbd>Escape</kbd> to close";
     footer.append(keys, beside);
     this.dialog.append(header, label, this.input, this.list, this.status, footer);
     document.body.append(this.dialog);
@@ -83,27 +89,39 @@ export class CommandSwitcher {
     action?.();
   }
 
+  // A leading ">" asks for actions only: nothing is searched and nothing is
+  // offered for creation, so "> pin" can never open or make a note.
   private search(): void {
     this.request?.abort(); window.clearTimeout(this.timer);
-    const query = this.input.value.trim().toLocaleLowerCase();
-    const local = [...recentEntries(), ...this.views, ...workspaceEntries()].filter((entry) => entry.label.toLocaleLowerCase().includes(query));
-    this.render(local);
-    if (query) this.status.textContent = "Searching notes…";
-    if (!query) return;
+    const typed = this.input.value.trim().toLocaleLowerCase();
+    const commands = typed.startsWith(">");
+    const query = commands ? typed.slice(1).trim() : typed;
+    const matches = (entry: SwitcherEntry): boolean => entry.label.toLocaleLowerCase().includes(query);
+    const actionsFirst = (a: SwitcherEntry, b: SwitcherEntry): number => Number(b.detail === "Action") - Number(a.detail === "Action");
+    const local = commands ? workspaceEntries().filter(matches).sort(actionsFirst) : [...recentEntries(), ...this.views, ...workspaceEntries()].filter(matches);
+    this.render(local, commands ? "" : this.input.value.trim());
+    if (!query || commands) return;
+    this.status.textContent = "Searching notes…";
     const request = new AbortController(); this.request = request;
-    this.timer = window.setTimeout(() => {
-      void searchEntries(query, request.signal).then((notes) => {
-        if (request.signal.aborted) return;
-        const paths = new Set(notes.map((entry) => entry.path?.toLocaleLowerCase()));
-        this.render([...notes, ...local.filter((entry) => !entry.path || !paths.has(entry.path.toLocaleLowerCase()))]);
-      }).catch(() => {
-        if (!request.signal.aborted) this.status.textContent = "Search unavailable. Try again or open Library.";
-      });
-    }, 120);
+    this.timer = window.setTimeout(() => { void this.searchNotes(query, local, request.signal); }, 120);
   }
 
-  private render(entries: SwitcherEntry[]): void {
-    const results = [...entries, ...queryEntries(this.input.value.trim())];
+  private async searchNotes(query: string, local: SwitcherEntry[], signal: AbortSignal): Promise<void> {
+    try {
+      const notes = await searchEntries(query, signal);
+      const closest = notes.length ? [] : await closestEntries(query, signal).catch(() => []);
+      if (signal.aborted) return;
+      const found = notes.length ? notes : closest;
+      const paths = new Set(found.map((entry) => entry.path?.toLocaleLowerCase()));
+      this.render([...found, ...local.filter((entry) => !entry.path || !paths.has(entry.path.toLocaleLowerCase()))], this.input.value.trim());
+      if (closest.length) this.status.textContent = `No exact matches. ${closest.length === 1 ? "Closest title" : "Closest titles"} shown.`;
+    } catch {
+      if (!signal.aborted) this.status.textContent = "Search unavailable. Try again or open Library.";
+    }
+  }
+
+  private render(entries: SwitcherEntry[], creatable: string): void {
+    const results = [...entries, ...queryEntries(creatable)];
     const previous = this.entries[this.active];
     const selected = results.findIndex((entry) => this.selectionMoved && previous && entry.path === previous.path && entry.label === previous.label);
     this.entries = results; this.active = Math.max(0, selected); this.list.replaceChildren();
@@ -112,7 +130,7 @@ export class CommandSwitcher {
       option.id = `switcher-option-${index}`; option.setAttribute("role", "option");
       if (index >= entries.length) option.className = "switcher-query-action";
       const label = document.createElement("span");
-      const terms = this.input.value.trim().split(/\s+/);
+      const terms = this.input.value.trim().replace(/^>/, "").trim().split(/\s+/);
       const name = document.createElement("span"); name.className = "switcher-result-title"; name.append(highlightedText(entry.label, terms)); label.append(name);
       if (entry.excerpt) {
         const excerpt = document.createElement("span"); excerpt.className = "switcher-excerpt";
@@ -123,7 +141,7 @@ export class CommandSwitcher {
       option.addEventListener("click", () => this.choose(index));
       this.list.append(option);
     });
-    this.status.textContent = entries.length ? `${entries.length} ${entries.length === 1 ? "result" : "results"}` : "No matches. Try another search or use the actions below.";
+    this.status.textContent = entries.length ? `${entries.length} ${entries.length === 1 ? "result" : "results"}` : results.length ? "No matches. Try another search or use the actions below." : "No matching actions.";
     this.highlight();
   }
 
@@ -166,7 +184,7 @@ export class CommandSwitcher {
     }
     this.afterClose = () => {
       if (entry.path) window.location.assign(entry.path);
-      else document.querySelector<HTMLButtonElement>(entry.action === "capture" ? "[data-capture-launch]" : "[data-reading-mode]")?.click();
+      else if (entry.click) activate(entry.click, entry.reveal === true);
     };
     this.dialog.close();
   }

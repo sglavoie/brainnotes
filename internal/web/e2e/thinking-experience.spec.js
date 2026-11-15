@@ -130,7 +130,7 @@ test("switcher keeps query actions selected as notes arrive and opens Library wi
   const close = dialog.getByRole("button", { name: "Close search", exact: true });
   await expect(close).toHaveText("");
   await expect(dialog.locator("header")).toContainText("Find your next thought");
-  await expect(dialog.locator("footer kbd")).toHaveText(["Enter", "Alt Enter", "Escape"]);
+  await expect(dialog.locator("footer kbd")).toHaveText([">", "Enter", "Alt Enter", "Escape"]);
   await expect(dialog.getByRole("button", { name: "Keep beside", exact: true })).toBeHidden();
   await close.click();
   await expect(launch).toBeFocused();
