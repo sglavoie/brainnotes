@@ -466,3 +466,18 @@ func TestSyncConflictsAnswersAnEmptyChannelAsAnArray(t *testing.T) {
 		t.Fatalf("operations = %+v on a vault with no conflicts", view.Operations)
 	}
 }
+
+// A vault that does not synchronize has no incoming channel and so is holding
+// nothing. It used to answer 500 here, which put an error on the Sync page of
+// every vault that had simply never been enrolled.
+func TestSyncConflictsAreEmptyForAnUnenrolledVault(t *testing.T) {
+	ts, _ := newHTTPServerForFiles(t, map[string][]byte{"Alpha.md": []byte("Body\n")})
+	response, err := ts.Client().Get(ts.URL + syncConflictsAPIRoutePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := readResponseBody(t, response)
+	if response.StatusCode != http.StatusOK || !strings.Contains(body, `"operations":[]`) {
+		t.Fatalf("unenrolled conflicts: %d %s", response.StatusCode, body)
+	}
+}

@@ -28,7 +28,7 @@ func (s *Server) handleNote(w http.ResponseWriter, r *http.Request) {
 
 	key, err := noteKeyFromPath(r.URL.Path)
 	if err != nil {
-		http.NotFound(w, r)
+		s.writeNotFoundPage(w, r, "")
 		return
 	}
 
@@ -40,7 +40,7 @@ func (s *Server) handleNote(w http.ResponseWriter, r *http.Request) {
 
 	note, normalizedKey, ok := noteForRoute(snapshot, key)
 	if !ok {
-		http.NotFound(w, r)
+		s.writeNotFoundPage(w, r, key)
 		return
 	}
 

@@ -281,7 +281,7 @@ func noCacheStatic(next http.Handler) http.Handler {
 
 func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	if r.URL.Path != "/" {
-		http.NotFound(w, r)
+		s.writeNotFoundPage(w, r, "")
 		return
 	}
 	if r.Method != http.MethodGet {

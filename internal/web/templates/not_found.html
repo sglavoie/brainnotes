@@ -1,0 +1,44 @@
+{{define "not-found"}}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" type="image/svg+xml" sizes="any" href="/static/favicon.svg">
+  <title>{{ .Title }}</title>
+  {{template "themeBoot" .}}
+  <link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+  {{template "workspaceSkip" .}}
+  <main class="index-main">
+    <header class="site-header focused-workspace-header">
+      <h1>{{if .Wanted}}No note here{{else}}Nothing here{{end}}</h1>
+      {{template "workspaceMenu" "not-found"}}
+    </header>
+    <section id="workspace-content" tabindex="-1" class="panel not-found-panel" data-not-found>
+      <div class="workspace-empty">
+        {{if .Wanted}}
+          <p>There is no note called <strong>{{.Wanted}}</strong>. It may have been renamed, moved or removed.</p>
+          {{if .Closest}}
+            <p class="empty-closest-titles">Did you mean {{range $index, $note := .Closest}}{{if $index}}{{if eq $index $.LastClosest}} or {{else}}, {{end}}{{end}}<a href="{{$note.Path}}"{{if $note.Folder}} title="{{$note.Folder}}"{{end}}>{{$note.Title}}</a>{{end}}?</p>
+          {{end}}
+          <div class="empty-state-actions">
+            <a class="bn-button bn-primary" href="{{.SearchPath}}">Search Library for “{{.Wanted}}”</a>
+            {{if not readOnly}}<a class="bn-button bn-quiet" href="{{.CreatePath}}">Create a note titled “{{.Wanted}}”…</a>{{end}}
+          </div>
+        {{else}}
+          <p>This address does not lead anywhere in the workspace.</p>
+          <div class="empty-state-actions">
+            <a class="bn-button bn-primary" href="/">Go to Daily Brief</a>
+            <a class="bn-button bn-quiet" href="/library">Search Library</a>
+          </div>
+        {{end}}
+      </div>
+    </section>
+  </main>
+  <script src="/static/app.js" defer></script>
+  <script src="/static/workspace-actions.js" defer></script>
+</body>
+</html>
+{{end}}

@@ -7,6 +7,7 @@ import (
 
 	"github.com/sglavoie/brainnotes/internal/noteops"
 	"github.com/sglavoie/brainnotes/internal/vaultimport"
+	"github.com/sglavoie/brainnotes/internal/vaultsync"
 )
 
 const syncConflictsAPIRoutePath = "/api/sync/conflicts"
@@ -151,13 +152,21 @@ func (s *Server) handleSyncConflicts(w http.ResponseWriter, r *http.Request) {
 	if !requireSyncGet(w, r, syncConflictsAPIRoutePath) {
 		return
 	}
+	view := syncConflictsView{OK: true, Operations: []syncConflictOperationView{}}
 	pending, err := vaultimport.Inspect(s.vault.Root)
+	if errors.Is(err, vaultsync.ErrNotEnrolled) {
+		// The ordinary state of a vault that does not synchronize: it has no
+		// incoming channel, so it is holding nothing. The status route says
+		// "unenrolled" for the same vault; answering a failure here made the
+		// page of every such vault report an error beside that.
+		writeManagementJSON(w, http.StatusOK, view)
+		return
+	}
 	if err != nil {
 		writeManagementError(w, noteops.WrapError(noteops.CodeInternal,
 			"sync: the incoming channel could not be read", err))
 		return
 	}
-	view := syncConflictsView{OK: true, Operations: []syncConflictOperationView{}}
 	blocked := syncBlockedIndex(pending)
 	for _, held := range pending {
 		if held.Reason != vaultimport.HoldConflict || held.Conflict == nil {
