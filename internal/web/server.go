@@ -271,6 +271,10 @@ func NewServer(cfg *config.Config, v *vault.Vault, opts Options) (*Server, error
 func noCacheStatic(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Cache-Control", "private, no-cache")
+		// Some systems do not map .webmanifest to a JSON media type.
+		if r.URL.Path == "/static/manifest.webmanifest" {
+			w.Header().Set("Content-Type", "application/manifest+json")
+		}
 		next.ServeHTTP(w, r)
 	})
 }

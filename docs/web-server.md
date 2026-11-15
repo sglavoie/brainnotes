@@ -21,6 +21,23 @@ search**, links to remove individual constraints, and title-based note creation
 together, preserving unrelated filters when removing one constraint. Replicas
 keep recovery links without offering note creation.
 
+## Install as an app
+
+Open the workspace in Chromium or another browser that supports installing web
+apps, then choose its **Install Brain Notes** action in the address bar or browser
+menu. The installed app opens on Brief in its own window, without the browser's
+tabs and address bar.
+
+Keep `bn serve` running: installation does not bundle the server or make notes
+available offline. Start the server at the same address and port each time so
+the installed app can reconnect. Local loopback addresses work over HTTP;
+a hosted workspace needs HTTPS for browser installation. Installation preserves
+the server's local, hosted, or read-only capabilities.
+
+The window color follows the system's light or dark preference. The workspace's
+own theme control still sets its page theme. There is no service worker,
+offline cache, or browser background sync.
+
 ## Find a note
 
 Use Library to combine text search, filters, and an optional **Query expression**.
