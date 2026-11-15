@@ -239,6 +239,29 @@ for (const mode of ["light", "dark", "forced"]) {
   });
 }
 
+for (const theme of ["light", "dark"]) {
+  for (const width of [1280, 390]) {
+    test(`default New note uses the default button colour in ${theme} at ${width}px`, async ({ page }) => {
+      await page.setViewportSize({ width, height: 900 });
+      await page.addInitScript((value) => localStorage.setItem("bn.theme", value), theme);
+      await page.goto("/n/Reading");
+      const defaultColour = await page.locator("[data-thread-collect]").evaluate((button) => getComputedStyle(button).color);
+      const linkColour = await page.locator("[data-note-body] a").first().evaluate((link) => getComputedStyle(link).color);
+      expect(defaultColour).not.toBe(linkColour);
+      for (const path of ["/n/Reading", "/threads", "/edit?key=Writing", "/new"]) {
+        if (path !== "/n/Reading") await page.goto(path);
+        // Check both the header action and its Workspace-menu counterpart.
+        const actions = page.locator(".new-note-action");
+        expect(await actions.count()).toBeGreaterThan(0);
+        for (const action of await actions.all()) {
+          await expect(action).not.toHaveClass(/bn-primary/);
+          await expect(action).toHaveCSS("color", defaultColour);
+        }
+      }
+    });
+  }
+}
+
 test("New note follows header priority and chips share a removal affordance", async ({ page }) => {
   for (const path of ["/", "/library", "/pinned", "/graph", "/properties", "/health", "/settings", "/sync", "/history", "/synthesize?source=Alpha"]) {
     await page.goto(path);

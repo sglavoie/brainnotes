@@ -11,6 +11,9 @@ Properties, Health, Settings, Sync, and History, subject to the server's capabil
 Saved views have their own row. In the source editor, **Workspace** opens this
 navigation, search, and theme controls without leaving your draft.
 
+**New note** uses the default button colour while reading, editing, creating a
+note, or working with Threads. On other workspaces it keeps primary emphasis.
+
 Every workspace has **Skip to content**; note pages have **Skip to note**.
 These links and the navigation disclosures work without JavaScript.
 

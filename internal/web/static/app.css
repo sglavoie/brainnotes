@@ -8664,9 +8664,10 @@ dt.sync-fact {
 /* Three levels: primary for one main action per region; .bn-button for the
    default bordered action; .bn-quiet (legacy .is-quiet) for text-only actions.
    Legacy primary aliases share this definition; danger remains semantic. */
+/* Anchor colour beats base a; component classes still override the default. */
+:where(.bn-button), a:where(.bn-button) { color: var(--bn-text); }
 :where(.bn-button) {
   border: 1px solid var(--bn-border);
-  color: var(--bn-text);
   background: var(--bn-raised);
   cursor: pointer;
 }
@@ -8718,7 +8719,6 @@ dt.sync-fact {
   color: var(--bn-faint);
   cursor: default;
 }
-.bn-button.bn-secondary { background: var(--bn-raised); color: var(--bn-text-subtle); border-color: var(--bn-border); font-weight: 400; }
 .bn-button.bn-danger, .settings-danger {
   border-color: var(--bn-danger-border);
   color: var(--bn-danger);
