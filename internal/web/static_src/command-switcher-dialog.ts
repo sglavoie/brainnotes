@@ -1,3 +1,4 @@
+import { prepareTitleNavigation } from "./title-navigation";
 import { closeButton } from "./close-button";
 import { highlightedText } from "./text-highlight";
 import { queryEntries, recentEntries, savedViewEntries, searchEntries, workspaceEntries, type SwitcherEntry } from "./switcher-data";
@@ -40,6 +41,7 @@ export class CommandSwitcher {
     this.input.addEventListener("input", () => { this.selectionMoved = false; this.search(); });
     this.input.addEventListener("keydown", (event) => this.keydown(event));
     this.dialog.addEventListener("close", () => this.closed());
+    window.addEventListener("pageshow", (event) => { if (event.persisted) this.dialog.close(); });
     const beside = document.createElement("button");
     beside.type = "button"; beside.className = "bn-button switcher-beside";
     beside.textContent = "Keep beside";
@@ -156,6 +158,12 @@ export class CommandSwitcher {
   private choose(index: number): void {
     const entry = this.entries[index];
     if (!entry) return;
+    if (entry.path?.startsWith("/n/")) {
+      this.request?.abort(); window.clearTimeout(this.timer); this.generation++;
+      prepareTitleNavigation(this.list.children[index]?.querySelector(".switcher-result-title"));
+      window.location.assign(entry.path);
+      return;
+    }
     this.afterClose = () => {
       if (entry.path) window.location.assign(entry.path);
       else document.querySelector<HTMLButtonElement>(entry.action === "capture" ? "[data-capture-launch]" : "[data-reading-mode]")?.click();

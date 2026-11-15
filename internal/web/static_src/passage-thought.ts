@@ -1,3 +1,4 @@
+import { trackPassagePosition } from "./passage-position";
 import { collectInThread } from "./thread-loader";
 import { startConnectionWriting } from "./thought-writing-loader";
 import { notePathForKey } from "./filters";
@@ -18,6 +19,7 @@ export const initPassageThought = (body: HTMLElement): void => {
   toolbar.append(button, collect, hint); document.body.append(toolbar);
   let passage = "";
   let range: Range | undefined;
+  const position = trackPassagePosition(toolbar, () => range);
   const update = (): void => {
     const selection = window.getSelection();
     if (!selection?.rangeCount || selection.isCollapsed) {
@@ -32,7 +34,7 @@ export const initPassageThought = (body: HTMLElement): void => {
     if (!body.contains(selected.startContainer) || !body.contains(selected.endContainer) || !text || text.length > 8000) {
       toolbar.hidden = true; return;
     }
-    passage = text; range = selected.cloneRange(); toolbar.hidden = false;
+    passage = text; range = selected.cloneRange(); toolbar.hidden = false; position();
   };
   collect.addEventListener("click", () => {
     toolbar.hidden = true;

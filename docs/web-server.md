@@ -429,6 +429,10 @@ Short confirmation and card transitions respect reduced-motion preferences.
 
 Select up to 8,000 characters in a note and choose **Write a thought** in the
 small floating toolbar (or press **Alt + Enter** with the selection focused).
+With a mouse or trackpad, the bar follows the selection above it, or below when
+there is no room above. Long selections use a free side gutter; when the
+selection fills the viewport, scroll to its edge or use **Alt + Enter**. Touch
+devices keep the bar docked at the bottom, clear of native selection handles.
 The composer keeps your quotation and source visible while you write. **Save
 thought…** suggests an editable title; **Save thought** creates a Markdown note
 with the quotation, a source wikilink, and your writing. **Back to your passage**
@@ -558,7 +562,8 @@ the browser supports option styling; Safari keeps its system highlight.
 Labels wrap at word boundaries. Selecting a
 note in **Focus** mode gently centers it without changing zoom or rearranging
 nodes; ordinary Filter mode preserves the viewport. Reduced motion makes these
-viewport changes immediate. Reading-to-writing title transitions are enabled
+viewport changes immediate. Titles also travel into notes from Library, Brief, Pinned, search, preview,
+and the saved-thought composer. These title transitions are enabled
 only in browsers supporting cross-document view transitions, and only when
 reduced motion is off.
 

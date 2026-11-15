@@ -1,4 +1,4 @@
-/* One reading measure and type choice follows a thought into the editor. */
+/* Shared reading and writing type. */
 :root { --bn-prose-width: 48rem; --bn-prose-font: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; --bn-prose-size: 1.075rem; --bn-prose-leading: 1.75; }
 :root[data-reading-type='book'] { --bn-prose-font: var(--bn-book); --bn-prose-size: 1.15rem; --bn-prose-leading: 1.8; }
 .note-print-body > .note-body,
@@ -81,3 +81,5 @@
 }
 @media print { .capture-history, .library-density { display: none; } }
 .source-editor:not([data-writing-source='true']) .cm-line.cm-prose-gap { line-height: 0.65; min-height: 0; }
+
+.switcher-result-title { display: block; }

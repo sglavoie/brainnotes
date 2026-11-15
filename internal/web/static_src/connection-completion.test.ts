@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { expect, it } from "vitest";
+import { expect, it, vi } from "vitest";
 import { showSavedThought, suggestThoughtTitle } from "./connection-completion";
 
 it("suggests a short editable filename from the first sentence without path syntax", () => {
@@ -15,9 +15,12 @@ it("shows confirmed text literally and links to the returned key", () => {
   const form = document.querySelector("form")!;
   form.querySelector("input")!.value = "A <literal> title";
   form.querySelector("textarea")!.value = "A thought with <script>literal text</script>.";
+  const reveal = vi.fn();
+  HTMLElement.prototype.scrollIntoView = reveal;
   showSavedThought(form, "/edit?key=Ideas%2FReturned");
   expect(form.querySelector("h3")!.textContent).toBe("A <literal> title");
   expect(form.querySelector("script")).toBeNull();
   expect(form.querySelector("a")!.getAttribute("href")).toBe("/n/Ideas/Returned");
+  expect(reveal).toHaveBeenCalledWith({ block: "nearest" });
   expect(document.activeElement).toBe(form.querySelector("h3"));
 });

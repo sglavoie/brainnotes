@@ -82,3 +82,13 @@
   .connection-pair .connection-note:has(h3) { animation: confirmation-settle 160ms ease-out; }
   @keyframes connection-unfold { from { opacity: 0.5; transform: translateY(6px) scale(0.985); } to { opacity: 1; transform: none; } }
 }
+
+/* Fine-pointer placement comes from the preserved selection's live geometry. */
+.passage-tools[data-side] { flex-wrap: wrap; }
+.passage-tools[data-side] > span { display: none; }
+@media (prefers-reduced-motion: no-preference) {
+  .passage-tools:not([hidden]), .connection-saved { animation: confirmation-settle 160ms ease-out; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .passage-tools, .passage-thought, .connection-saved { animation: none; }
+}

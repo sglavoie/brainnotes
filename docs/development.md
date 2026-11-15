@@ -200,7 +200,11 @@ creation after a lost response.
 literal quotations and canonical source links on disk, draft restoration,
 idempotent recovery after a lost reply and reload, accessibility of the composer,
 returning to the selection, and confirmed capture feedback. The visual matrix
-also covers selected passages, writing, and completed thoughts.
+also covers selected passages, writing, and completed thoughts. Passage snapshots
+use fine pointers at 1280 px and touch/coarse pointers at 390 px. Behavioral
+checks cover above/below placement, scrolling, oversized selections, keyboard
+access when no free gutter exists, exact saved bytes, and title naming at
+activation with cancellation and reduced motion.
 
 `header-empty-states.spec.js` covers the shared incoming badge across every page
 at 1280 and 390 px, its accessible review name, empty status geometry, and

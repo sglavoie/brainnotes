@@ -73,7 +73,7 @@ for (const [theme, width] of [["light", 1280], ["dark", 390], ["light", 390], ["
     });
     experienceVisuals(snapshot);
     thinkingVisuals(snapshot);
-    passageVisuals(snapshot);
+    passageVisuals(snapshot, width);
     test("editor and exact Undo confirmation", async ({ page }) => {
       await page.goto("/edit?key=Survey");
       await expect(page.locator(SURFACE)).toContainText("The water has fallen");
@@ -193,24 +193,27 @@ function thinkingVisuals(snapshot) {
   });
 }
 
-function passageVisuals(snapshot) {
-  test("selected passage, writing and a saved thought", async ({ page }) => {
-    await page.goto("/n/Survey");
-    await page.locator("[data-note-body] p").first().evaluate((element) => {
-      const range = document.createRange(); range.selectNodeContents(element);
-      getSelection().removeAllRanges(); getSelection().addRange(range);
+function passageVisuals(snapshot, width) {
+  test.describe("passage pointer placement", () => {
+    test.use({ hasTouch: width === 390 });
+    test("selected passage, writing and a saved thought", async ({ page }) => {
+      await page.goto("/n/Survey");
+      await page.locator("[data-note-body] p").first().evaluate((element) => {
+        const range = document.createRange(); range.selectNodeContents(element);
+        getSelection().removeAllRanges(); getSelection().addRange(range);
+      });
+      await expect(page.getByRole("button", { name: "Write a thought", exact: true })).toBeVisible();
+      await snapshot(page, "passage-selection");
+      await page.getByRole("button", { name: "Write a thought", exact: true }).click();
+      const dialog = page.getByRole("dialog", { name: "Follow this thought" });
+      await dialog.getByLabel("Your thought", { exact: true }).fill("Return to the same place before drawing a conclusion.");
+      await snapshot(page, "passage-writing");
+      await dialog.getByRole("button", { name: "Save thought…", exact: true }).click();
+      await page.route("**/api/notes/new", (route) => route.fulfill({ json: { ok: true, key: "Return to the same place" } }));
+      await dialog.getByRole("button", { name: "Save thought", exact: true }).click();
+      await expect(dialog.locator(".connection-saved")).toBeVisible();
+      await snapshot(page, "passage-saved");
     });
-    await expect(page.getByRole("button", { name: "Write a thought", exact: true })).toBeVisible();
-    await snapshot(page, "passage-selection");
-    await page.getByRole("button", { name: "Write a thought", exact: true }).click();
-    const dialog = page.getByRole("dialog", { name: "Follow this thought" });
-    await dialog.getByLabel("Your thought", { exact: true }).fill("Return to the same place before drawing a conclusion.");
-    await snapshot(page, "passage-writing");
-    await dialog.getByRole("button", { name: "Save thought…", exact: true }).click();
-    await page.route("**/api/notes/new", (route) => route.fulfill({ json: { ok: true, key: "Return to the same place" } }));
-    await dialog.getByRole("button", { name: "Save thought", exact: true }).click();
-    await expect(dialog.locator(".connection-saved")).toBeVisible();
-    await snapshot(page, "passage-saved");
   });
 }
 

@@ -38,6 +38,7 @@ export const showSavedThought = (form: HTMLFormElement, editorURL: string): void
   sources.setAttribute("aria-label", "Source notes");
   actions.append(keep, open); result.append(status, sources, heading, body, actions); form.replaceChildren(result);
   heading.focus({ preventScroll: true });
+  result.scrollIntoView({ block: "nearest" });
 };
 
 const announceSavedPassage = (form: HTMLFormElement, key: string, title: string, thought: string): void => {

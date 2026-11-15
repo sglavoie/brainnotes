@@ -1,3 +1,4 @@
+import { expectPassagePlacement } from "./passage-placement.js";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { test, expect, manifest } from "./fixture.js";
@@ -12,6 +13,7 @@ test("hosted passage writing preserves its source and returns the selection", as
     getSelection().removeAllRanges(); getSelection().addRange(range);
     return getSelection().toString();
   });
+  await expectPassagePlacement(page);
   await page.getByRole("button", { name: "Write a thought", exact: true }).click();
   const dialog = page.getByRole("dialog", { name: "Follow this thought" });
   await expect(dialog.locator("blockquote")).toHaveText(text);
