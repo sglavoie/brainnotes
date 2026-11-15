@@ -36,9 +36,11 @@ test("reading opens the relevant source passage and mobile pane switches keep it
   await expect(page.locator(SURFACE)).toBeVisible();
   const scroller = page.locator(".cm-scroller");
   await expect.poll(() => scroller.evaluate((node) => node.scrollTop)).toBeGreaterThan(1000);
-  await expect(page.locator("[data-source-preview] [data-source-line]").first()).toBeAttached();
   const before = await scroller.evaluate((node) => node.scrollTop);
   await page.getByRole("tab", { name: "Preview", exact: true }).click();
+  // Hidden panes render on reveal; passage restoration must survive that load.
+  await expect(page.locator('[data-source-pane="preview"]')).toBeVisible();
+  await expect(page.locator("[data-source-preview] [data-source-line]").first()).toBeAttached();
   const preview = page.locator("[data-source-preview]");
   await expect.poll(() => preview.evaluate((node) => node.scrollTop)).toBeGreaterThan(1000);
   const activeLine = await preview.evaluate((node) => {

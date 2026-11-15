@@ -33,8 +33,11 @@ export const openConnection = (connection: Connection, trigger: HTMLElement): vo
     connectionWriting(dialog, [connection.source, connection.candidate], request.signal);
   }
   dialog.addEventListener("close", () => {
+    // Native close queues this event after releasing modal focus. Preserve any
+    // new focus target chosen in the meantime, including the next shortcut.
+    const restoreFocus = document.activeElement === document.body || dialog.contains(document.activeElement);
     request.abort(); dialog.remove();
-    if (trigger.isConnected) trigger.focus({ preventScroll: true });
+    if (restoreFocus && trigger.isConnected) trigger.focus({ preventScroll: true });
   });
   document.body.append(dialog);
   dialog.showModal();

@@ -10,9 +10,15 @@ export const createPreviewPanel = (
 ): PreviewScheduler => {
   const retry = elements.panel.querySelector<HTMLButtonElement>("[data-source-preview-retry]");
   let hasPreview = false;
+  let latest: string | null = null;
+  const pane = elements.preview?.closest<HTMLElement>('[data-source-pane="preview"]');
+  // Let the rendered CSS layout decide visibility, including split view and
+  // responsive tabs. Without observation, retain the eager-render fallback.
+  const enabled = (): boolean => !pane || typeof ResizeObserver === "undefined" || pane.getClientRects().length > 0;
   const scheduler = createPreviewScheduler({
     delayMs,
     render,
+    enabled,
     sink: {
       render: (html) => {
         if (elements.preview) elements.preview.innerHTML = html;
@@ -35,15 +41,23 @@ export const createPreviewPanel = (
       },
     },
   });
+  let visible = enabled();
+  const observer = pane && typeof ResizeObserver !== "undefined" ? new ResizeObserver(() => {
+    const shown = enabled();
+    if (shown && !visible && latest !== null) scheduler.flush(latest);
+    visible = shown;
+  }) : null;
+  if (pane) observer?.observe(pane);
   const onRetry = (): void => {
     if (retry?.getAttribute("aria-disabled") !== "true") scheduler.flush(content());
   };
   retry?.addEventListener("click", onRetry);
   return {
-    schedule: scheduler.schedule,
-    flush: scheduler.flush,
+    schedule: (text) => { latest = text; scheduler.schedule(text); },
+    flush: (text) => { latest = text; scheduler.flush(text); },
     dispose: () => {
       retry?.removeEventListener("click", onRetry);
+      observer?.disconnect();
       scheduler.dispose();
     },
   };

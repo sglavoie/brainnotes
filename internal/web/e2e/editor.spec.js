@@ -53,6 +53,8 @@ test("a note typed in the browser is saved by Ctrl/⌘ + S and lands in the fixt
   // same one the note page uses — reached through /api/source/preview. A
   // browser-side Markdown renderer would be a second answer to what a note
   // looks like; this asserts there is only one.
+  await page.getByLabel("Writing layout").selectOption("split");
+  await expect(page.locator('[data-source-pane="preview"]')).toBeVisible();
   await expect(page.locator("[data-source-preview] h2")).toContainText(phrase);
 
   await page.keyboard.press("ControlOrMeta+s");

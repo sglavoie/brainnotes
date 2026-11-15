@@ -309,12 +309,8 @@ const runLoad = async (
     mountSurface(deps, state, loaded.content, () => {
       ctx.refreshSaveButton();
       refreshEditStatus(deps.elements, state, ctx.setStatus);
-      // The preview is scheduled on every edit regardless of which pane is
-      // showing. On a wide screen both are, so this is simply correct; on a
-      // narrow one it costs a debounced request for a hidden pane, and the
-      // alternative — asking matchMedia which layout is in force — puts a
-      // breakpoint that belongs in css/responsive.css into this file, where
-      // the two would drift apart silently.
+      // The panel retains the latest text and renders when CSS exposes it;
+      // hidden previews must not compete with Save for upload bandwidth.
       ctx.preview.schedule(state.surface?.getValue() ?? "");
       ctx.drafts.keep();
     });

@@ -23,6 +23,28 @@ test("Split shows both panes side by side on a wide window", async ({ page }) =>
   await expect(page.locator('[data-source-tab="edit"]')).toBeHidden();
 });
 
+test("hidden preview waits for reveal and Split refreshes after a resize", async ({ page }) => {
+  const requests = [];
+  page.on("request", request => { if (request.url().includes("/api/source/preview")) requests.push(request); });
+  await openEditor(page);
+  await expect(page.locator(PANE_PREVIEW)).toBeHidden();
+  expect(requests).toHaveLength(0);
+  const phrase = phraseFor("deferred preview");
+  await caretToEnd(page);
+  await page.keyboard.insertText(`\n\n${phrase}\n`);
+  await page.getByLabel("Writing layout").selectOption("split");
+  await expect(page.locator("[data-source-preview]")).toContainText(phrase);
+  await page.setViewportSize({ width: 700, height: 900 });
+  await expect(page.locator(PANE_PREVIEW)).toBeHidden();
+  await caretToEnd(page);
+  await page.keyboard.insertText("Latest draft after resize.");
+  await page.setViewportSize({ width: 1280, height: 720 });
+  await expect(page.locator(PANE_PREVIEW)).toBeVisible();
+  await expect(page.locator("[data-source-preview]")).toContainText("Latest draft after resize.");
+  await expect(page.locator("[data-source-save]")).toBeEnabled();
+  expect(readFileSync(join(manifest.localVault, NOTE), "utf8")).not.toContain(phrase);
+});
+
 test.describe("on a narrow window", () => {
   test.use({ viewport: { width: 700, height: 900 } });
 

@@ -211,6 +211,10 @@ between matches; Escape closes Find and returns to editing. On narrow screens,
 Find switches from Preview to Edit. Replacements remain in the draft until Save
 and can be undone while editing.
 
+Hidden preview panes defer rendering requests so they do not compete with typing
+or saving. Switching to Split or Preview renders the latest draft; resizing to
+show the pane does the same.
+
 **Retry preview** renders the current draft without saving. If rendering failed,
 the previous preview is labeled outdated. Retrying disables the button and
 returns focus to the preview when it disappears, unless you moved focus elsewhere.

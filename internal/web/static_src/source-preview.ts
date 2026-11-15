@@ -37,6 +37,8 @@ export type PreviewSchedulerOptions = {
   render: PreviewRenderer;
   sink: PreviewSink;
   delayMs?: number;
+  // A hidden pane can defer work until its owner flushes on reveal.
+  enabled?: () => boolean;
 };
 
 const DEFAULT_DELAY_MS = 350;
@@ -52,7 +54,7 @@ export const createPreviewScheduler = (
   let disposed = false;
 
   const run = (content: string): void => {
-    if (disposed || content === rendered) {
+    if (disposed || content === rendered || options.enabled?.() === false) {
       return;
     }
     issued += 1;
