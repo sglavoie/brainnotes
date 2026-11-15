@@ -122,3 +122,23 @@ test("main destinations are directly available on desktop and mobile keeps Searc
   await page.locator(".source-editor-workspace > summary").click();
   await expect(page.getByRole("navigation", { name: "Primary" }).getByRole("link", { name: "Library" })).toBeVisible();
 });
+
+for (const [width, zoom] of [[1280, "1"], [320, "1"], [640, "2"]]) {
+  test(`shortcut sheet is accessible at ${width}px and ${zoom} zoom`, async ({ page }) => {
+    await page.setViewportSize({ width, height: 800 });
+    await page.goto("/n/Alpha");
+    await page.evaluate((value) => { document.documentElement.style.zoom = value; }, zoom);
+    await page.keyboard.press("?");
+    const dialog = page.getByRole("dialog", { name: "Keyboard shortcuts" });
+    await expect(dialog).toBeVisible();
+    await dialog.evaluate(async (element) => { await Promise.all(element.getAnimations({ subtree: true }).map((animation) => animation.finished)); });
+    await expectNoAxeViolations(page);
+    expect(await dialog.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+    await expect(dialog.getByRole("button", { name: "Close", exact: true })).toBeFocused();
+    await page.keyboard.press("Tab");
+    await page.keyboard.press("Shift+Tab");
+    await expect(dialog.getByRole("button", { name: "Close", exact: true })).toBeFocused();
+    await page.keyboard.press("Escape");
+    await expect(dialog).toBeHidden();
+  });
+}

@@ -1,4 +1,5 @@
 import { test, expect } from "./fixture.js";
+import { keyboardVisuals } from "./keyboard-visuals.js";
 import { graphVisuals } from "./graph-visuals.js";
 import { fixedHistory, fixedRecentNotes, reviewVisuals } from "./review-visuals.js";
 import { SURFACE } from "./editor-helpers.js";
@@ -24,6 +25,7 @@ for (const [theme, width] of [["light", 1280], ["dark", 390], ["light", 390], ["
     };
     reviewVisuals(snapshot);
     graphVisuals(snapshot);
+    keyboardVisuals(snapshot);
     for (const [name, path] of [["new-note", "/new"], ["pinned", "/pinned"], ["threads-empty", "/threads"], ["synthesis", "/synthesize?source=Alpha"]]) {
       test(`${name} focused workspace`, async ({ page }) => {
         await page.goto(path);

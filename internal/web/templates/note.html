@@ -86,7 +86,7 @@
       <div class="note-actions">
         {{- if not readOnly -}}
           <div class="note-action-group">
-            <a class="source-editor-launch bn-button bn-primary" href="{{.EditSourcePath}}" data-source-editor-launch>Edit</a>
+            <a class="source-editor-launch bn-button bn-primary" href="{{.EditSourcePath}}" data-source-editor-launch aria-keyshortcuts="e">Edit</a>
           </div>
         {{- end -}}
         <div class="note-action-group" data-pin-note data-pin-key="{{.Key}}" data-pin-csrf="{{.CSRFToken}}" data-pin-state="{{if .Pinned}}pinned{{else}}unpinned{{end}}">

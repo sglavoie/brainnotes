@@ -1,4 +1,5 @@
 [
+  "keyboard-tools=internal/web/static_src/keyboard-tools.ts",
   "app=internal/web/static_src/main.ts",
   "thread-collect=internal/web/static_src/thread-collect.ts",
   "threads=internal/web/static_src/threads.css",

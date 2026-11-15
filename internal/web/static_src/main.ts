@@ -1,3 +1,4 @@
+import { initKeyboardShortcuts } from "./keyboard-shortcuts";
 import { initThreadCollection } from "./thread-loader";
 import { initWorkspaceMemory } from "./workspace-memory";
 import { initCommandSwitcher } from "./command-switcher";
@@ -27,6 +28,7 @@ import { initPendingWriteOutcomes } from "./write-outcome-check";
 (function () {
   const readOnly = document.documentElement.dataset.readOnly === "true";
   initTheme();
+  initKeyboardShortcuts();
   initWorkspaceMemory();
   initWorkspacePopovers();
   initCommandSwitcher();

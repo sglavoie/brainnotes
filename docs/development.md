@@ -67,7 +67,8 @@ The generated JavaScript is committed so Go-only builds do not need Node. The
 editor and Sync pages load `editing.js` for CodeMirror; note reading loads only
 `app.js`. Each workspace loads its own small page bundle. Recent-history tools
 load with Library, Properties and Settings. Connection dialogs and their styles
-load on demand; passage tools load on text selection, and both load the shared
+load on demand; the switcher and shortcut sheet share on-demand keyboard-tools.js,
+while the key matcher and global bindings load with app.js; passage tools load on text selection, and both load the shared
 creation tools only when someone chooses to write. Note-specific AI tools load
 only when the note page offers a configured agent; ordinary reading keeps its
 370 KB combined script/style and 400 KB whole-page transfer budgets. Shared

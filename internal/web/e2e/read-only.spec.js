@@ -103,3 +103,19 @@ test("replica connection and reference previews offer only reading actions", asy
   expect(gitRead(manifest.peerVault, "rev-parse", "HEAD").trim()).toBe(before);
   expect(gitStatus(manifest.peerVault)).toBe("");
 });
+
+
+test("read-only keyboard navigation leaves absent writing controls inert", async ({ page }) => {
+  await page.goto("/n/Alpha");
+  await expect(page.locator("[data-note-body]")).toBeVisible();
+  await page.keyboard.press("e");
+  await page.keyboard.press("g");
+  await page.keyboard.press("t");
+  await expect(page).toHaveURL(/\/n\/Alpha$/);
+  await expect(page.locator("[data-source-editor-launch]")).toHaveCount(0);
+  await page.keyboard.press("g");
+  await page.keyboard.press("l");
+  await expect(page).toHaveURL(/\/library$/);
+  await page.keyboard.press("?");
+  await expect(page.getByRole("dialog", { name: "Keyboard shortcuts" })).toBeVisible();
+});

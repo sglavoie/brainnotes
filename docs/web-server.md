@@ -446,6 +446,53 @@ when available; hover the date for the exact timestamp. Connection previews
 highlight the connecting reference, and a saved thought displays links back to
 its sources.
 
+## Keyboard shortcuts
+
+Open **Workspace → Keyboard shortcuts** or press **?** for the complete sheet.
+**Single-key shortcuts** in Workspace is on by default. Turning it off disables
+character shortcuts, including `/`, across pages and tabs in this browser
+(`bn.shortcuts` in local storage). Modifier shortcuts and native control keys
+remain available. If storage is unavailable, the toggle still applies to the
+current page. The sheet remains available through its button.
+
+| Keys | Action |
+| --- | --- |
+| `g` then `b`, `l`, `t`, `p`, `g` | Brief, Library, Threads, Pinned, Graph; finish within one second |
+| `j` / `k` | Focus the next / previous visible Library result, Pinned note, or thread |
+| Enter / `o` | Open the focused row's link |
+| `x` | Toggle that row's selection checkbox, when present |
+| `e` | Activate Edit on a note |
+| `/` | Focus the page's search; Escape returns to the previous control |
+| `?` | Open the shortcut sheet |
+| Ctrl/⌘ K | Search notes and actions |
+| Ctrl/⌘ Shift Space | Capture; Ctrl/⌘ Enter submits inside capture |
+
+Character shortcuts yield while typing, composing text, in open dialogs, in the
+editor, or on the Graph canvas/list. They ignore held-key repeats and handled
+keys. Navigation activates the existing links and buttons, so unavailable
+controls remain inert in hosted and read-only modes. List highlights are actual
+link focus; native buttons, checkboxes and disclosures retain their keyboard
+behavior.
+
+In the switcher, ↑ / ↓ select, Enter opens, Alt Enter keeps beside, and Escape
+closes. On a previewable note link, Alt ↓ opens its preview; Escape closes it.
+Escape also closes a side reference while focus is inside it. Graph's canvas uses
+arrows to browse, Home / End for first / last, Enter / Space for neighbour labels,
+and Escape to clear selection. The Graph list uses native selection keys and
+expands a selected folder; use **Open note** to open the selected note. Pinned drag
+handles use ↑ / ↓ to reorder and Escape to cancel dragging.
+
+In the editor, Ctrl/⌘ S saves, F finds, B makes bold, I italic, E inline code,
+Alt K a Markdown link, Shift K a wikilink, Shift 8 a bullet list, and Alt 1–6
+headings. Ctrl/⌘ Z undoes; Ctrl/⌘ Shift Z redoes (Control Y also redoes on
+Windows/Linux). Completion uses ↑ / ↓, Enter and Escape. Escape leaves Focus;
+editor tabs use ← / → and Home / End. The sheet also describes native Tab,
+Shift Tab, Enter and Space operation. Properties rows use ↑ / ↓ to move, Space
+to select, and Enter to edit; Escape closes the editor or clears selection.
+Reading sidebar resize handles use ← / → (Shift for larger steps); side-reference
+resize handles also use Home / End for minimum / maximum width. Capture wikilinks
+and filter suggestions use arrows, Enter and Escape; Ctrl/⌘ Enter submits Ask AI.
+
 ## Thinking workspace
 
 Use **Search** in the header or **Ctrl/⌘ + K** from any workspace to find notes,

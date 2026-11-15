@@ -1,16 +1,12 @@
-const editableSelector = 'input, textarea, select, [contenteditable]:not([contenteditable="false"]), [role="textbox"]';
-const dialogSelector = 'dialog[open], [role="dialog"]:not([hidden]), [role="alertdialog"]:not([hidden])';
+import { allowsSingleKey } from "./keyboard-guard";
+export { isEditableTarget } from "./keyboard-guard";
 
 // A page whose own search field carries this attribute owns "/" instead of the
 // header search, which then drops its shortcut and hint.
 const pageShortcutOwnerSelector = "[data-page-search-shortcut]";
 
 export const isSearchShortcut = (event: KeyboardEvent): boolean =>
-  event.key === "/" && !event.ctrlKey && !event.metaKey && !event.altKey &&
-  !event.isComposing && !event.defaultPrevented && !event.repeat;
-
-export const isEditableTarget = (target: EventTarget | null): boolean =>
-  target instanceof Element && target.closest(editableSelector) !== null;
+  event.key === "/" && allowsSingleKey(event);
 
 const yieldToPageShortcut = (input: HTMLInputElement, scope: HTMLElement): boolean => {
   const owner = input.ownerDocument.querySelector(pageShortcutOwnerSelector);
@@ -43,10 +39,7 @@ export const bindSearchShortcut = (input: HTMLInputElement): (() => void) => {
       returnFocus();
       return;
     }
-    if (!isSearchShortcut(event) || !input.isConnected || input.disabled || doc.querySelector(dialogSelector)) {
-      return;
-    }
-    if (isEditableTarget(event.target)) {
+    if (!isSearchShortcut(event) || !input.isConnected || input.disabled) {
       return;
     }
     event.preventDefault();

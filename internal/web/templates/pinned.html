@@ -41,7 +41,7 @@
                 aria-label="Reorder {{.Title}}"
                 title="Drag to reorder, or press Up or Down"
               ><span aria-hidden="true">⠿</span></button>
-              <a class="pinned-note-title" href="{{.Path}}">{{.Title}}</a>
+              <a class="pinned-note-title" aria-keyshortcuts="j k Enter o" href="{{.Path}}">{{.Title}}</a>
               <span class="pinned-note-meta">
                 <span class="pinned-note-folder">{{if .Folder}}{{.Folder}}{{else}}/{{end}}</span>
               </span>

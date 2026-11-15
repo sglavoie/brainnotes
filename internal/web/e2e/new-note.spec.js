@@ -115,3 +115,16 @@ test("a lost Trash reply can be checked by its exact journaled attempt", async (
   await page.goto("/");
   await expect(page.locator(".pending-write-outcomes")).toHaveCount(0);
 });
+
+
+test("hosted keyboard flow activates Library and the browser editor", async ({ page }) => {
+  await page.goto("/n/Alpha");
+  await expect(page.locator("[data-note-body]")).toBeVisible();
+  await page.keyboard.press("e");
+  await expect(page).toHaveURL(/\/edit\?key=alpha(?:&|$)/);
+  await expect(page.locator(".cm-content")).toBeVisible();
+  await page.evaluate(() => document.activeElement?.blur());
+  await page.keyboard.press("g");
+  await page.keyboard.press("l");
+  await expect(page).toHaveURL(/\/library$/);
+});

@@ -83,11 +83,11 @@
   <div class="workspace-navigation">
     {{if and (not readOnly) (ne . "library") (ne . "brief")}}<a class="bn-button new-note-action{{if and (ne . "note") (ne . "editor") (ne . "new") (ne . "threads")}} bn-primary{{end}}" href="/new"{{if eq . "new"}} aria-current="page"{{end}}>New note</a>{{end}}
     <nav class="site-nav" aria-label="Primary">
-      <a href="/"{{if eq . "brief"}} aria-current="page"{{end}}>Brief</a>
-      <a href="/library"{{if eq . "library"}} aria-current="page"{{end}}>Library</a>
-      {{if not readOnly}}<a href="/threads"{{if eq . "threads"}} aria-current="page"{{end}}>Threads</a>{{end}}
-      <a href="/pinned"{{if eq . "pinned"}} aria-current="page"{{end}}>Pinned</a>
-      <a href="/graph"{{if eq . "graph"}} aria-current="page"{{end}}>Graph</a>
+      <a href="/" aria-keyshortcuts="g b" title="Go to Brief (g then b)"{{if eq . "brief"}} aria-current="page"{{end}}>Brief</a>
+      <a href="/library" aria-keyshortcuts="g l" title="Go to Library (g then l)"{{if eq . "library"}} aria-current="page"{{end}}>Library</a>
+      {{if not readOnly}}<a href="/threads" aria-keyshortcuts="g t" title="Go to Threads (g then t)"{{if eq . "threads"}} aria-current="page"{{end}}>Threads</a>{{end}}
+      <a href="/pinned" aria-keyshortcuts="g p" title="Go to Pinned (g then p)"{{if eq . "pinned"}} aria-current="page"{{end}}>Pinned</a>
+      <a href="/graph" aria-keyshortcuts="g g" title="Go to Graph (g then g)"{{if eq . "graph"}} aria-current="page"{{end}}>Graph</a>
       <details class="manage-nav"{{if or (eq . "properties") (eq . "health") (eq . "settings") (eq . "sync") (eq . "history")}} open{{end}}>
         <summary>Manage</summary>
         <div class="manage-nav-links">
@@ -114,11 +114,11 @@
 
 {{define "desktopWorkspaceNav"}}
   <nav class="desktop-workspace-nav" aria-label="Main destinations">
-    <a href="/"{{if eq . "brief"}} aria-current="page"{{end}}>Brief</a>
-    <a href="/library"{{if eq . "library"}} aria-current="page"{{end}}>Library</a>
-    {{if not readOnly}}<a href="/threads"{{if eq . "threads"}} aria-current="page"{{end}}>Threads</a>{{end}}
-      <a href="/pinned"{{if eq . "pinned"}} aria-current="page"{{end}}>Pinned</a>
-    <a href="/graph"{{if eq . "graph"}} aria-current="page"{{end}}>Graph</a>
+    <a href="/" aria-keyshortcuts="g b" title="Go to Brief (g then b)"{{if eq . "brief"}} aria-current="page"{{end}}>Brief</a>
+    <a href="/library" aria-keyshortcuts="g l" title="Go to Library (g then l)"{{if eq . "library"}} aria-current="page"{{end}}>Library</a>
+    {{if not readOnly}}<a href="/threads" aria-keyshortcuts="g t" title="Go to Threads (g then t)"{{if eq . "threads"}} aria-current="page"{{end}}>Threads</a>{{end}}
+      <a href="/pinned" aria-keyshortcuts="g p" title="Go to Pinned (g then p)"{{if eq . "pinned"}} aria-current="page"{{end}}>Pinned</a>
+    <a href="/graph" aria-keyshortcuts="g g" title="Go to Graph (g then g)"{{if eq . "graph"}} aria-current="page"{{end}}>Graph</a>
   </nav>
 {{end}}
 
@@ -135,6 +135,8 @@
     <div class="source-editor-workspace-content">
       <div class="site-header-tools">
         {{template "themeControl" .}}
+        <label><input type="checkbox" data-shortcuts-toggle checked> Single-key shortcuts</label>
+        <button type="button" class="bn-button" data-shortcuts-open aria-keyshortcuts="Shift+?">Keyboard shortcuts</button>
       <div class="workspace-memory">
         <p class="workspace-memory-hint">Reading places, recent notes, and your side reference are remembered in this browser.</p>
         <button type="button" class="bn-button" data-forget-workspace>Forget remembered places</button>

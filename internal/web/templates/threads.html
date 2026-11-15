@@ -8,7 +8,7 @@
 <p class="page-subtitle">Keep a question, collected passages, and your writing together.</p>
 <section id="workspace-content" tabindex="-1" class="panel" aria-labelledby="thread-list-title">
 <h2 id="thread-list-title">Pick up your thinking</h2>
-{{if .Items}}<ul>{{range .Items}}<li><a href="/edit?key={{.Key}}">{{.Title}}</a> · <a href="{{.Path}}">Read</a></li>{{end}}</ul></section>
+{{if .Items}}<ul>{{range .Items}}<li><a data-thread-link aria-keyshortcuts="j k Enter o" href="/edit?key={{.Key}}">{{.Title}}</a> · <a href="{{.Path}}">Read</a></li>{{end}}</ul></section>
 {{else}}<div class="workspace-empty"><p>Give a question a place to grow as you read.</p>{{end}}
 {{if not readOnly}}
 <details{{if .Items}} class="panel"{{end}}><summary{{if not .Items}} class="bn-button bn-primary"{{end}}>Start a thread</summary>

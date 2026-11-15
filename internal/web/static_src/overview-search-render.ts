@@ -292,6 +292,7 @@ const renderResultSelection = (
     selectWrap.className = "overview-result-select";
     const checkbox = doc.createElement("input");
     checkbox.type = "checkbox";
+    checkbox.setAttribute("aria-keyshortcuts", "x");
     checkbox.value = result.key;
     checkbox.dataset.wikilink = result.wikilink;
     checkbox.checked = Boolean(options.selected);
@@ -334,6 +335,7 @@ export const renderOverviewSearchResult = (
 
   const link = doc.createElement("a");
   link.className = "overview-result-link";
+  link.setAttribute("aria-keyshortcuts", "j k Enter o");
   link.setAttribute("href", libraryResultPath(path, item.id));
 
   const title = doc.createElement("span");

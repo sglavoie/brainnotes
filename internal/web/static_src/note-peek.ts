@@ -59,6 +59,7 @@ class NotePeek {
   attach(link: HTMLAnchorElement): void {
     if (link.dataset.peekAttached) return;
     link.dataset.peekAttached = "true";
+    link.setAttribute("aria-keyshortcuts", `${link.getAttribute("aria-keyshortcuts") || ""} Alt+ArrowDown`.trim());
     const button = document.createElement("button");
     button.type = "button";
     button.className = "note-peek-trigger";
