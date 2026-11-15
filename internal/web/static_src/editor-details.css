@@ -360,3 +360,7 @@
 .source-editor .cm-line:has(.source-frontmatter-placeholder) { font-size: 0; line-height: 0; }
 
 .source-editor > .source-editor-tabs { order: -1; }
+/* Link completion rows: note name, then folder. The doubled class outranks the monospace CodeMirror sets on this list. */
+.source-editor-surface .cm-tooltip.cm-tooltip-autocomplete > ul { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; font-size: 0.9rem; min-width: 16rem; }
+.source-editor-surface .cm-tooltip-autocomplete > ul > li { display: flex; justify-content: space-between; gap: 1rem; padding: 0.3rem 0.6rem; }
+.source-editor-surface .cm-tooltip-autocomplete .cm-completionDetail { margin-left: 0; font-size: 0.8rem; }

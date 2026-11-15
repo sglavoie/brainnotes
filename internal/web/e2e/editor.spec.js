@@ -134,7 +134,7 @@ test("a completion survives when the note matched on something other than its pa
   await caretToEnd(page);
 
   await page.keyboard.type("[[Cartograph");
-  await expectLiveCompletion(page, "Notes/Fieldwork");
+  await expectLiveCompletion(page, "Fieldwork");
 
   await page.keyboard.press("Enter");
   await expect(page.locator(SURFACE)).toContainText("[[Notes/Fieldwork]]");
@@ -166,7 +166,7 @@ test("a completion still open declines Enter rather than breaking the link", asy
 
   // And the keystroke is only deferred, not swallowed for good: once the query
   // lands the dialog is live again and the same Enter completes the link.
-  await expectLiveCompletion(page, "Notes/Fieldwork");
+  await expectLiveCompletion(page, "Fieldwork");
   await page.keyboard.press("Enter");
   await expect(page.locator(SURFACE)).toContainText("[[Notes/Fieldwork]]");
 
@@ -225,7 +225,7 @@ test("a pause after [[ does not switch the guard off for everything typed next",
   const value = () => page.locator(SURFACE).innerText();
   expect(await value(), "Enter fell through to the document mid-query").not.toContain("[[Cartograph\n");
 
-  await expectLiveCompletion(page, "Notes/Fieldwork");
+  await expectLiveCompletion(page, "Fieldwork");
   await page.keyboard.press("Enter");
   await expect(page.locator(SURFACE)).toContainText("[[Notes/Fieldwork]]");
 

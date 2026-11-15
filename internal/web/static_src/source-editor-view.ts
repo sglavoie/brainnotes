@@ -14,7 +14,7 @@ import {
 } from "@codemirror/autocomplete";
 import { defaultKeymap, history, historyKeymap } from "@codemirror/commands";
 import { markdown, markdownLanguage } from "@codemirror/lang-markdown";
-import { bracketMatching, defaultHighlightStyle, syntaxHighlighting } from "@codemirror/language";
+import { bracketMatching, defaultHighlightStyle, HighlightStyle, syntaxHighlighting } from "@codemirror/language";
 import { Annotation, EditorState } from "@codemirror/state";
 import { openSearchPanel, search, searchKeymap } from "@codemirror/search";
 import { EditorView, highlightSpecialChars, keymap } from "@codemirror/view";
@@ -73,14 +73,14 @@ export const createSourceSurfaceFactory = (
           EditorView.lineWrapping,
           EditorView.contentAttributes.of({ "aria-labelledby": "source-editor-heading" }),
           markdown({ base: markdownLanguage }),
-          syntaxHighlighting(defaultHighlightStyle, { fallback: true }),
+          syntaxHighlighting(writingHighlightStyle, { fallback: true }),
           codeTypography,
           writingTools(host),
           proseSyntax,
           titlePresentation(host),
           threadPresentation(host),
           restoredPassage,
-          autocompletion({ override: [wikilinkCompletionSource(options, refresh)] }),
+          autocompletion({ override: [wikilinkCompletionSource(options, refresh)], icons: false }),
           // Tab is deliberately not bound. CodeMirror's own documentation
           // warns that capturing it traps keyboard users in the editor, and a
           // Markdown note has no indentation this page needs to offer.
@@ -181,6 +181,17 @@ const formattingKeymap = (options: SourceViewOptions) => {
     ...headings,
   ];
 };
+
+// writingHighlightStyle is CodeMirror's default style with one change: a
+// heading is bold but not underlined. In a note, an underline means a link, and
+// the default's underlined headings read as links that go nowhere. The heading
+// rule is the only one in the default that is both bold and underlined, which
+// is how it is found without depending on the highlighter's tag objects.
+const writingHighlightStyle = HighlightStyle.define(
+  defaultHighlightStyle.specs.map((spec) =>
+    spec.fontWeight === "bold" && spec.textDecoration === "underline" ? { ...spec, textDecoration: "none" } : spec,
+  ),
+);
 
 // CompletionRefresh is what the completion source tells the keymap below.
 //
@@ -326,12 +337,22 @@ const wikilinkCompletionSource =
       filter: false,
       options: matches.map((match) => ({
         label: match.label,
-        detail: match.detail || undefined,
-        type: "text",
+        ...wikilinkRowText(match.label, match.detail),
         apply: applyWikilink(match.label),
       })),
     };
   };
+
+// wikilinkRowText is how a completion row reads. The label stays the wikilink
+// target, because that is what is inserted and what the keymap compares; the
+// row shows the note's name first and its folder after it, which is the order
+// somebody scanning for a note reads in. A title that differs from the file
+// name follows the folder.
+const wikilinkRowText = (label: string, title: string): { displayLabel: string; detail?: string } => {
+  const slash = label.lastIndexOf("/");
+  const context = [slash >= 0 ? label.slice(0, slash) : "", title].filter(Boolean).join(" · ");
+  return { displayLabel: label.slice(slash + 1), ...(context ? { detail: context } : {}) };
+};
 
 // applyWikilink closes the brackets unless they are already there, so accepting
 // a completion leaves a finished link rather than one the user has to close by
