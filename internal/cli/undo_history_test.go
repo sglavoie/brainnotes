@@ -2,7 +2,6 @@ package cli
 
 import (
 	"errors"
-	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -12,45 +11,48 @@ import (
 	"github.com/sglavoie/brainnotes/internal/journal"
 )
 
-func TestHistoryListsNewestFirst(t *testing.T) {
+// historyFixture journals two changes to one note, a second apart.
+func historyFixture(t *testing.T) {
+	t.Helper()
 	root := buildSetFixture(t)
 	notePath := filepath.Join(root, "note.md")
 	if err := os.WriteFile(notePath, []byte("seed\n"), 0o644); err != nil {
 		t.Fatalf("write seed note: %v", err)
 	}
-
 	makeJournalEntry(t, root, notePath, "entry-old", time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC), "bn set note.md status=old", "old\n")
 	makeJournalEntry(t, root, notePath, "entry-new", time.Date(2026, 1, 2, 3, 4, 6, 0, time.UTC), "bn set note.md status=new", "new\n")
+}
 
-	// A terminal gets the header row; a pipe (the test buffer) does not.
-	prev := stdoutIsTerminal
-	stdoutIsTerminal = func(io.Writer) bool { return true }
-	out, err := runCLI(t, "", "history")
-	stdoutIsTerminal = prev
-	if err != nil {
-		t.Fatalf("history: %v\n%s", err, out)
-	}
-
+// A pipe (the test buffer) gets one tab-separated record per entry, newest
+// first, and nothing else.
+func TestHistoryListsNewestFirst(t *testing.T) {
+	historyFixture(t)
 	piped, err := runCLI(t, "", "history")
 	if err != nil {
 		t.Fatalf("history (piped): %v\n%s", err, piped)
 	}
-	if got := nonEmptyLines(piped); len(got) != 2 || got[0] != nonEmptyLines(out)[1] {
+	want := []string{
+		"2026-01-02T03:04:06Z\tentry-new\tbn set note.md status=new",
+		"2026-01-02T03:04:05Z\tentry-old\tbn set note.md status=old",
+	}
+	if got := nonEmptyLines(piped); len(got) != 2 || got[0] != want[0] || got[1] != want[1] {
 		t.Fatalf("piped history must be entries only, got:\n%s", piped)
 	}
+}
 
-	lines := nonEmptyLines(out)
-	if len(lines) != 3 {
-		t.Fatalf("history line count = %d, want 3\n%s", len(lines), out)
+// A terminal gets each entry in local time with the command that undoes it.
+func TestHistoryOnATerminalSpellsOutTheUndo(t *testing.T) {
+	historyFixture(t)
+	lines := nonEmptyLines(runCLIOnTerminal(t, "history"))
+	if len(lines) != 4 {
+		t.Fatalf("history line count = %d, want 4\n%v", len(lines), lines)
 	}
-	if lines[0] != "TIMESTAMP\tID\tCOMMAND" {
-		t.Fatalf("history header = %q", lines[0])
+	newest := time.Date(2026, 1, 2, 3, 4, 6, 0, time.UTC).Local().Format(historyTimeLayout)
+	if lines[0] != newest+"  bn set note.md status=new" || strings.TrimSpace(lines[1]) != "bn undo entry-new" {
+		t.Fatalf("history newest entry = %q, %q", lines[0], lines[1])
 	}
-	if lines[1] != "2026-01-02T03:04:06Z\tentry-new\tbn set note.md status=new" {
-		t.Fatalf("history newest row = %q", lines[1])
-	}
-	if lines[2] != "2026-01-02T03:04:05Z\tentry-old\tbn set note.md status=old" {
-		t.Fatalf("history oldest row = %q", lines[2])
+	if !strings.HasSuffix(lines[2], "bn set note.md status=old") || strings.TrimSpace(lines[3]) != "bn undo entry-old" {
+		t.Fatalf("history oldest entry = %q, %q", lines[2], lines[3])
 	}
 }
 

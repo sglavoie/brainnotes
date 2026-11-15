@@ -21,6 +21,11 @@ bn find [--tag t]... [--category c]... [--status s] [--type t]
 ```
 
 Prints matching absolute paths, one per line (or NUL-separated with `-0`).
+That is the form a pipeline reads. When stdout is a terminal, `find`, `links`
+and `backlinks` list the same notes vault-relative, with the folder dimmed and
+a count underneath, and `search` adds the first lines that matched under each
+note; any `bn` command accepts those vault-relative paths back. `-0` and
+`--json` always print the machine form, and `NO_COLOR` turns the colour off.
 Pipe into `fzf` with `-i` for an interactive picker; a picker that selects
 nothing exits 1. `--json` prints an array of `{"path", "abs_path", "title"}`
 records in the same order instead: `path` is vault-relative, like every other

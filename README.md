@@ -98,10 +98,12 @@ with its source attached. In the editor, save feedback stays beside **Save**;
 You can also [install the workspace in its own window](docs/web-server.md#install-as-an-app)
 while keeping `bn serve` running.
 
-Capture a thought from the terminal without choosing a filename:
+Capture a thought from the terminal without choosing a filename, or open
+today's daily note:
 
 ```sh
 bn capture "ask [[Bob]] about the migration"
+bn today    # needs a `daily` template; see docs/commands-notes.md
 ```
 
 ### Go further

@@ -159,6 +159,9 @@ func printCaptureResult(out io.Writer, result *noteops.CaptureResult) error {
 	if result.CreatedNote {
 		created = " (created)"
 	}
+	if stdoutIsTerminal(out) {
+		return printCaptureForPerson(out, result, rel+created)
+	}
 	if _, err := fmt.Fprintf(out, "captured to %s%s\n%s\n", rel, created, result.Line); err != nil {
 		return err
 	}
@@ -168,5 +171,21 @@ func printCaptureResult(out io.Writer, result *noteops.CaptureResult) error {
 		}
 	}
 	_, err := fmt.Fprintf(out, "note: undo restores all of %s; after later edits to it 'bn undo' refuses, and 'bn undo --force' overwrites those edits\n", rel)
+	return err
+}
+
+// printCaptureForPerson is the terminal form of a capture: where it went, the
+// line as written, and the one thing worth knowing about taking it back. The
+// journal id stays in the piped form and in `bn history`, where a script or a
+// later undo can read it.
+func printCaptureForPerson(out io.Writer, result *noteops.CaptureResult, where string) error {
+	style := newTermStyle()
+	if _, err := fmt.Fprintf(out, "%s %s\n  %s\n", style.accent("✓"), style.bold("Captured to "+where), result.Line); err != nil {
+		return err
+	}
+	if result.Journal == nil {
+		return nil
+	}
+	_, err := fmt.Fprintln(out, style.dim("  bn undo takes it back, until the note is edited again"))
 	return err
 }

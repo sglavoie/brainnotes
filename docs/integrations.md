@@ -42,6 +42,13 @@ does not load completes nothing.
 
 ## Scripting: exit status and JSON
 
+Output is drawn for a person only when stdout is a terminal. `find`, `search`,
+`links`, `backlinks`, `capture`, `history` and `doctor` each have a shorter,
+decorated terminal form; piped or redirected, they print the records described
+here and in each command's reference, unchanged. A script therefore never needs
+a flag to get stable output, and `NO_COLOR` removes colour from the terminal
+form.
+
 `bn` follows grep's exit-status convention:
 
 | Status | Meaning |

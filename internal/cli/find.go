@@ -14,8 +14,9 @@ func NewFindCmd() *cobra.Command {
 		Use:   "find",
 		Short: "Find notes by frontmatter criteria",
 		Long: `Find notes whose frontmatter matches every supplied filter. Prints matching
-absolute paths, one per line (or NUL-separated with -0). Pipe into fzf with -i
-for an interactive picker.
+absolute paths, one per line (or NUL-separated with -0); on a terminal the
+listing is vault-relative with a count. Pipe into fzf with -i for an
+interactive picker.
 
 -q takes a query expression, which reaches filters the flags cannot spell:
 boolean composition (and / or / not, grouped with parentheses), comparison

@@ -179,3 +179,51 @@ func writeDoctorFooter(w io.Writer, counts cockpit.Counts) {
 	}
 	fmt.Fprintf(w, "\n%d active %s (%s hidden).\n", counts.Active, noun, strings.Join(hidden, ", "))
 }
+
+// writeDoctorForPerson is the terminal rendering of the queue: tasks of one
+// kind share a heading and a count instead of repeating the rule's identifier
+// on every task, and each task is the note it concerns followed by why. The
+// plain rendering above stays the piped form, one self-contained block per
+// task.
+func writeDoctorForPerson(w io.Writer, queue cockpit.Queue) {
+	style := newTermStyle()
+	if len(queue.Tasks) == 0 {
+		fmt.Fprintln(w, style.accent("✓")+" No hygiene tasks. Vault is clean.")
+		writeDoctorFooter(w, queue.Counts)
+		return
+	}
+	for start := 0; start < len(queue.Tasks); {
+		end := start
+		for end < len(queue.Tasks) && queue.Tasks[end].Kind == queue.Tasks[start].Kind {
+			end++
+		}
+		if start > 0 {
+			fmt.Fprintln(w)
+		}
+		heading, _, _ := strings.Cut(queue.Tasks[start].Title, ": ")
+		fmt.Fprintf(w, "%s %s\n", style.bold(heading), style.dim(fmt.Sprintf("(%d)", end-start)))
+		for _, task := range queue.Tasks[start:end] {
+			writeDoctorTaskForPerson(w, style, task)
+		}
+		start = end
+	}
+	writeDoctorFooter(w, queue.Counts)
+	fmt.Fprintln(w, style.dim("Fix or snooze them under Health in `bn serve`."))
+}
+
+func writeDoctorTaskForPerson(w io.Writer, style termStyle, task cockpit.Task) {
+	if len(task.Affected) != 1 {
+		fmt.Fprintf(w, "  %s\n", task.Summary)
+	}
+	for _, note := range task.Affected {
+		line := style.notePath(note.RelPath)
+		if note.Location != "" {
+			line += style.dim(" (" + note.Location + ")")
+		}
+		if len(task.Affected) == 1 {
+			fmt.Fprintf(w, "  %s  %s\n", line, style.dim(task.Summary))
+			continue
+		}
+		fmt.Fprintf(w, "    %s\n", line)
+	}
+}

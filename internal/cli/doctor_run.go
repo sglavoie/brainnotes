@@ -80,6 +80,9 @@ func writeDoctorQueue(cmd *cobra.Command, queue cockpit.Queue, opts doctorOption
 		return writeDoctorJSON(out, cockpit.BuildReviewContext(queue))
 	case opts.asJSON:
 		return writeDoctorJSON(out, queue)
+	case stdoutIsTerminal(out):
+		writeDoctorForPerson(out, queue)
+		return nil
 	default:
 		writeDoctorHuman(out, queue)
 		return nil

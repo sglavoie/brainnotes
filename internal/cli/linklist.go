@@ -43,7 +43,7 @@ func (o linkListOptions) writePaths(out io.Writer, root string, paths []string) 
 	if o.asJSON {
 		return writeNotesJSON(out, root, paths)
 	}
-	return writePathList(out, paths, o.nullSep)
+	return writeNoteList(out, root, paths, o.nullSep)
 }
 
 // linkListRun is the resolved state a link-listing command renders from: the

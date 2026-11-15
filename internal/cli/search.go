@@ -21,7 +21,8 @@ func NewSearchCmd() *cobra.Command {
 By default the search is case-insensitive and treats the pattern as a literal string.
 
 Output modes:
-  paths (default)  One absolute path per matching note, sorted.
+  paths (default)  One absolute path per matching note, sorted. On a terminal:
+                   vault-relative paths, each with its first matching lines.
   --context N      Each match with N lines of surrounding body context (grep-style);
                    -C 0 prints the matching lines alone.
   --count          Match count per note, sorted by count descending then path.

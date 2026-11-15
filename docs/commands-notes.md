@@ -53,6 +53,33 @@ bn new book "Crafting Interpreters" --var author="Robert Nystrom"
 # → References/Books/Crafting Interpreters.md
 ```
 
+### `bn today` — open today's daily note
+
+```sh
+bn today [--print] [--template name]
+```
+
+Opens the note named after today's date (`YYYY-MM-DD`) in `[open].editor` or
+`$EDITOR`, creating it first if it does not exist. Creation is `bn new` with
+the `daily` template: the note goes to the folder `[new.routes]` gives that
+template (or the vault root), is journaled like any other new note, and can be
+undone with `bn undo`. On every later run that day the existing note is opened
+as it is, never rewritten.
+
+The note is looked for where it would be created, so if you move daily notes,
+change the route. `--print` reports the path without opening an editor, and
+`--template` names a template other than `daily`.
+
+```toml
+[new.routes]
+daily = "Daily"
+```
+
+```sh
+bn today
+# → Daily/2026-11-15.md, opened in your editor
+```
+
 ### `bn capture` — append a timestamped line to the inbox note
 
 ```sh

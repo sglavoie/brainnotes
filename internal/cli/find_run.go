@@ -215,7 +215,7 @@ func runFindPaths(r *findRun) error {
 		// the plain listing prints.
 		return writeNotesJSON(r.cmd.OutOrStdout(), r.root, paths)
 	}
-	return writePathList(r.cmd.OutOrStdout(), paths, r.opts.nullSep)
+	return writeNoteList(r.cmd.OutOrStdout(), r.root, paths, r.opts.nullSep)
 }
 
 // findLimit is the cap find applies: --limit when given, else the view's.

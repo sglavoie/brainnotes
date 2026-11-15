@@ -391,7 +391,11 @@ func runSearchPaths(r *searchRun) error {
 	if len(paths) == 0 {
 		return noMatch("search")
 	}
-	return writePathList(r.cmd.OutOrStdout(), paths, r.opts.nullSep)
+	out := r.cmd.OutOrStdout()
+	if listsForPerson(out, r.opts.nullSep) {
+		return writeSearchListing(out, r, notesAtPaths(r.notes, paths))
+	}
+	return writePathList(out, paths, r.opts.nullSep)
 }
 
 // matchingSearchPaths is the sorted absolute paths of the notes whose body has
@@ -409,6 +413,21 @@ func matchingSearchPaths(r *searchRun) ([]string, error) {
 	}
 	sort.Strings(paths)
 	return capResults(paths, r.opts.limit), nil
+}
+
+// notesAtPaths returns the notes at paths, in the order of paths.
+func notesAtPaths(notes []*vault.Note, paths []string) []*vault.Note {
+	byPath := make(map[string]*vault.Note, len(notes))
+	for _, n := range notes {
+		byPath[n.Path] = n
+	}
+	ordered := make([]*vault.Note, 0, len(paths))
+	for _, path := range paths {
+		if n, ok := byPath[path]; ok {
+			ordered = append(ordered, n)
+		}
+	}
+	return ordered
 }
 
 // openSearchMatch resolves the editor and opens path at line. Resolution is

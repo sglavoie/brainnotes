@@ -7,7 +7,7 @@ func addRootCommandGroups(root *cobra.Command) {
 		NewFindCmd(), NewSearchCmd(), NewOpenCmd(), NewBacklinksCmd(), NewLinksCmd(),
 		NewRelatedCmd(), NewContextCmd(), NewGraphCmd(), NewTagsCmd(), NewValuesCmd(), NewViewsCmd(), NewVaultCmd())
 	addCommandGroup(root, "editing", "Capture and edit:",
-		NewCaptureCmd(), NewNewCmd(), NewMoveCmd(), NewRenameCmd(), NewRemoveCmd(),
+		NewCaptureCmd(), NewNewCmd(), NewTodayCmd(), NewMoveCmd(), NewRenameCmd(), NewRemoveCmd(),
 		NewSetCmd(), NewUnsetCmd(), NewPinCmd(), NewUnpinCmd(), NewReplaceCmd(),
 		NewRelinkCmd(), NewRenameKeyCmd())
 	addCommandGroup(root, "maintenance", "Maintain and recover:",

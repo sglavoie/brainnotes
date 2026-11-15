@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -90,16 +91,12 @@ func runHistory(cmd *cobra.Command, asJSON bool) error {
 }
 
 func writeHistoryText(out io.Writer, entries []journal.Entry) error {
-	if len(entries) == 0 {
-		return nil
-	}
-	// The header is for a person reading a terminal. In a pipeline it would be
-	// the first "record", so `bn history | head -n 10` would show nine entries
-	// and `bn history | cut -f2` would start with the word ID.
+	// A person reading a terminal and a pipeline want different things from
+	// the same entries. The pipeline gets one tab-separated record per entry
+	// and nothing else, so `bn history | head -n 10` is ten entries and
+	// `bn history | cut -f2` is ten ids.
 	if stdoutIsTerminal(out) {
-		if _, err := fmt.Fprintln(out, "TIMESTAMP\tID\tCOMMAND"); err != nil {
-			return err
-		}
+		return writeHistoryForPerson(out, entries)
 	}
 	for _, e := range entries {
 		if _, err := fmt.Fprintf(
@@ -108,6 +105,30 @@ func writeHistoryText(out io.Writer, entries []journal.Entry) error {
 			e.Timestamp.UTC().Format(time.RFC3339Nano),
 			e.ID,
 			e.Command,
+		); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// historyTimeLayout is local time to the minute: what "when did I do that"
+// is asked in. The exact UTC instant stays in the piped and JSON forms.
+const historyTimeLayout = "2006-01-02 15:04"
+
+// writeHistoryForPerson shows each change as when it happened and what ran,
+// with the command that takes it back spelled out underneath, ready to copy.
+func writeHistoryForPerson(out io.Writer, entries []journal.Entry) error {
+	style := newTermStyle()
+	if len(entries) == 0 {
+		_, err := fmt.Fprintln(out, style.dim("No journaled changes yet."))
+		return err
+	}
+	indent := strings.Repeat(" ", len(historyTimeLayout)+2)
+	for _, e := range entries {
+		if _, err := fmt.Fprintf(out, "%s  %s\n%s%s\n",
+			style.dim(e.Timestamp.Local().Format(historyTimeLayout)), e.Command,
+			indent, style.dim("bn undo "+e.ID),
 		); err != nil {
 			return err
 		}
